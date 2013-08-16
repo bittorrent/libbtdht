@@ -2,6 +2,7 @@
 #include "sockaddr.h" // for SockAddr, is_ip_local
 
 #include <utility> // for std::make_pair
+#include <time.h>
 
 ExternalIPCounter::ExternalIPCounter(SHACallback* sha)
 	: _winnerV4(_map.end()), _winnerV6(_map.end()), _HeatStarted(0)

@@ -1,6 +1,13 @@
 // Only used by the DHT.  Maybe could be replaced someday
 // with something reasonable.
 #include "blockallocator.h"
+#include <stdlib.h> // for NULL and malloc()
+
+template<typename T> T static inline exch(T &a, const T b) {
+   const T t = a;
+   a = b;
+   return t;
+}
 
 void BlockAllocator::Grow()
 {

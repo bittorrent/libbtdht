@@ -2,6 +2,8 @@
 #ifndef __BLOCKALLOCATOR_H__
 #define __BLOCKALLOCATOR_H__
 
+#include "utypes.h"
+
 struct BlockAllocator {
 	BlockAllocator():_size(0),_grow(0), _free(NULL){}
 	uint16 _size, _grow;
