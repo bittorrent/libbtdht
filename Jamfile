@@ -6,6 +6,7 @@ SOURCES = DHTMessage DhtImpl ExternalIPCounter blockallocator dht ;
 lib ut_dht : src/$(SOURCES).cpp
 	: <include>src
 	  <library>/ut_utils//ut_utils/<link>static
+	  <include>libtomcrypt/src/headers
 	: <link>static
 	: <include>src
 	;
