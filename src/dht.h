@@ -13,6 +13,7 @@
 
 class UDPSocketInterface;
 class ExternalIPCounter;
+class BencEntity;
 
 // callback types used in the DHT
 typedef void DhtVoteCallback(void *ctx, const byte *target, int const* votes);

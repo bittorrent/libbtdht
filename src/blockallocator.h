@@ -3,6 +3,7 @@
 #define __BLOCKALLOCATOR_H__
 
 #include "utypes.h"
+#include <stddef.h> // for NULL
 
 struct BlockAllocator {
 	BlockAllocator():_size(0),_grow(0), _free(NULL){}
