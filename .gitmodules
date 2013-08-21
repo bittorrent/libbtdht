@@ -1,3 +1,9 @@
 [submodule "ut_utils"]
 	path = ut_utils
 	url = git@github.com:bittorrent/ut_utils.git
+[submodule "libtomcrypt"]
+	path = libtomcrypt
+	url = git@github.com:bittorrent/libtomcrypt.git
+[submodule "libtommath"]
+	path = libtommath
+	url = git@github.com:bittorrent/libtommath.git
