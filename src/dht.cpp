@@ -7,9 +7,10 @@
 #include "DhtImpl.h"
 #include "sockaddr.h"
 
-IDht* create_dht(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_socket_mgr)
+IDht* create_dht(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_socket_mgr
+	, DhtSaveCallback* save, DhtLoadCallback* load)
 {
-	return new DhtImpl(udp_socket_mgr, udp6_socket_mgr);
+	return new DhtImpl(udp_socket_mgr, udp6_socket_mgr, save, load);
 }
 
 IDht::~IDht() {}
