@@ -35,19 +35,19 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src/DHTMessage.cpp" />
-    <ClCompile Include="src/DHTImpl.cpp" />
-    <ClCompile Include="src/dht.cpp" />
-    <ClCompile Include="src/blockallocator.cpp" />
-    <ClCompile Include="src/ExternalIPCounter.cpp" />
+    <ClCompile Include="src\DHTMessage.cpp" />
+    <ClCompile Include="src\DHTImpl.cpp" />
+    <ClCompile Include="src\dht.cpp" />
+    <ClCompile Include="src\blockallocator.cpp" />
+    <ClCompile Include="src\ExternalIPCounter.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src/DHTMessage.h" />
-    <ClInclude Include="src/Buffer.h" />
-    <ClInclude Include="src/DHTImpl.h" />
-    <ClInclude Include="src/dht.h" />
-    <ClInclude Include="src/blockallocator.h" />
-    <ClInclude Include="src/ExternalIPCounter.h" />
+    <ClInclude Include="src\DHTMessage.h" />
+    <ClInclude Include="src\Buffer.h" />
+    <ClInclude Include="src\DHTImpl.h" />
+    <ClInclude Include="src\dht.h" />
+    <ClInclude Include="src\blockallocator.h" />
+    <ClInclude Include="src\ExternalIPCounter.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{507D1356-0000-0000-0000-000000000000}</ProjectGuid>
