@@ -1,0 +1,12 @@
+
+use-project /ut_utils : ut_utils ;
+
+SOURCES = DHTMessage DhtImpl ExternalIPCounter blockallocator dht ;
+
+lib ut_dht : src/$(SOURCES).cpp
+	: <include>src
+	  <library>/ut_utils//ut_utils/<link>static
+	: <link>static
+	: <include>src
+	;
+

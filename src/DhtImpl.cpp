@@ -22,8 +22,8 @@
 
 #define lenof(x) (sizeof(x)/sizeof(x[0]))
 
-bool DhtVerifyHardenedID(const SockAddr& addr, byte const* node_id);
-void DhtCalculateHardenedID(const SockAddr& addr, byte *node_id);
+bool DhtVerifyHardenedID(const SockAddr& addr, byte const* node_id, DhtSHACallback* sha);
+void DhtCalculateHardenedID(const SockAddr& addr, byte *node_id, DhtSHACallback* sha);
 
 int clamp(int v, int min, int max)
 {
@@ -270,7 +270,7 @@ void DhtImpl::GenerateId()
 	byte id_bytes[20];
 
 	if(_ip_counter && _ip_counter->GetIP(externIp)){
-		DhtCalculateHardenedID(externIp, id_bytes);
+		DhtCalculateHardenedID(externIp, id_bytes, _sha_callback);
 	} else {
 		uint32 *pTemp = (uint32 *) id_bytes;
 		// Generate a random ID
@@ -1265,7 +1265,7 @@ void DhtImpl::AddIP(SimpleBencoder& sb, byte const* id, SockAddr const& addr)
 	//verify the ip here...we need to notify them if they're using a
 	//peer id that doesn't match with their external ip
 
-	if (!DhtVerifyHardenedID(addr, id)) {
+	if (!DhtVerifyHardenedID(addr, id, _sha_callback)) {
 		if (addr.isv4()) {
 			sb.p += snprintf(sb.p, 35, "2:ip4:");
 			sb.p += addr.compact((byte*)sb.p, false);

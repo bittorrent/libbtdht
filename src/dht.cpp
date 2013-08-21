@@ -2,8 +2,6 @@
  * @ingroup dht
  */
 
-#include "StdAfxCore.h"
-
 #include "DhtImpl.h"
 #include "sockaddr.h"
 
@@ -15,7 +13,7 @@ IDht* create_dht(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_so
 IDht::~IDht() {}
 
 // See http://www.rasterbar.com/products/libtorrent/dht_sec.html
-void generate_node_id_prefix(const SockAddr& addr, int random, SHA1& h)
+sha1_hash generate_node_id_prefix(const SockAddr& addr, int random, DhtSHACallback* sha)
 {
 	uint8 octets[9];
 	int size;
@@ -38,39 +36,33 @@ void generate_node_id_prefix(const SockAddr& addr, int random, SHA1& h)
 	}
 	octets[size++] = random & 0x7;
 
-	h.Update((const byte*)octets, size);
+	return sha((const byte*)octets, size);
 }
 
 // See http://www.rasterbar.com/products/libtorrent/dht_sec.html
-bool DhtVerifyHardenedID(const SockAddr& addr, byte const* node_id)
+bool DhtVerifyHardenedID(const SockAddr& addr, byte const* node_id, DhtSHACallback* sha)
 {
 	if (is_ip_local(addr)) return true;
 
 	uint seed = node_id[19];
-	SHA1 sha;
-	generate_node_id_prefix(addr, seed, sha);
+	sha1_hash digest = generate_node_id_prefix(addr, seed, sha);
 
-	const sha1_hash *digest = sha.Finish();
-
-	if (memcmp(digest->value, node_id, 4) != 0)
+	if (memcmp(digest.value, node_id, 4) != 0)
 		return false; // failed verification
 	else
 		return true; // verification passed
 }
 
 // See http://www.rasterbar.com/products/libtorrent/dht_sec.html
-void DhtCalculateHardenedID(const SockAddr& addr, byte *node_id)
+void DhtCalculateHardenedID(const SockAddr& addr, byte *node_id, DhtSHACallback* sha)
 {
-	SHA1 sha;
-	uint seed = randomMT() & 0xff;
-	generate_node_id_prefix(addr, seed, sha);
-
-	const sha1_hash *digest = sha.Finish();
+	uint seed = rand() & 0xff;
+	sha1_hash digest = generate_node_id_prefix(addr, seed, sha);
 
 	for (int i = 0; i < 4; i++)
-		node_id[i] = digest->value[i];
+		node_id[i] = digest.value[i];
 	for (int i = 4; i < 19; i++)
-		node_id[i] = randomMT();
+		node_id[i] = rand();
 	node_id[19] = seed;
 }
 
