@@ -84,8 +84,6 @@ public:
 	virtual void SetPacketCallback(DhtPacketCallback* cb) = 0;
 	virtual void SetAddNodeResponseCallback(DhtAddNodeResponseCallback* cb) = 0;
 	virtual void SetSHACallback(DhtSHACallback* cb) = 0;
-	virtual void SetStateRestoreCallback(DhtSaveCallback* save
-		, DhtLoadCallback* _load) = 0;
 	virtual void AddBootstrapNode(SockAddr const& addr) = 0;
 	
 	// userdata pointer is passed on to the AddNodeReponseCallback
@@ -127,7 +125,8 @@ public:
 	virtual ULONG STDMETHODCALLTYPE Release(void) = 0;
 };
 
-IDht* create_dht(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_socket_mgr);
+IDht* create_dht(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_socket_mgr
+	, DhtSaveCallback* save, DhtLoadCallback* load);
 
 #endif //__DHT_H__
 

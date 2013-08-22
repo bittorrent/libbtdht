@@ -87,12 +87,13 @@ const char *format_dht_id(const DhtID &id)
 //
 //--------------------------------------------------------------------------------
 
-DhtImpl::DhtImpl(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_socket_mgr)
+DhtImpl::DhtImpl(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_socket_mgr
+	, DhtSaveCallback* save, DhtLoadCallback* load)
 {
 	_ip_counter = NULL;
 	_add_node_callback = NULL;
-	_save_callback = NULL;
-	_load_callback = NULL;
+	_save_callback = save;
+	_load_callback = load;
 	_packet_callback = NULL;
 	_peers_tracked = 0;
 	_dht_enabled = false;
@@ -2395,13 +2396,6 @@ void DhtImpl::ProcessCallback()
 	_refresh_bucket = 0;
 	_refresh_buckets_counter = 0; // start forced bucket refresh
 	_refresh_bucket_force = true;
-}
-
-void DhtImpl::SetStateRestoreCallback( DhtSaveCallback* save
-	, DhtLoadCallback* load)
-{
-	_save_callback = save;
-	_load_callback = load;
 }
 
 void DhtImpl::SetExternalIPCounter(ExternalIPCounter* ip)

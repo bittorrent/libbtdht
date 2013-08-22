@@ -1530,7 +1530,8 @@ inline void VoteDhtProcess::Start()
 class DhtImpl : public IDht, public IDhtProcessCallbackListener
 {
 public:
-	DhtImpl(UDPSocketInterface *_udp_socket_mgr, UDPSocketInterface *_udp6_socket_mgr);
+	DhtImpl(UDPSocketInterface *_udp_socket_mgr, UDPSocketInterface *_udp6_socket_mgr
+		, DhtSaveCallback* save, DhtLoadCallback* load);
 	~DhtImpl();
 	REFBASE;
 
@@ -1569,8 +1570,6 @@ public:
 	void SetAddNodeResponseCallback(DhtAddNodeResponseCallback* cb);
 	void SetSHACallback(DhtSHACallback* cb);
 	void SetPacketCallback(DhtPacketCallback* cb);
-	void SetStateRestoreCallback( DhtSaveCallback* save
-		, DhtLoadCallback* _load);
 
 	void AddNode(const SockAddr& addr, void* userdata, uint origin);
 	void AddBootstrapNode(SockAddr const& addr);
