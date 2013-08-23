@@ -2,6 +2,7 @@
 #define __DHT_IMPL_H__
 
 #include "dht.h"
+#include <climits>
 #include <assert.h> // for assert
 #include <time.h> // for time_t
 #include <string.h> // for memcmp
