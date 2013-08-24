@@ -1,11 +1,15 @@
 
 use-project /ut_utils : ut_utils ;
+use-project /tommath : libtommath ;
+use-project /tomcrypt : libtomcrypt ;
 
 SOURCES = DHTMessage DhtImpl ExternalIPCounter blockallocator dht ;
 
 lib ut_dht : src/$(SOURCES).cpp
 	: <include>src
 	  <library>/ut_utils//ut_utils/<link>static
+	  <library>/tommath//tommath/<link>static/<clang-cxx11>off
+	  <library>/tomcrypt//tomcrypt/<link>static/<clang-cxx11>off
 	  <include>libtomcrypt/src/headers
 	: <link>static
 	: <include>src
