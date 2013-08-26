@@ -2905,7 +2905,7 @@ void DhtImpl::SaveState()
 
 	size_t len;
 	BencEntityMem beM;
-	beM.SetMem(&peer_list[0], peer_list.size() * sizeof(PackedDhtPeer));
+	beM.SetMemOwn(&peer_list[0], peer_list.size() * sizeof(PackedDhtPeer));
 	dict->Insert("nodes", beM);
 
 	// CHECK: time(NULL) can be int64....
