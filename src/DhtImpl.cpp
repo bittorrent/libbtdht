@@ -433,8 +433,10 @@ bool CopyBytesToDhtID(DhtID &id, const byte *b)
 int CompareDhtIDToTarget(const DhtID &a, const DhtID &b, const DhtID &target)
 {
 	for(uint i=0; i<5; i++) {
-		int r = (a.id[i] ^ target.id[i]) - (b.id[i] ^ target.id[i]);
-		if (r) return r;
+		uint32 lhs = a.id[i] ^ target.id[i];
+		uint32 rhs = b.id[i] ^ target.id[i];
+		if (lhs > rhs) return 1;
+		if (lhs < rhs) return -1;
 	}
 	return 0;
 }
@@ -767,17 +769,25 @@ uint DhtImpl::CopyPeersFromBucket(uint bucket_id, DhtPeerID **list, uint numwant
 	return n;
 }
 
+struct dht_node_comparator
+{
+	dht_node_comparator(DhtID t): target(t) {}
+	bool operator()(DhtPeerID const* a, DhtPeerID const* b) const {
+		return CompareDhtIDToTarget(a->id, b->id, target) < 0;
+	}
+	DhtID target;
+};
+
 // Given the source list and size, sort it and copy the destCount closest
 // to the dest list
 void FindNClosestToTarget( DhtPeerID *src[], uint srcCount, DhtPeerID *dest[], uint destCount, const DhtID &target ){
 	// sort the list to find the closest peers.
 	// Seems to only be used on lists of 30 or smaller
-	std::vector<DhtIdDistance> Distances;
-	for(int i = 0; i < srcCount; i++)
-		Distances.push_back(DhtIdDistance(src[i], &target));
-	std::sort(Distances.begin(), Distances.end(), &DhtIdDistance::QsortCompare);
+	std::vector<DhtPeerID*> sorted_list(src, src + srcCount);
+	if (destCount > srcCount) destCount = srcCount;
+	std::sort(sorted_list.begin(), sorted_list.end(), dht_node_comparator(target));
 	for(int i = 0; i < destCount ; i++)
-		dest[i] = (DhtPeerID *) Distances[i]._pId;
+		dest[i] = sorted_list[i];
 }
 
 int DhtImpl::AssembleNodeList(const DhtID &target, DhtPeerID** ids, int numwant)

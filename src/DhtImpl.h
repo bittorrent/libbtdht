@@ -1936,21 +1936,6 @@ public:
 
 };
 
-// For sorting based on distance.  We must jump through these hoops
-// in order to use extra arguments (the target in this case)
-// in the sort comparison function without resorting to yucky globals.
-struct DhtIdDistance : public DhtID {
-	const DhtPeerID *_pId;
-	const DhtID *_pTarget;
-	DhtIdDistance( const DhtPeerID *pId, const DhtID *pTarget ): _pId(pId), _pTarget(pTarget){}
-
-	static int QsortCompare(DhtIdDistance const& a, DhtIdDistance const& b)
-	{
-		return CompareDhtIDToTarget(a._pId->id, b._pId->id, *(a._pTarget));
-	}
-
-};
-
 void LoadDHTFeed();
 
 //*****************************************************************************
