@@ -10,6 +10,7 @@
 #include "sha1_hash.h"
 #include "sockaddr.h"
 #include "RefBase.h"
+#include "smart_ptr.h"
 
 class UDPSocketInterface;
 class ExternalIPCounter;
@@ -125,7 +126,7 @@ public:
 	virtual ULONG STDMETHODCALLTYPE Release(void) = 0;
 };
 
-IDht* create_dht(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_socket_mgr
+smart_ptr<IDht> create_dht(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_socket_mgr
 	, DhtSaveCallback* save, DhtLoadCallback* load);
 
 #endif //__DHT_H__

@@ -3566,6 +3566,8 @@ void FindNodeDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsi
 	// The find_node rpc
 	sb.p += snprintf(sb.p, (end - sb.p), "d1:ad2:id20:");
 	sb.put_buf(impl->_my_id_bytes, 20);
+	sb.p += snprintf(sb.p, (end - sb.p), "6:target20:");
+	sb.put_buf(target_bytes, 20);
 	sb.p += snprintf(sb.p, (end - sb.p), "e1:q9:find_node");
 	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4), end);
 	impl->put_version(sb, end);
