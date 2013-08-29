@@ -17,6 +17,7 @@
 #include "utypes.h"
 #include "bloom_filter.h"
 #include "tailqueue.h"
+#include "get_microseconds.h"
 
 // for logging dht activity
 #if g_log_dht

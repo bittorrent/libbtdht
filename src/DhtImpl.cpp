@@ -2097,7 +2097,6 @@ bool DhtImpl::ProcessResponse(const SockAddr& addr,
 #endif
 #if g_log_dht
 	dht_log("dlok replytime:%u\n", get_milliseconds() - req->time);
-	origin = req->origin;
 #endif
 
 	UnlinkRequest(req);
@@ -2701,7 +2700,7 @@ void DhtImpl::Tick()
 
 #if g_log_dht
 	{
-	static DWORD last = GetTickCount() - 1000;
+	static DWORD last = get_milliseconds() - 1000;
 	static int64 inrequests = 0;
 	static int64 outrequests = 0;
 	static int64 inrequests2 = 0;
@@ -2711,7 +2710,7 @@ void DhtImpl::Tick()
 	int64 t_outrequests = acct[DHT_BW_OUT_TOTAL].count;
 	int64 t_inrequests2 = acct[DHT_BW_IN_REPL].count;
 	int64 t_inrequests3 = acct[DHT_BW_IN_TIMEOUT].count;
-	DWORD now = GetTickCount();
+	DWORD now = get_milliseconds();
 	double t = (now - last) / 1000.0;
 	double oqps = (t_outrequests - outrequests) / t;
 	double iqps = (t_inrequests - inrequests) / t;
