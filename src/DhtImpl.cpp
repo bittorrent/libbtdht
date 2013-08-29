@@ -60,13 +60,22 @@ void dht_log(char const* fmt, ...)
 static void do_log(char const* fmt, ...)
 {
 	va_list args;
-	vfprintf(stderr, fmt, args);
+	va_start(args, fmt);
+	char buf[1000];
+	vsnprintf(buf, sizeof(buf), fmt, args);
+
+	fprintf(stderr, "DHT: %s\n", buf);
 	// TODO: call callback or something
 }
 
 #if defined(_DEBUG_DHT)
 static void debug_log(char const* fmt, ...)
 {
+	va_list args;
+	va_start(args, fmt);
+	char buf[1000];
+	vsnprintf(buf, sizeof(buf), fmt, args);
+	fprintf(stderr, "DHT: %s\n", buf);
 	// TODO: call callback or something
 }
 #endif
@@ -537,14 +546,14 @@ void DhtImpl::DumpBuckets()
 			char age[64];
 			if (p->first_seen) {
 				size_t d = time(NULL) - p->first_seen;
-				snprintf(age, sizeof(age), "%dm %ds", d / 60, d % 60);
+				snprintf(age, sizeof(age), "%dm %ds", int(d / 60), int(d % 60));
 			} else {
 				strcpy(age, "?");
 			}
-			do_log("    %s %A fail:%d seen:%d age:%s ver:%s rtt:%d",
-				 format_dht_id(p->id.id),
-				 &p->id.addr,  p->num_fail, p->lastContactTime, age,
-				 p->client.str(), p->rtt);
+//			do_log("    %s %A fail:%d seen:%d age:%s ver:%s rtt:%d",
+//				 format_dht_id(p->id.id),
+//				 &p->id.addr,  p->num_fail, p->lastContactTime, age,
+//				 p->client.str(), p->rtt);
 		}
 	}
 	do_log("Total peers: %d (in replacement cache %d)", total, total_cache);
@@ -1235,7 +1244,7 @@ bool DhtImpl::ParseIncomingICMP(BencEntity &benc, const SockAddr& addr)
 	DhtRequest *req = LookupRequest(Read32(tid));
 	if (!req) {
 #if defined(_DEBUG_DHT)
-//		debug_log("Unknown transaction ID %d", Read32(tid));
+		debug_log("Unknown transaction ID %d", Read32(tid));
 #endif
 		return false;
 	}
@@ -1248,7 +1257,7 @@ bool DhtImpl::ParseIncomingICMP(BencEntity &benc, const SockAddr& addr)
 	//Account(DHT_BW_IN_REPL, pkt_size);
 
 #if defined(_DEBUG_DHT)
-//	debug_log("Got ICMP error (%d seconds) tid=%d", (get_milliseconds() - req->time) / 1000, Read32(tid));
+	debug_log("Got ICMP error (%d seconds) tid=%d", (get_milliseconds() - req->time) / 1000, Read32(tid));
 #endif
 
 	UnlinkRequest(req);
@@ -1387,7 +1396,7 @@ void DhtImpl::add_to_dht_feed(byte const* info_hash, char const* file_name)
 
 void DhtImpl::put_transaction_id(SimpleBencoder& sb, Buffer tid, char const* end)
 {
-	sb.p += snprintf(sb.p, (end - sb.p), "1:t%d:", tid.len);
+	sb.p += snprintf(sb.p, (end - sb.p), "1:t%d:", int(tid.len));
 	sb.put_buf(tid.b, tid.len);
 }
 
@@ -1422,15 +1431,15 @@ bool DhtImpl::ProcessQueryAnnouncePeer(const SockAddr &thisNodeAddress, DHTMessa
 	// read the token
 	if (!message.token.len) {
 #if defined(_DEBUG_DHT)
-//		debug_log("Bad write token");
+		debug_log("Bad write token");
 #endif
 		Account(DHT_INVALID_PQ_BAD_WRITE_TOKEN, packetSize);
 		return false;
 	}
 
 #if defined(_DEBUG_DHT)
-//		char *temp = stack_strdup(format_dht_id(info_hash_id));
-//		debug_log("ANNOUNCE_PEER: id='%s', info_hash='%s', host='%A', token='%s'", format_dht_id(peerID.id), temp, &peerID.addr, hexify(message.token.b));
+		char const* temp = format_dht_id(info_hash_id);
+		debug_log("ANNOUNCE_PEER: id='%s', info_hash='%s', host='%A', token='%s'", format_dht_id(peerID.id), temp, &peerID.addr, hexify(message.token.b));
 #endif
 
 	// validate the token
@@ -1566,9 +1575,9 @@ bool DhtImpl::ProcessQueryGetPeers(const SockAddr &addr, DHTMessage &message, Dh
 	sb.put_buf(ttoken.value, 20);
 
 #if defined(_DEBUG_DHT)
-//	char *temp = stack_strdup(format_dht_id(info_hash_id));
-//	debug_log("GET_PEERS: id='%s', info_hash='%s', host='%A', token='%s'",
-//			 format_dht_id(peerID.id), temp, &peerID.addr, hexify(ttoken.value));
+	char const* temp = format_dht_id(info_hash_id);
+	debug_log("GET_PEERS: id='%s', info_hash='%s', token='%s'",
+			 format_dht_id(peerID.id), temp, hexify(ttoken.value));
 #endif
 
 	if (has_values) {
@@ -1634,8 +1643,8 @@ bool DhtImpl::ProcessQueryFindNode(const SockAddr &addr, DHTMessage &message, Dh
 		BuildFindNodesPacket(sb, target_id, mtu - size);
 
 #if defined(_DEBUG_DHT)
-//	debug_log("FIND_NODE: [%A]: %s. Found %d peers.", &peerID.addr,
-//		 format_dht_id(target_id), n);
+	debug_log("FIND_NODE: %s. Found %d peers."
+		, format_dht_id(target_id), n);
 #endif
 
 	assert(sb.p - buf <= mtu);
@@ -1887,14 +1896,14 @@ bool DhtImpl::ProcessQueryGet(const SockAddr &addr, DHTMessage &message, DhtPeer
 	sb.put_buf(_my_id_bytes, 20);
 
 	if (keyToReturn.len){	// add a "key" field to the response, if there is one
-		sb.p += snprintf(sb.p, (end-sb.p), "3:key%d:", keyToReturn.len);
+		sb.p += snprintf(sb.p, (end-sb.p), "3:key%d:", int(keyToReturn.len));
 		sb.put_buf((byte*)keyToReturn.b, keyToReturn.len);
 	}
 
 	BuildFindNodesPacket(sb, targetId, mtu - size);
 
 	if (signatureToReturn.len){	// add a "sig" field to the response, if there is one
-		sb.p += snprintf(sb.p, (end-sb.p), "3:sig%d:", signatureToReturn.len);
+		sb.p += snprintf(sb.p, (end-sb.p), "3:sig%d:", int(signatureToReturn.len));
 		sb.put_buf((byte*)signatureToReturn.b, signatureToReturn.len);
 	}
 
@@ -1986,7 +1995,7 @@ bool DhtImpl::ProcessQueryPing(const SockAddr &addr, DHTMessage &message, DhtPee
 	SimpleBencoder sb(buf);
 
 #if defined(_DEBUG_DHT)
-		debug_log("PING: [%A]", &peerID.addr);
+		debug_log("PING");
 #endif
 	sb.p += snprintf(sb.p, (end - sb.p), "d1:rd2:id20:");
 	sb.put_buf(_my_id_bytes, 20);
@@ -2060,7 +2069,7 @@ bool DhtImpl::ProcessResponse(const SockAddr& addr,
 	DhtRequest *req = LookupRequest(Read32(message.transactionID.b));
 	if (!req) {
 #if defined(_DEBUG_DHT)
-		debug_log("Invalid transaction ID from %A tid:%d", &addr, Read32(message.transactionID.b));
+		debug_log("Invalid transaction ID tid:%d", Read32(message.transactionID.b));
 #endif
 		Account(DHT_INVALID_PR_UNKNOWN_TID, pkt_size);
 		return false;	// invalid transaction id?
@@ -2092,8 +2101,8 @@ bool DhtImpl::ProcessResponse(const SockAddr& addr,
 	peer_id.addr.set_port(req->peer.addr.get_port());
 
 #if defined(_DEBUG_DHT)
-	debug_log("Got reply from %A (%d seconds) tid=%d",
-		 &peer_id.addr, int32(get_milliseconds() - req->time) / 1000, Read32(message.transactionID.b));
+	debug_log("Got reply from (%d seconds) tid=%d",
+		int32(get_milliseconds() - req->time) / 1000, Read32(message.transactionID.b));
 #endif
 #if g_log_dht
 	dht_log("dlok replytime:%u\n", get_milliseconds() - req->time);
@@ -2225,9 +2234,9 @@ void DhtImpl::DoFindNodes(DhtID &target, int target_len, IDhtProcessCallbackList
 	DhtProcessManager *dpm = new DhtProcessManager(ids, num, target);
 
 #if defined(_DEBUG_DHT)
-	debug_log("DoFindNodes: %s",format_dht_id(target));
-	for(uint i=0; i!=num; i++)
-		debug_log(" %A", &ids[i]->addr);
+//	debug_log("DoFindNodes: %s",format_dht_id(target));
+//	for(uint i=0; i!=num; i++)
+//		debug_log(" %A", &ids[i]->addr);
 #endif
 
 	CallBackPointers cbPtrs;
@@ -2676,7 +2685,7 @@ void DhtImpl::Tick()
 	// Allow a new job every 4 seconds.
 	if ( (++_4_sec_counter & 3) == 0) {
 #ifdef _DHT_STATS
-		static DWORD last = GetTickCount() - 4000;
+		static DWORD last = get_milliseconds() - 4000;
 		static int64 inrequests = 0;
 		static int64 outrequests = 0;
 
@@ -2684,13 +2693,13 @@ void DhtImpl::Tick()
 		int64 t_inrequests = acct[DHT_BW_IN_TOTAL].count;
 		int64 t_outrequests = acct[DHT_BW_OUT_TOTAL].count;
 
-		double t = (GetTickCount() - last) / 1000.0;
+		double t = (get_milliseconds() - last) / 1000.0;
 		double iqps = (t_inrequests - inrequests) / t;
 		double oqps = (t_outrequests - outrequests) / t;
 		double known = acct[DHT_BW_IN_KNOWN].count * 100.0 / acct[DHT_BW_IN_TOTAL].count;
 		do_log("QPS in: %d out: %d (known: %d%%)", (int)(iqps+0.5), (int)(oqps+0.5), (int)(known+0.5));
 
-		last = GetTickCount();
+		last = get_milliseconds();
 		inrequests = t_inrequests;
 		outrequests = t_outrequests;
 #endif
@@ -3023,7 +3032,7 @@ DhtPeer* DhtImpl::Update(const DhtPeerID &id, uint origin, bool seen, int rtt)
 	DhtBucket &bucket = *_buckets[bucket_id];
 
 #if defined(_DEBUG_DHT)
-	debug_log("Update: %s. %A", format_dht_id(id.id), &id.addr);
+	debug_log("Update: %s.", format_dht_id(id.id));
 #endif
 
 	assert(bucket.TestForMatchingPrefix(id.id));
@@ -3807,7 +3816,7 @@ void AnnounceDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsi
 	// convert the token
 	ArgumenterValueInfo& argBuf = announceArgumenterPtr->GetArgumenterValueInfo(a_token);
 	char* b = (char*)argBuf.GetBufferPtr();
-	int pos = snprintf(b, ArgumenterValueInfo::BUF_LEN, "%d:", nodeInfo.token.len);
+	int pos = snprintf(b, ArgumenterValueInfo::BUF_LEN, "%d:", int(nodeInfo.token.len));
 	memcpy(b + pos, nodeInfo.token.b, nodeInfo.token.len);
 	argBuf.SetNumBytesUsed(nodeInfo.token.len + pos);
 
@@ -3926,7 +3935,7 @@ void VoteDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned
 	sb.put_buf(impl->_my_id_bytes, 20);
 	sb.p += snprintf(sb.p, (end - sb.p), "6:target20:");
 	sb.put_buf(target_bytes, 20);
-	sb.p += snprintf(sb.p, (end - sb.p), "5:token%d:", nodeInfo.token.len);
+	sb.p += snprintf(sb.p, (end - sb.p), "5:token%d:", int(nodeInfo.token.len));
 	sb.put_buf(nodeInfo.token.b, nodeInfo.token.len);
 	sb.p += snprintf(sb.p, (end - sb.p), "4:votei%de", voteValue);
 	sb.p += snprintf(sb.p, (end - sb.p), "e1:q4:vote");
