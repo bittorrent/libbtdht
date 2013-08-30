@@ -1533,7 +1533,7 @@ class DhtImpl : public IDht, public IDhtProcessCallbackListener
 {
 public:
 	DhtImpl(UDPSocketInterface *_udp_socket_mgr, UDPSocketInterface *_udp6_socket_mgr
-		, DhtSaveCallback* save, DhtLoadCallback* load);
+		, DhtSaveCallback* save = 0, DhtLoadCallback* load = 0);
 	~DhtImpl();
 	REFBASE;
 
