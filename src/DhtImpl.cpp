@@ -20,6 +20,8 @@
 #include <string.h> // for strlen
 #include <algorithm> // for std::min
 
+#include <stdarg.h>
+
 #define lenof(x) (sizeof(x)/sizeof(x[0]))
 
 bool DhtVerifyHardenedID(const SockAddr& addr, byte const* node_id, DhtSHACallback* sha);
