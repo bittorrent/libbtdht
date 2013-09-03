@@ -21,18 +21,6 @@ void DHTMessage::DecodeMessageData(byte* bencMessageBytes, int numBytes)
 	DecodeMessageData(*_bDict);
 }
 
-void DHTMessage::DecodeMessageData(char *bencMessageString)
-{
-	DecodeMessageData((byte *)bencMessageString, strlen(bencMessageString));
-}
-
-DHTMessage::DHTMessage(char * bencMessageString)
-{
-	Init();
-	_bDict = new BencodedDict;
-	DecodeMessageData((byte*)bencMessageString, strlen(bencMessageString));
-}
-
 DHTMessage::DHTMessage(byte* bencMessageBytes, int numBytes)
 {
 	Init();
@@ -201,13 +189,17 @@ void DHTMessage::DecodeQuery(BencodedDict &bDict)
 
 void DHTMessage::CopyFrom(DHTMessage &src)
 {
+	if (&src == this) return;
+
+	delete _bDict; // free ours if necessary
+	_bDict = NULL;
+
 	// If the source _bDict object is not null, then the src object allocated
 	// its own BencodedDict.  So this object needs to do its own allocation
 	// before copying.
-	if(src._bDict){
-		if(_bDict) delete _bDict; // free ours if necessary
+	if (src._bDict){
 		_bDict = new BencodedDict;
-		(*_bDict) = *(src._bDict);
+		*_bDict = *src._bDict;
 	}
 
 	// if _bDict is not null, set to our _bDict, otherwise the consumer provided

@@ -85,12 +85,10 @@ public:
 	DHTMessage();
 	DHTMessage(DHTMessage &src);
 	DHTMessage(BencodedDict &Dictionary);
-	DHTMessage(char * bencMessageString);
 	DHTMessage(byte* bencMessageBytes, int numBytes);
 	~DHTMessage();
 	DHTMessage& operator=(DHTMessage &rhs);
 
-	void DecodeMessageData(char *bencMessageString);
 	void DecodeMessageData(byte* bencMessageBytes, int numBytes);
 	void DecodeMessageData(BencodedDict &bDict);
 	bool ValidArguments(){return _argumentsAreValid;}
