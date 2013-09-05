@@ -50,6 +50,13 @@ public:
 	// Resolve gcc warning about nonvirtual destructor with virtual methods
 	virtual ~IDht();
 
+	enum announce_flags_t
+	{
+		announce_seed = 1,
+		announce_non_aggressive = 2,
+		announce_only_get = 4,
+	};
+
 	virtual bool handleReadEvent(UDPSocketInterface *socket, byte *buffer, size_t len, const SockAddr& addr) = 0;
 	virtual bool handleICMP(UDPSocketInterface *socket, byte *buffer, size_t len, const SockAddr& addr) = 0;
 	virtual void Tick() = 0;
@@ -61,9 +68,8 @@ public:
 		DhtAddNodesCallback *addnodes_callback,
 		DhtPortCallback* pcb,
 		cstr file_name,
-		bool seed,
 		void *ctx,
-		bool performLessAgressiveSearch = false) = 0;
+		int flags = 0) = 0;
 
 
 	virtual void SetId(byte new_id_bytes[20]) = 0;

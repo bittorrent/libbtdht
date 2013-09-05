@@ -1120,7 +1120,7 @@ void DhtImpl::AddPeerToStore(const DhtID &info_hash, cstr file_name, const SockA
 	StoredPeer sp;
 	addr.compact(sp.ip, true);
 	sp.time = time(NULL);
-	sp.seed = seed;
+	sp.seed = IDht::announce_seed;
 	sc->peers.push_back(sp);
 	_peers_tracked++;
 }
@@ -2269,13 +2269,15 @@ void DhtImpl::RunSearches()
 }
 #endif
 
-void DhtImpl::DoVote(const DhtID &target, int vote, DhtVoteCallback* callb, void *ctx, bool performLessAgressiveSearch)
+void DhtImpl::DoVote(const DhtID &target, int vote, DhtVoteCallback* callb, void *ctx, int flags)
 {
 	// voting is a two stage process,
 	//  1) perform a get_peers dht search to build a list of nearist nodes
 	//  2) follow through with a broadcast stage to do the vote
 
-	int maxOutstanding = (performLessAgressiveSearch) ? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA : KADEMLIA_LOOKUP_OUTSTANDING;
+	int maxOutstanding = (flags & announce_non_aggressive)
+		? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA
+		: KADEMLIA_LOOKUP_OUTSTANDING;
 	DhtPeerID *ids[32];
 	int num = AssembleNodeList(target, ids, sizeof(ids)/sizeof(ids[0]));
 
@@ -2285,7 +2287,7 @@ void DhtImpl::DoVote(const DhtID &target, int vote, DhtVoteCallback* callb, void
 	cbPtrs.voteCallback = callb;
 
 	DhtProcessBase* getPeersProc = GetPeersDhtProcess::Create(this, *dpm, target, 20,
-		cbPtrs, false, maxOutstanding);
+		cbPtrs, 0, maxOutstanding);
 	DhtProcessBase* voteProc = VoteDhtProcess::Create(this, *dpm, target, 20,
 		cbPtrs, vote);
 	// processes will be exercised in the order they are added
@@ -2294,9 +2296,11 @@ void DhtImpl::DoVote(const DhtID &target, int vote, DhtVoteCallback* callb, void
 	dpm->Start();
 }
 
-void DhtImpl::DoScrape(const DhtID &target, DhtScrapeCallback *callb, void *ctx, bool performLessAgressiveSearch)
+void DhtImpl::DoScrape(const DhtID &target, DhtScrapeCallback *callb, void *ctx, int flags)
 {
-	int maxOutstanding = (performLessAgressiveSearch) ? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA : KADEMLIA_LOOKUP_OUTSTANDING;
+	int maxOutstanding = (flags & announce_non_aggressive)
+		? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA
+		: KADEMLIA_LOOKUP_OUTSTANDING;
 	DhtPeerID *ids[32];
 	int num = AssembleNodeList(target, ids, sizeof(ids)/sizeof(ids[0]));
 
@@ -2310,9 +2314,11 @@ void DhtImpl::DoScrape(const DhtID &target, DhtScrapeCallback *callb, void *ctx,
 	dpm->Start();
 }
 
-void DhtImpl::ResolveName(DhtID const& target, DhtHashFileNameCallback* callb, void *ctx, bool performLessAgressiveSearch)
+void DhtImpl::ResolveName(DhtID const& target, DhtHashFileNameCallback* callb, void *ctx, int flags)
 {
-	int maxOutstanding = (performLessAgressiveSearch) ? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA : KADEMLIA_LOOKUP_OUTSTANDING;
+	int maxOutstanding = (flags & announce_non_aggressive)
+		? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA
+		: KADEMLIA_LOOKUP_OUTSTANDING;
 	DhtPeerID *ids[32];
 	int num = AssembleNodeList(target, ids, sizeof(ids)/sizeof(ids[0]));
 
@@ -2322,7 +2328,7 @@ void DhtImpl::ResolveName(DhtID const& target, DhtHashFileNameCallback* callb, v
 	cbPtrs.callbackContext = ctx;
 	cbPtrs.filenameCallback = callb;
 
-	DhtProcessBase* getPeersProc = GetPeersDhtProcess::Create(this, *dpm, target, 20, cbPtrs, false, maxOutstanding);
+	DhtProcessBase* getPeersProc = GetPeersDhtProcess::Create(this, *dpm, target, 20, cbPtrs, flags, maxOutstanding);
 	dpm->AddDhtProcess(getPeersProc);
 	dpm->Start();
 }
@@ -2338,15 +2344,17 @@ void DhtImpl::DoAnnounce(const DhtID &target,
 	DhtAddNodesCallback *callb,
 	DhtPortCallback *pcb,
 	cstr file_name,
-	bool seed,
 	void *ctx,
-	bool performLessAgressiveSearch)
+	int flags)
 {
 	// announcing is a two stage process,
 	//  1) perform a get_peers dht search to build a list of nearist nodes
 	//  2) follow through with a broadcast stage to announce to the nearist nodes
 
-	int maxOutstanding = (performLessAgressiveSearch) ? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA : KADEMLIA_LOOKUP_OUTSTANDING;
+	int maxOutstanding = (flags & announce_non_aggressive)
+		? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA
+		: KADEMLIA_LOOKUP_OUTSTANDING;
+
 	DhtPeerID *ids[32];
 	int num = AssembleNodeList(target, ids, sizeof(ids)/sizeof(ids[0]));
 
@@ -2359,12 +2367,15 @@ void DhtImpl::DoAnnounce(const DhtID &target,
 	cbPtrs.portCallback = pcb;
 
 	DhtProcessBase* getPeersProc = GetPeersDhtProcess::Create(this, *dpm, target, target_len,
-		cbPtrs, seed, maxOutstanding);
-	DhtProcessBase* announceProc = AnnounceDhtProcess::Create(this, *dpm, target, target_len,
-		cbPtrs, file_name, seed);
+		cbPtrs, flags, maxOutstanding);
 	// processes will be exercised in the order they are added
 	dpm->AddDhtProcess(getPeersProc); // add get_peers first
-	dpm->AddDhtProcess(announceProc); // add announce second
+
+	if ((flags & announce_only_get) == 0) {
+		DhtProcessBase* announceProc = AnnounceDhtProcess::Create(this, *dpm, target, target_len,
+			cbPtrs, file_name, flags);
+		dpm->AddDhtProcess(announceProc); // add announce second
+	}
 
 	dpm->Start();
 }
@@ -2563,14 +2574,13 @@ void DhtImpl::AnnounceInfoHash(
 	DhtAddNodesCallback *addnodes_callback,
 	DhtPortCallback* pcb,
 	cstr file_name,
-	bool seed,
 	void *ctx,
-	bool performLessAgressiveSearch)
+	int flags)
 {
 	DhtID id;
 	CopyBytesToDhtID(id, info_hash);
 	DoAnnounce(id, info_hash_len, partialcallback, addnodes_callback,
-		pcb, file_name, seed, ctx, performLessAgressiveSearch);
+		pcb, file_name, ctx, flags);
 	_allow_new_job = false;
 }
 
@@ -3681,15 +3691,15 @@ GetPeersDhtProcess::GetPeersDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 
 DhtProcessBase* GetPeersDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
 	const DhtID &target2, int target2_len,
-	CallBackPointers &cbPointers, bool seed, int maxOutstanding)
+	CallBackPointers &cbPointers, int flags, int maxOutstanding)
 {
 	GetPeersDhtProcess* process = new GetPeersDhtProcess(pDhtImpl, dpm, target2, target2_len, time(NULL), cbPointers, maxOutstanding);
 
-	// If seed is true, then we want to include noseed in the rpc arguments.
+	// If flags & announce_seed is true, then we want to include noseed in the rpc arguments.
 	// If seed is false, then noseed should also be false (just not included in the
 	// rpc argument list)
 	// This can coordinate with an announce with seed=1
-	process->gpArgumenterPtr->enabled[a_noseed] = seed;
+	process->gpArgumenterPtr->enabled[a_noseed] = flags & IDht::announce_seed;
 
 	return process;
 }
@@ -3789,7 +3799,7 @@ AnnounceDhtProcess::AnnounceDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 DhtProcessBase* AnnounceDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
 	const DhtID &target2, int target2_len,
 	CallBackPointers &cbPointers,
-	cstr file_name, bool seed)
+	cstr file_name, int flags)
 {
 	AnnounceDhtProcess* process = new AnnounceDhtProcess(pDhtImpl, dpm, target2, target2_len, time(NULL), cbPointers);
 
@@ -3805,7 +3815,7 @@ DhtProcessBase* AnnounceDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager 
 			process->announceArgumenterPtr->SetValueBytes(a_name, (byte*)buf, numChars);
 		}
 	}
-	process->announceArgumenterPtr->enabled[a_seed] = seed;
+	process->announceArgumenterPtr->enabled[a_seed] = flags & IDht::announce_seed;
 	return process;
 }
 

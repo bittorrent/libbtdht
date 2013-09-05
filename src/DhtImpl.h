@@ -1359,7 +1359,7 @@ class GetPeersDhtProcess : public DhtLookupScheduler
 		static DhtProcessBase* Create(DhtImpl* pImpl, DhtProcessManager &dpm,
 			const DhtID &target2, int target2_len,
 			CallBackPointers &cbPointers,
-			bool seed = false,
+			int flags = 0,
 			int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING);
 };
 
@@ -1419,7 +1419,7 @@ class AnnounceDhtProcess : public DhtBroadcastScheduler
 			const DhtID &target2, int target2_len,
 			CallBackPointers &cbPointers,
 			cstr file_name,
-			bool seed);
+			int flags);
 };
 
 inline void AnnounceDhtProcess::Start()
@@ -1562,9 +1562,8 @@ public:
 		DhtAddNodesCallback *addnodes_callback,
 		DhtPortCallback* pcb,
 		cstr file_name,
-		bool seed,
 		void *ctx,
-		bool performLessAgressiveSearch);
+		int flags);
 
 	void SetRate(int bytes_per_second);
 	void SetVersion(char const* client, int major, int minor);
@@ -1888,11 +1887,11 @@ public:
 	void RunSearches();
 #endif
 
-	void DoVote(const DhtID &target, int vote, DhtVoteCallback* callb, void *ctx, bool performLessAgressiveSearch = true);
+	void DoVote(const DhtID &target, int vote, DhtVoteCallback* callb, void *ctx, int flags = 0);
 
-	void DoScrape(const DhtID &target, DhtScrapeCallback *callb, void *ctx, bool performLessAgressiveSearch = true);
+	void DoScrape(const DhtID &target, DhtScrapeCallback *callb, void *ctx, int flags = 0);
 
-	void ResolveName(DhtID const& target, DhtHashFileNameCallback* callb, void *ctx, bool performLessAgressiveSearch = true);
+	void ResolveName(DhtID const& target, DhtHashFileNameCallback* callb, void *ctx, int flags = 0);
 
 	void DoAnnounce(const DhtID &target,
 		int target_len,
@@ -1900,9 +1899,8 @@ public:
 		DhtAddNodesCallback *callb,
 		DhtPortCallback *pcb,
 		cstr file_name,
-		bool seed,
 		void *ctx,
-		bool performLessAgressiveSearch = true);
+		int flags);
 
 	void RefreshBucket(uint buck);
 	uint PingStalestInBucket(uint buck);
