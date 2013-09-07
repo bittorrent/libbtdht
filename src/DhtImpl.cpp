@@ -1120,7 +1120,7 @@ void DhtImpl::AddPeerToStore(const DhtID &info_hash, cstr file_name, const SockA
 	StoredPeer sp;
 	addr.compact(sp.ip, true);
 	sp.time = time(NULL);
-	sp.seed = IDht::announce_seed;
+	sp.seed = seed;
 	sc->peers.push_back(sp);
 	_peers_tracked++;
 }
@@ -1530,7 +1530,9 @@ bool DhtImpl::ProcessQueryGetPeers(const SockAddr &addr, DHTMessage &message, Dh
 		for (int i = 0; i < sc->size(); ++i) {
 			StoredPeer const& p = (*sc)[i];
 			sha1_hash h = _sha_callback(p.ip, sizeof(p.ip));
-			if (p.seed) seeds.add(h);
+			if (p.seed) {
+				seeds.add(h);
+			}
 			else downloaders.add(h);
 		}
 
