@@ -11,6 +11,7 @@ lib ut_dht : src/$(SOURCES).cpp
 	  <library>/tommath//tommath/<link>static/<clang-cxx11>off
 	  <library>/tomcrypt//tomcrypt/<link>static/<clang-cxx11>off
 	  <include>libtomcrypt/src/headers
+	  <target-os>windows:<define>WIN32
 	: <link>static
 	: <include>src
 	;
