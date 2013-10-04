@@ -1570,6 +1570,7 @@ public:
 	void SetExternalIPCounter(ExternalIPCounter* ip);
 	void SetAddNodeResponseCallback(DhtAddNodeResponseCallback* cb);
 	void SetSHACallback(DhtSHACallback* cb);
+	void SetEd25519OpenCallback(Ed25519OpenCallback* cb);
 	void SetPacketCallback(DhtPacketCallback* cb);
 
 	void AddNode(const SockAddr& addr, void* userdata, uint origin);
@@ -1619,6 +1620,7 @@ public:
 	DhtLoadCallback* _load_callback;
 	DhtPacketCallback* _packet_callback;
 	DhtSHACallback* _sha_callback;
+	Ed25519OpenCallback* _ed25519_open_callback;
 	ExternalIPCounter* _ip_counter;
 
 	// the buckets in the routing table. These buckets are ordered by their

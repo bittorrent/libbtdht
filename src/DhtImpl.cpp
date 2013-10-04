@@ -1686,11 +1686,8 @@ bool DhtImpl::ProcessQueryFindNode(const SockAddr &addr, DHTMessage &message, Dh
 bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeerID &peerID, int packetSize)
 {
 	char buf[256];
-	char sprintfBuf[1500];
-	char numChars;
 	char const* const end = buf + sizeof(buf);
 	SimpleBencoder sb(buf);
-	bool putSuccessful = true;
 	DhtID targetDhtID;
 
 	// read the token
@@ -1724,37 +1721,27 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 
 	if(message.key.len && message.sequenceNum && message.signature.len)
 	{ // mutable put
-		int rsaStatusResult;
-		int rsaVerificationResult;
-
 		assert(message.vBuf.len < 800);
 
-		// construct and sha1 hash the bencoded sequence num and 'v' elemnent for verification
-		numChars = snprintf(sprintfBuf, sizeof(sprintfBuf), "3:seqi%de1:v", message.sequenceNum);
-		memcpy(sprintfBuf + numChars, message.vBuf.b, message.vBuf.len);
-		numChars += message.vBuf.len;
-
-		const sha1_hash hashPtr = _sha_callback((const byte*)sprintfBuf, numChars);
-
-		// import the public key
-		rsa_key key;
-		if (rsa_import(message.key.b, message.key.len, &key) != CRYPT_OK){
-			// the key provided is not valid
+		if(message.key.len != 32 || message.signature.len != 64) {
 			Account(DHT_INVALID_PQ_BAD_PUT_KEY, packetSize);
 			return false;
 		}
-
-		// verify the hash
-		rsaVerificationResult = rsa_verify_hash_ex((unsigned char*)message.signature.b, message.signature.len,
-			(unsigned char*)hashPtr.value, 20,
-			LTC_PKCS_1_PSS, 0, 0,
-			&rsaStatusResult, // [out] 0==hash did not verify, 1==valid
-			&key);
-		if(rsaVerificationResult != CRYPT_OK || !rsaStatusResult){
-			// hash verification failed
+		unsigned long long sig_msg_len = 64 + message.vBuf.len;
+		unsigned long long msg_len;
+		unsigned char* sig_msg = static_cast<unsigned char*>(malloc(sig_msg_len));
+		assert(sig_msg);
+		unsigned char* msg = static_cast<unsigned char*>(malloc(sig_msg_len));
+		assert(msg);
+		memcpy(sig_msg, message.signature.b, 64);
+		if (!_ed25519_open_callback(msg, &msg_len, sig_msg, sig_msg_len, message.key.b)) {
 			Account(DHT_INVALID_PQ_BAD_PUT_SIGNATURE, packetSize);
+			free(sig_msg);
+			free(msg);
 			return false;
 		}
+		free(sig_msg);
+		free(msg);
 
 		// make a hash of the address for the DataStores to use to record usage of an item
 		const sha1_hash addrHashPtr = _sha_callback((const byte*)addr.get_hash_key(), addr.get_hash_key_len());
@@ -1800,8 +1787,6 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 				containerPtr->lastUse = time(NULL);
 			}
 		}
-
-		rsa_free(&key);
 	}
 	else
 	{
@@ -2460,6 +2445,11 @@ void DhtImpl::SetPacketCallback(DhtPacketCallback* cb)
 void DhtImpl::SetSHACallback(DhtSHACallback* cb)
 {
 	_sha_callback = cb;
+}
+
+void DhtImpl::SetEd25519OpenCallback(Ed25519OpenCallback* cb)
+{
+	_ed25519_open_callback = cb;
 }
 
 void DhtImpl::SetAddNodeResponseCallback(DhtAddNodeResponseCallback* cb)
@@ -3410,7 +3400,7 @@ void DhtLookupScheduler::ImplementationSpecificReplyProcess(void *userdata, cons
 		nodes.b = (byte*)message.replyDict->GetString("nodes", &nodes.len);
 		info_hash.b = (byte*)message.replyDict->GetString("info_hash", &info_hash.len);
 		file_name.b = (byte*)message.replyDict->GetString("n", &file_name.len);
-		byte *id = (byte*)message.replyDict->GetString("id", 20);
+		//byte *id = (byte*)message.replyDict->GetString("id", 20);
 
 		BencodedList *valuesList = message.replyDict->GetList("values");
 		if (valuesList) {
