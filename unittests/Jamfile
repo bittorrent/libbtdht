@@ -1,0 +1,48 @@
+import testing ;
+import modules ;
+
+BOOST_ROOT = [ modules.peek : BOOST_ROOT ] ;
+use-project /boost : $(BOOST_ROOT) ;
+use-project /ut_dht : .. ;
+#use-project /tomcrypt : ../libtomcrypt ;
+#use-project /tommath : ../libtommath ;
+
+GTEST_ROOT = ../ut_utils/vendor/gtest-1.6.0 ;
+GMOCK_ROOT = ../ut_utils/vendor/gmock-1.6.0 ;
+
+DHT_SOURCES = DHTMessage DhtImpl ExternalIPCounter blockallocator dht ;
+TEST_SOURCES = UnitTestUDPSocket TestDHT ;
+#TEST_SOURCES = TestDHT TestDHTMessageObject TestDHTRoutingTable ;
+
+exe unit_tests
+	: # sources
+	../src/$(DHT_SOURCES).cpp
+	$(TEST_SOURCES).cpp
+	$(GTEST_ROOT)/src/gtest-all.cc
+  $(GMOCK_ROOT)/src/gmock-all.cc
+  $(GMOCK_ROOT)/src/gmock_main.cc
+	: # requirements
+	<define>_DEBUG_DHT=1
+#	<define>ENABLE_SRP=1
+	<library>/ut_dht//ut_dht/<clang-cxx11>off/<link>static
+#	<library>/tommath//tommath/<link>static
+#	<library>/tomcrypt//tomcrypt/<link>static
+	<library>/boost//system/<link>static
+
+	<include>$(GTEST_ROOT)/include
+	<include>$(GMOCK_ROOT)/include
+	<include>$(GTEST_ROOT)
+	<include>$(GMOCK_ROOT)
+	<define>GTEST_USE_OWN_TR1_TUPLE=1
+
+	<include>../src
+	<include>/opt/local/include
+
+	<toolset>clang:<clang-cxx11>on
+	<toolset>clang:<cxxflags>-Wno-invalid-source-encoding
+	<toolset>clang:<cxxflags>-Wno-multichar
+	<toolset>clang:<cxxflags>-Wno-unused-private-field
+#	libtommath makes the below completely impractical
+#	<warnings-as-errors>on
+	: # default build
+	;
