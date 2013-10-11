@@ -5,7 +5,6 @@
 
 // Once we move everything over to ed25519, we can drop this
 // dependency
-#include "tomcrypt.h"
 
 #include "bencoding.h"
 #include "DhtImpl.h"
@@ -1727,21 +1726,10 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 			Account(DHT_INVALID_PQ_BAD_PUT_KEY, packetSize);
 			return false;
 		}
-		unsigned long long sig_msg_len = 64 + message.vBuf.len;
-		unsigned long long msg_len;
-		unsigned char* sig_msg = static_cast<unsigned char*>(malloc(sig_msg_len));
-		assert(sig_msg);
-		unsigned char* msg = static_cast<unsigned char*>(malloc(sig_msg_len));
-		assert(msg);
-		memcpy(sig_msg, message.signature.b, 64);
-		if (!_ed25519_open_callback(msg, &msg_len, sig_msg, sig_msg_len, message.key.b)) {
+		if (!_ed25519_verify_callback(message.signature.b, message.vBuf.b, message.vBuf.len, message.key.b)) {
 			Account(DHT_INVALID_PQ_BAD_PUT_SIGNATURE, packetSize);
-			free(sig_msg);
-			free(msg);
 			return false;
 		}
-		free(sig_msg);
-		free(msg);
 
 		// make a hash of the address for the DataStores to use to record usage of an item
 		const sha1_hash addrHashPtr = _sha_callback((const byte*)addr.get_hash_key(), addr.get_hash_key_len());
@@ -2447,9 +2435,9 @@ void DhtImpl::SetSHACallback(DhtSHACallback* cb)
 	_sha_callback = cb;
 }
 
-void DhtImpl::SetEd25519OpenCallback(Ed25519OpenCallback* cb)
+void DhtImpl::SetEd25519VerifyCallback(Ed25519VerifyCallback* cb)
 {
-	_ed25519_open_callback = cb;
+	_ed25519_verify_callback = cb;
 }
 
 void DhtImpl::SetAddNodeResponseCallback(DhtAddNodeResponseCallback* cb)
