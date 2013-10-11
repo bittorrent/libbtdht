@@ -3400,7 +3400,7 @@ void DhtLookupScheduler::ImplementationSpecificReplyProcess(void *userdata, cons
 		nodes.b = (byte*)message.replyDict->GetString("nodes", &nodes.len);
 		info_hash.b = (byte*)message.replyDict->GetString("info_hash", &info_hash.len);
 		file_name.b = (byte*)message.replyDict->GetString("n", &file_name.len);
-		//byte *id = (byte*)message.replyDict->GetString("id", 20);
+		message.replyDict->GetString("id", 20);
 
 		BencodedList *valuesList = message.replyDict->GetList("values");
 		if (valuesList) {
