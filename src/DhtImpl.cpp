@@ -1301,16 +1301,16 @@ void DhtImpl::AddIP(SimpleBencoder& sb, byte const* id, SockAddr const& addr)
 	//verify the ip here...we need to notify them if they're using a
 	//peer id that doesn't match with their external ip
 
-	if (!DhtVerifyHardenedID(addr, id, _sha_callback)) {
+//	if (!DhtVerifyHardenedID(addr, id, _sha_callback)) {
 		if (addr.isv4()) {
-			sb.p += snprintf(sb.p, 35, "2:ip4:");
-			sb.p += addr.compact((byte*)sb.p, false);
+			sb.p += snprintf(sb.p, 35, "2:ip6:");
+			sb.p += addr.compact((byte*)sb.p, true);
 		} else {
-			sb.p += snprintf(sb.p, 35, "2:ip16:");
-			sb.p += addr.compact((byte*)sb.p, false);
+			sb.p += snprintf(sb.p, 35, "2:ip18:");
+			sb.p += addr.compact((byte*)sb.p, true);
 		}
 	}
-}
+//}
 
 
 //--------------------------------------------------------------------------------
@@ -2145,10 +2145,12 @@ bool DhtImpl::ProcessResponse(const SockAddr& addr,
 		SockAddr myIp;
 		Buffer external_ip;
 		external_ip.b = (byte*)message.replyDict->GetString("ip", &external_ip.len);
-		if(external_ip.len == 4){
+		if(external_ip.len == 6){
 			myIp.set_addr4(*((uint32 *) external_ip.b));
-		}else if(external_ip.len == 16){
+			myIp.set_port(*((uint16 *) external_ip.b+4));
+		}else if(external_ip.len == 18){
 			myIp.set_addr6(*((in6_addr *) external_ip.b));
+			myIp.set_port(*((uint16 *) external_ip.b+16));
 		}
 		if (!myIp.is_addr_any()){
 			CountExternalIPReport(myIp, req->peer.addr);
@@ -2580,6 +2582,42 @@ void DhtImpl::Vote(void *ctx_ptr, const sha1_hash* info_hash, int vote, DhtVoteC
 	_allow_new_job = false;
 }
 
+void DhtImpl::Put(
+		const byte * pkey,
+		DhtPutCallback * put_callback,
+		void *ctx,
+		int flags)
+{
+
+	int maxOutstanding = (flags & announce_non_aggressive)
+		? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA
+		: KADEMLIA_LOOKUP_OUTSTANDING;
+
+	sha1_hash pkey_hash = _sha_callback(pkey, sizeof(pkey));
+	DhtID target;
+	CopyBytesToDhtID(target, pkey_hash.value);
+
+	DhtPeerID *ids[32];
+	int num = AssembleNodeList(target, ids, sizeof(ids)/sizeof(ids[0]));
+
+
+	DhtProcessManager *dpm = new DhtProcessManager(ids, num, target);
+
+	CallBackPointers cbPtrs;
+	cbPtrs.putCallback = put_callback;
+	cbPtrs.callbackContext = ctx;
+
+	DhtProcessBase* getProc = GetDhtProcess::Create(this, *dpm, target, 20, cbPtrs, flags, maxOutstanding);
+	// processes will be exercised in the order they are added
+	dpm->AddDhtProcess(getProc); // add get_peers first
+
+	if ((flags & announce_only_get) == 0) {
+	DhtProcessBase* putProc = PutDhtProcess::Create(this, *dpm, pkey,
+		cbPtrs, flags);
+		dpm->AddDhtProcess(putProc); // add announce second
+	}
+	dpm->Start();
+}
 
 /**
  * The BT code calls this to announce itself to the DHT network.
@@ -3234,6 +3272,10 @@ void DhtLookupNodeList::SetNodeIds(DhtPeerID** ids, unsigned int numId, const Dh
 		InsertPeer(*ids[x], target);
 }
 
+void DhtLookupNodeList::set_data_blk(byte * v, int v_len)
+{
+	data_blk.assign(v, v + v_len);
+}
 
 //*****************************************************************************
 //
@@ -3303,10 +3345,10 @@ void DhtLookupScheduler::Schedule()
 		}
 		++nodeIndex;
 	}
-
 	// No outstanding requests. Means we're finished.
-	if (totalOutstandingRequests == 0)
-		CompleteThisProcess();
+	if (totalOutstandingRequests == 0){
+			CompleteThisProcess();
+	}
 }
 
 /**
@@ -3348,7 +3390,6 @@ void DhtLookupScheduler::OnReply(void *userdata, const DhtPeerID &peer_id, DhtRe
 	if(!req->slow_peer){
 		--numNonSlowRequestsOutstanding;
 	}
-
 	// If a "slow" problem, mark the node as slow and see if another query can be issued.
 	if (flags & PROCESS_AS_SLOW){
 		--numNonSlowRequestsOutstanding;
@@ -3499,10 +3540,12 @@ void DhtLookupScheduler::ImplementationSpecificReplyProcess(void *userdata, cons
 	}
 
 	dfnh = processManager.FindQueriedPeer(peer_id);
+
 	if(errored || (flags & ANY_ERROR)){
 		// mark peer as errored
 		if (dfnh) dfnh->queried = QUERIED_ERROR;
 		impl->UpdateError(peer_id);
+
 	}
 	else{
 		// mark that the peer replied.
@@ -3519,8 +3562,17 @@ void DhtLookupScheduler::ImplementationSpecificReplyProcess(void *userdata, cons
 				dfnh->token.b = (byte*)malloc(token.len);
 				memcpy(dfnh->token.b, token.b, token.len);
 			}
+			int seq = message.replyDict->GetInt("seq", -1);
+
+			if(seq >= processManager.seq()){
+				Buffer v;
+				v.b = (byte*)message.replyDict->GetString("v", &v.len);
+				processManager.set_data_blk(v.b, v.len);
+				processManager.set_seq(seq);
+			}
 		}
 	}
+
 }
 
 //*****************************************************************************
@@ -3895,6 +3947,162 @@ void AnnounceDhtProcess::CompleteThisProcess()
 	DhtProcessBase::CompleteThisProcess();
 }
 
+//*****************************************************************************
+//
+// GetDhtProcess			get
+//
+//*****************************************************************************
+
+GetDhtProcess::GetDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
+	, const DhtID & target_2, int target_2_len, time_t startTime, const CallBackPointers &consumerCallbacks, int maxOutstanding)
+	: DhtLookupScheduler(pDhtImpl,dpm,target_2,target_2_len,startTime,consumerCallbacks,maxOutstanding)
+{
+	
+	char* buf = (char*)this->_id;
+	snprintf(buf, GetDhtProcess::BUF_LEN, "2:id20:");
+	memcpy(buf + 7, pDhtImpl->_my_id_bytes, 20);
+
+
+#if g_log_dht
+	dht_log("GetDhtProcess,instantiated,id,%d,time,%d\n", target.id[0], get_milliseconds());
+#endif
+
+}
+
+DhtProcessBase* GetDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
+	const DhtID & target2, int target2_len,
+	CallBackPointers &cbPointers, int flags, int maxOutstanding)
+{
+	GetDhtProcess* process = new GetDhtProcess(pDhtImpl, dpm, target2, target2_len, time(NULL), cbPointers, maxOutstanding);
+
+	return process;
+}
+
+void GetDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
+{
+	const int bufLen = 1024;
+	char buf[bufLen];
+
+	SimpleBencoder sb(buf);
+	char const* end = buf + sizeof(buf);
+
+	sb.p += snprintf(sb.p, (end - sb.p), "d1:ad");
+
+	sb.put_buf((byte*)this->_id, 27);
+
+	sb.p += snprintf(sb.p, (end - sb.p), "6:target20:");
+
+	byte targetAsID[20];
+
+	DhtIDToBytes(targetAsID, target);
+	sb.put_buf(targetAsID, 20);
+
+	sb.p += snprintf(sb.p, (end - sb.p), "e1:q3:get");
+	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4), end);
+	impl->put_version(sb, end);
+	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:qe");
+	
+	impl->SendTo(nodeInfo.id, buf, sb.p - buf);
+}
+
+//*****************************************************************************
+//
+// PutDhtProcess			put
+//
+//*****************************************************************************
+
+PutDhtProcess::PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const byte * pkey, time_t startTime, const CallBackPointers &consumerCallbacks)
+	: DhtBroadcastScheduler(pDhtImpl,dpm,target,target_len,startTime,consumerCallbacks)
+{
+
+	signiture[0]='\0';
+	char* buf = (char*)this->_id;
+	snprintf(buf, PutDhtProcess::BUF_LEN, "2:id20:");
+	memcpy(buf + 7, pDhtImpl->_my_id_bytes, 20);
+
+	buf = (char*)this->_pkey;
+	snprintf(buf, PutDhtProcess::BUF_LEN, "1:k32:");
+	memcpy(buf + 6, pkey, 32);
+
+#if g_log_dht
+	dht_log("PutDhtProcess,instantiated,id,%d,time,%d\n", target.id[0], get_milliseconds());
+#endif
+
+}
+
+DhtProcessBase* PutDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
+	const byte * pkey,
+	CallBackPointers &cbPointers, int flags)
+{
+	PutDhtProcess* process = new PutDhtProcess(pDhtImpl, dpm, pkey, time(NULL), cbPointers);
+
+	return process;
+}
+
+void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
+{
+
+	if(!strlen(signiture))
+		callbackPointers.putCallback(callbackPointers.callbackContext, processManager.get_data_blk(), processManager.seq(), signiture);
+
+	const int bufLen = 1024;
+	char rpcArgsBuf[bufLen];
+	char buf[bufLen];
+
+	//printf("Hello from Put Send %d \n", processManager.get_data_blk().size());
+	// convert the token
+	/*ArgumenterValueInfo& argBuf = putArgumenterPtr->GetArgumenterValueInfo(a_token);
+	char* b = (char*)argBuf.GetBufferPtr();
+	int pos = snprintf(b, ArgumenterValueInfo::BUF_LEN, "%d:", int(nodeInfo.token.len));
+	memcpy(b + pos, nodeInfo.token.b, nodeInfo.token.len);
+	argBuf.SetNumBytesUsed(nodeInfo.token.len + pos);
+
+	putArgumenterPtr->enabled[a_token] = true;
+
+	// build the bencoded query string
+	SimpleBencoder sb(buf);
+	char const* end = buf + sizeof(buf);
+
+	sb.p += snprintf(sb.p, (end - sb.p), "d1:ad");
+
+	int args_len = putArgumenterPtr->BuildArgumentBytes((byte*)rpcArgsBuf, bufLen);
+	sb.put_buf((byte*)rpcArgsBuf, args_len);
+
+	sb.p += snprintf(sb.p, (end - sb.p), "e1:q3:put");
+	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4), end);
+	impl->put_version(sb, end);
+	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:qe");
+
+	// send the query
+	impl->SendTo(nodeInfo.id, buf, sb.p - buf);*/
+}
+
+void PutDhtProcess::ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags)
+{
+	// handle errors
+	if(message.dhtMessageType != DHT_RESPONSE){
+		impl->UpdateError(peer_id);
+	}
+}
+
+void PutDhtProcess::CompleteThisProcess()
+{
+	if (callbackPointers.processListener)
+		callbackPointers.processListener->ProcessCallback();
+
+	// Tell it that we're done
+	if (callbackPointers.addnodesCallback) {
+		byte bytes[20];
+		DhtIDToBytes(bytes, target);
+		callbackPointers.addnodesCallback(callbackPointers.callbackContext, bytes, NULL, 0);
+	}
+	signiture[0]='\0';
+
+#if g_log_dht
+	dht_log("PutDhtProcess,complete_announce,id,%d,time,%d\n", target.id[0], get_milliseconds());
+#endif
+	DhtProcessBase::CompleteThisProcess();
+}
 
 //*****************************************************************************
 //

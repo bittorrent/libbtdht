@@ -832,6 +832,7 @@ class CallBackPointers
 		DhtVoteCallback *voteCallback;
 		DhtHashFileNameCallback *filenameCallback;
 		DhtPortCallback *portCallback;
+		DhtPutCallback * putCallback;
 };
 
 inline CallBackPointers::CallBackPointers():callbackContext(NULL),
@@ -841,7 +842,8 @@ inline CallBackPointers::CallBackPointers():callbackContext(NULL),
 	scrapeCallback(NULL),
 	voteCallback(NULL),
 	filenameCallback(NULL),
-	portCallback(NULL)
+	portCallback(NULL),
+	putCallback(NULL)
 {}
 
 //*****************************************************************************
@@ -858,6 +860,10 @@ class DhtLookupNodeList
 		unsigned int numNodes;	// Number of entries in node table
 		DhtFindNodeEntry nodes[KADEMLIA_K*4];		// Table of closest nodes
 		static void FreeNodeEntry(DhtFindNodeEntry &ent) { if (ent.token.b) free(ent.token.b); }
+		std::vector<char> buffer;
+	protected:
+		unsigned int seq_max;
+		std::vector<char> data_blk;
 
 	public:
 		DhtLookupNodeList();
@@ -871,9 +877,13 @@ class DhtLookupNodeList
 		void SetAllQueriedStatus(QueriedStatus status);
 		void SetNodeIds(DhtPeerID** ids, unsigned int numId, const DhtID &target);
 		void CompactList();
+		int seq(){return seq_max;}
+		void set_seq(unsigned int sq){seq_max = sq;}
+		void set_data_blk(byte * v, int v_len);
+		std::vector<char> &get_data_blk(){return data_blk;}	
 };
 
-inline DhtLookupNodeList::DhtLookupNodeList():numNodes(0)
+inline DhtLookupNodeList::DhtLookupNodeList():numNodes(0), seq_max(0)
 {
 	memset(nodes, 0, sizeof(nodes));
 }
@@ -881,7 +891,7 @@ inline DhtLookupNodeList::DhtLookupNodeList():numNodes(0)
 /**
 Initializes the node list with the provided list of nodes.
 */
-inline DhtLookupNodeList::DhtLookupNodeList(DhtPeerID** ids, unsigned int numId, const DhtID &target):numNodes(0)
+inline DhtLookupNodeList::DhtLookupNodeList(DhtPeerID** ids, unsigned int numId, const DhtID &target):numNodes(0), seq_max(0)
 {
 	memset(nodes, 0, sizeof(nodes));
 	SetNodeIds(ids, numId, target);
@@ -1436,6 +1446,86 @@ inline AnnounceDhtProcess::~AnnounceDhtProcess()
 	delete announceArgumenterPtr;
 }
 
+//*****************************************************************************
+//
+// GetDhtProcess		get
+//
+//*****************************************************************************
+class GetDhtProcess : public DhtLookupScheduler
+{
+
+	protected:
+		virtual void DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID);
+		virtual void CompleteThisProcess();
+
+	public:
+
+		enum ArgBufferLength {BUF_LEN = 32};
+
+		byte _id[BUF_LEN];
+
+		GetDhtProcess(DhtImpl *pDhtImpl, DhtProcessManager &dpm, const DhtID& target2
+			, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks
+			, int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING);
+		static DhtProcessBase* Create(DhtImpl* pImpl, DhtProcessManager &dpm,
+			const DhtID &target2, int target2_len,
+			CallBackPointers &cbPointers,
+			int flags = 0,
+			int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING);
+};
+
+inline void GetDhtProcess::CompleteThisProcess()
+{
+#if g_log_dht
+	dht_log("GetDhtProcess,completed,id,%d,time,%d\n", target.id[0], get_microseconds());
+#endif
+	processManager.CompactList();
+	DhtProcessBase::CompleteThisProcess();
+}
+
+
+//*****************************************************************************
+//
+// PutDhtProcess		put
+//
+//*****************************************************************************
+class PutDhtProcess : public DhtBroadcastScheduler
+{
+	protected:
+
+		virtual void ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags);
+		virtual void DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID);
+		virtual void CompleteThisProcess();
+		char signiture[256];
+
+	public:
+		enum ArgBufferLength {BUF_LEN = 32};
+
+		byte _id[BUF_LEN];
+		byte _pkey[BUF_LEN];
+
+		PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const byte * pkey, time_t startTime, const CallBackPointers &consumerCallbacks);
+		~PutDhtProcess();
+		virtual void Start();
+
+		static DhtProcessBase* Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
+			const byte * pkey,
+			CallBackPointers &cbPointers,
+			int flags);
+};
+
+inline void PutDhtProcess::Start()
+{
+#if g_log_dht
+	dht_log("PutDhtProcess,start_announce,id,%d,time,%d\n", target.id[0], get_microseconds());
+#endif
+	processManager.SetAllQueriedStatus(QUERIED_NO);
+	DhtProcessBase::Start();
+}
+
+inline PutDhtProcess::~PutDhtProcess()
+{
+}
 
 //*****************************************************************************
 //
@@ -1555,6 +1645,13 @@ public:
 	void Vote(void *ctx, const sha1_hash* info_hash, int vote, DhtVoteCallback* callb);
 
 	void SetId(byte new_id_bytes[20]);
+	
+	void Put(
+		const byte * pkey,
+		DhtPutCallback * put_callback,
+		void *ctx,
+		int flags);
+
 	void AnnounceInfoHash(
 		const byte *info_hash,
 		int info_hash_len,

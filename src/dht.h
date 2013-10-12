@@ -6,6 +6,7 @@
  */
 
 #include <stddef.h> // for size_t
+#include <vector> 
 #include "utypes.h"
 #include "sha1_hash.h"
 #include "sockaddr.h"
@@ -23,6 +24,7 @@ typedef void DhtHashFileNameCallback(void *ctx, const byte *info_hash, const byt
 typedef void DhtAddNodesCallback(void *ctx, const byte *info_hash, const byte *peers, uint num_peers);
 typedef void DhtAddNodeResponseCallback(void *userdata, bool is_response, SockAddr const& addr);
 typedef void DhtScrapeCallback(void *ctx, const byte *target, int downloaders, int seeds);
+typedef void DhtPutCallback(void * ctx, std::vector<char>& buffer, int seq, char * signiture);
 
 // asks the client to save the DHT state
 typedef void DhtSaveCallback(const byte* buf, int len);
@@ -61,6 +63,13 @@ public:
 	virtual bool handleICMP(UDPSocketInterface *socket, byte *buffer, size_t len, const SockAddr& addr) = 0;
 	virtual void Tick() = 0;
 	virtual void Vote(void *ctx, const sha1_hash* info_hash, int vote, DhtVoteCallback* callb) = 0;
+	
+	virtual void Put(
+		const byte * pkey,
+		DhtPutCallback * put_callback,
+		void *ctx,
+		int flags = 0) = 0;
+
 	virtual void AnnounceInfoHash(
 		const byte *info_hash,
 		int info_hash_len,

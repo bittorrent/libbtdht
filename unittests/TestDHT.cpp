@@ -1996,6 +1996,138 @@ TEST(TestDhtImpl, TestFindNodeRPC_ipv4)
 	EXPECT_FALSE(memcmp((const void*)nodes.b, (const void *)"abcdefghij0123456789zzzzxx", nodes.len));
 }
 
+void put_call_back(void * ctx, std::vector<char>& buffer, int seq, char * signiture){
+	printf("%s\n", "In put call back function");
+}
+
+TEST(TestDhtImpl, TestPutRPC_ipv4)
+{
+	UnitTestUDPSocket socket4;
+	UnitTestUDPSocket socket6;
+	BencodedDict bDictGetPeer;
+	SockAddr sAddr(0x7a7a7a7a,0x7878); // ip = zzzz and socket = xx
+	socket4.SetBindAddr(sAddr);
+	smart_ptr<DhtImpl> dhtTestObj(new DhtImpl(&socket4, &socket6));
+	dhtTestObj->SetSHACallback(&sha1_callback);
+
+	// prepare the object for use
+	dhtTestObj->Enable(true,0);
+	SetDHT_my_id_Bytes(dhtTestObj);
+
+	// put a peer into the dht for it to work with
+	DhtPeerID peerID;
+	peerID.id.id[0] = '1111'; // 1111
+	peerID.id.id[1] = 'BBBB'; // BBBB
+	peerID.id.id[2] = 'CCCC'; // CCCC
+	peerID.id.id[3] = 'DDDD'; // DDDD
+	peerID.id.id[4] = '0000'; // 0000
+	peerID.addr.set_port(128);
+	peerID.addr.set_addr4(0xf0f0f0f0);
+	dhtTestObj->Update(peerID, 0, false);
+	Buffer peerIDBuffer;
+	peerIDBuffer.len = 20;
+	peerIDBuffer.b = (byte*)&peerID.id.id[0];
+
+	DhtID target;
+	target.id[0] = 'FFFF'; // FFFF
+	target.id[1] = 'GGGG'; // GGGG
+	target.id[2] = 'HHHH'; // HHHH
+	target.id[3] = 'IIII'; // IIII
+	target.id[4] = 'JJJJ'; // JJJJ
+
+	// *****************************************************
+	// Make the dht emit an announce message (the get_peers rpc)
+	// Just tell it that the target is only 16 bytes long (instead of 20)
+	// *****************************************************
+	byte * pkey = (byte *)"dhuieheuu383y8yr7yy3hd3hdh3gfhg3g3e73r3";
+	EXPECT_FALSE(dhtTestObj->IsBusy()) << "The dht should not be busy yet";
+	dhtTestObj->Put(pkey, &put_call_back, NULL, 0);
+	//EXPECT_TRUE(dhtTestObj->IsBusy()) << "The dht should be busy";
+
+	// *****************************************************
+	// grab from the socket the emitted message and extract
+	// the transaction ID and verify the remainder of the
+	// message
+	// *****************************************************
+	std::string getOutput = socket4.GetSentDataAsString();
+	BencEntity bEntityGetQuery;
+	// verify the bencoded string that went out the socket
+	BencEntity::Parse((const byte *)getOutput.c_str(), bEntityGetQuery, (const byte *)(getOutput.c_str() + getOutput.length()));
+
+	// get the query dictionary
+	BencodedDict *dictForGet = BencodedDict::AsDict(&bEntityGetQuery);
+	EXPECT_TRUE(dictForGet);
+	if (!dictForGet) {
+		FAIL() << "ERROR:  The dht did not emit a bencoded dictionary for announce";
+	}
+
+	Buffer type;
+	type.b = (byte*)dictForGet->GetString("y" ,&type.len);
+	ASSERT_EQ(1, type.len) << "ERROR: the 'y' type length is wrong (should be 1 for 'q', 'r', or 'e')";
+	ASSERT_EQ('q', type.b[0]) << "ERROR: 'y' type is wrong; should be 'q' for query instead of:  " << type.b[0];
+
+	Buffer command;
+	command.b = (byte*)dictForGet->GetString("q" ,&command.len);
+	EXPECT_EQ(3, command.len);
+	EXPECT_FALSE(memcmp("get", command.b, 3)) << "ERROR: 'q' command is wrong";
+
+	// get the transaction ID to use later
+	Buffer tid;
+	tid.b = (byte*)dictForGet->GetString("t" ,&tid.len);
+	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
+
+	// now look into the query data
+	BencodedDict *getQuery = dictForGet->GetDict("a");
+	if (!getQuery) {
+		FAIL() << "ERROR:  Failed to extract 'a' dictionary from get_peer response";
+	}
+
+	Buffer id;
+	id.b = (byte*)getQuery->GetString("id" ,&id.len);
+	EXPECT_EQ(20, id.len);
+	EXPECT_FALSE(memcmp("AAAABBBBCCCCDDDDEEEE", id.b, 20)) << "ERROR: announced id is wrong";
+
+
+	Buffer pkey_buf;
+	pkey_buf.b = (byte*)getQuery->GetString("target" ,&pkey_buf.len);
+	EXPECT_EQ(20, pkey_buf.len);
+	EXPECT_FALSE(memcmp(sha1_callback(pkey, sizeof(pkey)).value, pkey_buf.b, 20)) << "ERROR: pkey is not the correct target";
+
+	std::vector<byte>	messageBytes;
+	std::vector<byte>	replyDictionaryBytes;
+
+	std::string responseToken("20_byte_reply_token.");
+	//std::string nearistNode  ("26_byte_nearist_node_addr.");
+	std::string nearistNode  ("");
+
+	std::string v("terfdre534erwe24366");
+
+	int seq = 3;
+	// construct the message bytes
+	BencStartDictionary(replyDictionaryBytes);
+	{
+		BencAddNameValuePair(replyDictionaryBytes,"id",peerIDBuffer);
+		BencAddNameValuePair(replyDictionaryBytes,"nodes",nearistNode);
+		BencAddNameValuePair(replyDictionaryBytes,"token",responseToken);
+		BencAddNameValuePair(replyDictionaryBytes,"seq",seq);
+		BencAddNameValuePair(replyDictionaryBytes,"v",v);		
+	}
+	BencEndDictionary(replyDictionaryBytes);
+
+	BencStartDictionary(messageBytes);
+	{
+		BencAddNameAndBencodedDictionary(messageBytes,"r",replyDictionaryBytes);
+		BencAddNameValuePair(messageBytes,"t",tid);
+		BencAddNameValuePair(messageBytes,"y","r");
+	}
+	BencEndDictionary(messageBytes);
+
+	// clear the socket and "send" the reply
+	socket4.Reset();
+	dhtTestObj->ProcessIncoming((byte*)&messageBytes.front(), messageBytes.size(), peerID.addr);
+
+	//EXPECT_TRUE(dhtTestObj->IsBusy()) << "The dht should still be busy";
+}
 
 TEST(TestDhtImpl, TestAnnouncePeerRPC_ipv4)
 {
