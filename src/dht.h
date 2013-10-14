@@ -42,6 +42,11 @@ typedef int DhtPortCallback();
 // allows the dht client to define what SHA-1 implementation to use
 typedef sha1_hash DhtSHACallback(byte const* buf, int len);
 
+// callback to ed25519 crypto_sign_open used for message verification
+typedef bool Ed25519VerifyCallback(const unsigned char *signature,
+		const unsigned char *message, unsigned long long message_len,
+		const unsigned char *key);
+
 /**
  * DHT public interface
  */
@@ -100,6 +105,7 @@ public:
 	virtual void SetPacketCallback(DhtPacketCallback* cb) = 0;
 	virtual void SetAddNodeResponseCallback(DhtAddNodeResponseCallback* cb) = 0;
 	virtual void SetSHACallback(DhtSHACallback* cb) = 0;
+	virtual void SetEd25519VerifyCallback(Ed25519VerifyCallback* cb) = 0;
 	virtual void AddBootstrapNode(SockAddr const& addr) = 0;
 	
 	// userdata pointer is passed on to the AddNodeReponseCallback

@@ -5,7 +5,6 @@
 
 // Once we move everything over to ed25519, we can drop this
 // dependency
-#include "tomcrypt.h"
 
 #include "bencoding.h"
 #include "DhtImpl.h"
@@ -1686,8 +1685,6 @@ bool DhtImpl::ProcessQueryFindNode(const SockAddr &addr, DHTMessage &message, Dh
 bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeerID &peerID, int packetSize)
 {
 	char buf[256];
-	char sprintfBuf[1500];
-	char numChars;
 	char const* const end = buf + sizeof(buf);
 	SimpleBencoder sb(buf);
 	DhtID targetDhtID;
@@ -1723,34 +1720,13 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 
 	if(message.key.len && message.sequenceNum && message.signature.len)
 	{ // mutable put
-		int rsaStatusResult;
-		int rsaVerificationResult;
-
 		assert(message.vBuf.len < 800);
 
-		// construct and sha1 hash the bencoded sequence num and 'v' elemnent for verification
-		numChars = snprintf(sprintfBuf, sizeof(sprintfBuf), "3:seqi%de1:v", message.sequenceNum);
-		memcpy(sprintfBuf + numChars, message.vBuf.b, message.vBuf.len);
-		numChars += message.vBuf.len;
-
-		const sha1_hash hashPtr = _sha_callback((const byte*)sprintfBuf, numChars);
-
-		// import the public key
-		rsa_key key;
-		if (rsa_import(message.key.b, message.key.len, &key) != CRYPT_OK){
-			// the key provided is not valid
+		if(message.key.len != 32 || message.signature.len != 64) {
 			Account(DHT_INVALID_PQ_BAD_PUT_KEY, packetSize);
 			return false;
 		}
-
-		// verify the hash
-		rsaVerificationResult = rsa_verify_hash_ex((unsigned char*)message.signature.b, message.signature.len,
-			(unsigned char*)hashPtr.value, 20,
-			LTC_PKCS_1_PSS, 0, 0,
-			&rsaStatusResult, // [out] 0==hash did not verify, 1==valid
-			&key);
-		if(rsaVerificationResult != CRYPT_OK || !rsaStatusResult){
-			// hash verification failed
+		if (!_ed25519_verify_callback(message.signature.b, message.vBuf.b, message.vBuf.len, message.key.b)) {
 			Account(DHT_INVALID_PQ_BAD_PUT_SIGNATURE, packetSize);
 			return false;
 		}
@@ -1799,8 +1775,6 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 				containerPtr->lastUse = time(NULL);
 			}
 		}
-
-		rsa_free(&key);
 	}
 	else
 	{
@@ -2461,6 +2435,11 @@ void DhtImpl::SetPacketCallback(DhtPacketCallback* cb)
 void DhtImpl::SetSHACallback(DhtSHACallback* cb)
 {
 	_sha_callback = cb;
+}
+
+void DhtImpl::SetEd25519VerifyCallback(Ed25519VerifyCallback* cb)
+{
+	_ed25519_verify_callback = cb;
 }
 
 void DhtImpl::SetAddNodeResponseCallback(DhtAddNodeResponseCallback* cb)
