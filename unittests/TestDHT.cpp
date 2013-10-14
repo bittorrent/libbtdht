@@ -791,6 +791,7 @@ MutableComponents GetComponents(smart_ptr<DhtImpl> &dhtTestObj, std::vector<byte
 	}
 
 	// return the key info
+	free(vBuf.b);
 	vBuf.len = 0;
 	vBuf.b = (byte*)reply->GetString("key", &vBuf.len);
 	returnData.key.clear();
