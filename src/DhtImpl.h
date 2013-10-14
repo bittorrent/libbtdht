@@ -880,7 +880,8 @@ class DhtLookupNodeList
 		int seq(){return seq_max;}
 		void set_seq(unsigned int sq){seq_max = sq;}
 		void set_data_blk(byte * v, int v_len);
-		std::vector<char> &get_data_blk(){return data_blk;}	
+		std::vector<char> &get_data_blk(){return data_blk;}
+		char * get_data_blk_str(){return &data_blk[0];}	
 };
 
 inline DhtLookupNodeList::DhtLookupNodeList():numNodes(0), seq_max(0)

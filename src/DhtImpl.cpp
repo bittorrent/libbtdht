@@ -4045,28 +4045,41 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 	if(!strlen(signiture))
 		callbackPointers.putCallback(callbackPointers.callbackContext, processManager.get_data_blk(), processManager.seq(), signiture);
 
+	
 	const int bufLen = 1024;
-	char rpcArgsBuf[bufLen];
 	char buf[bufLen];
 
-	//printf("Hello from Put Send %d \n", processManager.get_data_blk().size());
-	// convert the token
-	/*ArgumenterValueInfo& argBuf = putArgumenterPtr->GetArgumenterValueInfo(a_token);
-	char* b = (char*)argBuf.GetBufferPtr();
-	int pos = snprintf(b, ArgumenterValueInfo::BUF_LEN, "%d:", int(nodeInfo.token.len));
-	memcpy(b + pos, nodeInfo.token.b, nodeInfo.token.len);
-	argBuf.SetNumBytesUsed(nodeInfo.token.len + pos);
-
-	putArgumenterPtr->enabled[a_token] = true;
-
-	// build the bencoded query string
 	SimpleBencoder sb(buf);
 	char const* end = buf + sizeof(buf);
 
 	sb.p += snprintf(sb.p, (end - sb.p), "d1:ad");
+	sb.put_buf((byte*)this->_id, 27);
 
-	int args_len = putArgumenterPtr->BuildArgumentBytes((byte*)rpcArgsBuf, bufLen);
-	sb.put_buf((byte*)rpcArgsBuf, args_len);
+	sb.put_buf((byte*)this->_pkey, 32 + 6);
+
+	sb.p += snprintf(sb.p, (end - sb.p), "3:seqi");
+
+	sb.p += snprintf(sb.p, (end - sb.p), "%d", processManager.seq()+1);
+
+
+	sb.p += snprintf(sb.p, (end - sb.p), "e3:sig256:");
+
+	sb.put_buf((byte*)signiture, 256);
+
+
+	sb.p += snprintf(sb.p, (end - sb.p), "5:token");
+
+	sb.p += snprintf(sb.p, (end - sb.p), "%d:", int(nodeInfo.token.len));
+
+	sb.put_buf((byte*)nodeInfo.token.b, int(nodeInfo.token.len));
+
+	char * v = processManager.get_data_blk_str();
+
+	sb.p += snprintf(sb.p, (end - sb.p), "1:v");
+
+	sb.p += snprintf(sb.p, (end - sb.p), "%d:", strlen(v));
+
+	sb.p += snprintf(sb.p, (end - sb.p), "%s", v);
 
 	sb.p += snprintf(sb.p, (end - sb.p), "e1:q3:put");
 	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4), end);
@@ -4074,7 +4087,7 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:qe");
 
 	// send the query
-	impl->SendTo(nodeInfo.id, buf, sb.p - buf);*/
+	impl->SendTo(nodeInfo.id, buf, sb.p - buf);
 }
 
 void PutDhtProcess::ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags)

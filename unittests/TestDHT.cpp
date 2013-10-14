@@ -1997,6 +1997,8 @@ TEST(TestDhtImpl, TestFindNodeRPC_ipv4)
 }
 
 void put_call_back(void * ctx, std::vector<char>& buffer, int seq, char * signiture){
+	for(int i = 0; i<256; i++)
+		signiture[i]='a';
 	printf("%s\n", "In put call back function");
 }
 
@@ -2039,7 +2041,7 @@ TEST(TestDhtImpl, TestPutRPC_ipv4)
 	// Make the dht emit an announce message (the get_peers rpc)
 	// Just tell it that the target is only 16 bytes long (instead of 20)
 	// *****************************************************
-	byte * pkey = (byte *)"dhuieheuu383y8yr7yy3hd3hdh3gfhg3g3e73r3";
+	byte * pkey = (byte *)"dhuieheuu383y8yr7yy3hd3hdh3gfhg3";
 	EXPECT_FALSE(dhtTestObj->IsBusy()) << "The dht should not be busy yet";
 	dhtTestObj->Put(pkey, &put_call_back, NULL, 0);
 	//EXPECT_TRUE(dhtTestObj->IsBusy()) << "The dht should be busy";
@@ -2100,7 +2102,7 @@ TEST(TestDhtImpl, TestPutRPC_ipv4)
 	//std::string nearistNode  ("26_byte_nearist_node_addr.");
 	std::string nearistNode  ("");
 
-	std::string v("terfdre534erwe24366");
+	std::string v("terfdre534erwe2436676terdfgfet");
 
 	int seq = 3;
 	// construct the message bytes
@@ -2123,10 +2125,64 @@ TEST(TestDhtImpl, TestPutRPC_ipv4)
 	BencEndDictionary(messageBytes);
 
 	// clear the socket and "send" the reply
+
 	socket4.Reset();
 	dhtTestObj->ProcessIncoming((byte*)&messageBytes.front(), messageBytes.size(), peerID.addr);
 
-	//EXPECT_TRUE(dhtTestObj->IsBusy()) << "The dht should still be busy";
+	EXPECT_TRUE(dhtTestObj->IsBusy()) << "The dht should still be busy";
+
+	//Checking the put messages
+
+	std::string putOutput = socket4.GetSentDataAsString();
+	BencEntity bEntityPutQuery;
+	// verify the bencoded string that went out the socket
+	BencEntity::Parse((const byte *)putOutput.c_str(), bEntityPutQuery, (const byte *)(putOutput.c_str() + putOutput.length()));
+
+	// get the query dictionary
+	BencodedDict *dictForPut = BencodedDict::AsDict(&bEntityPutQuery);
+	EXPECT_TRUE(dictForPut);
+	if (!dictForPut) {
+		FAIL() << "ERROR:  The dht did not emit a bencoded dictionary for announce";
+	}
+
+	type.b = (byte*)dictForPut->GetString("y" ,&type.len);
+	ASSERT_EQ(1, type.len) << "ERROR: the 'y' type length is wrong (should be 1 for 'q', 'r', or 'e')";
+	ASSERT_EQ('q', type.b[0]) << "ERROR: 'y' type is wrong; should be 'q' for query instead of:  " << type.b[0];
+
+	command.b = (byte*)dictForPut->GetString("q" ,&command.len);
+	EXPECT_EQ(3, command.len);
+	EXPECT_FALSE(memcmp("put", command.b, 3)) << "ERROR: 'q' command is wrong";
+
+	// get the transaction ID to use later
+	tid.b = (byte*)dictForPut->GetString("t" ,&tid.len);
+	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
+
+	// now look into the query data
+	BencodedDict *putQuery = dictForPut->GetDict("a");
+	if (!putQuery) {
+		FAIL() << "ERROR:  Failed to extract 'a' dictionary from put_peer response";
+	}
+
+	id.b = (byte*)putQuery->GetString("id" ,&id.len);
+	EXPECT_EQ(20, id.len);
+	EXPECT_FALSE(memcmp("AAAABBBBCCCCDDDDEEEE", id.b, 20)) << "ERROR: announced id is wrong";
+
+	EXPECT_EQ(seq+1, putQuery->GetInt("seq"));
+
+	Buffer sig;
+	sig.b = (byte*)putQuery->GetString("sig" ,&sig.len);
+	EXPECT_EQ(256, sig.len);
+
+	Buffer token;
+	token.b = (byte*)putQuery->GetString("token" ,&token.len);
+	EXPECT_EQ(20, token.len);
+	EXPECT_FALSE(memcmp(responseToken.c_str(), token.b, 20)) << "ERROR: announced token is wrong";
+
+	Buffer v_out;
+	v_out.b = (byte*)putQuery->GetString("v" ,&v_out.len);
+	EXPECT_EQ(v.size(), v_out.len);
+	EXPECT_FALSE(memcmp(v.c_str(), v_out.b, v.size())) << "ERROR: v is wrong";
+
 }
 
 TEST(TestDhtImpl, TestAnnouncePeerRPC_ipv4)
