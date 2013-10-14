@@ -1772,8 +1772,9 @@ TEST(TestDhtImpl, TestPingRPC_ipv4)
 	// check the ipv4 address we supplied in SocketAddr sAddr(...) above
 	Buffer ip;
 	ip.b = (byte*)reply->GetString("ip", &ip.len);
-	ASSERT_EQ(4, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
+	ASSERT_EQ(6, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
 	EXPECT_FALSE(memcmp((const void*)ip.b, (const void *)"zzzz", 4));
+	EXPECT_FALSE(memcmp((const void*)(ip.b + 4), (const void *)"xx", 2));
 }
 
 TEST(TestDhtImpl, TestPingRPC_ipv4_ParseKnownPackets)
@@ -1845,8 +1846,9 @@ TEST(TestDhtImpl, TestPingRPC_ipv4_ParseKnownPackets)
 	// check the ipv4 address we supplied in SocketAddr sAddr(...) above
 	Buffer ip;
 	ip.b = (byte*)reply->GetString("ip", &ip.len);
-	ASSERT_EQ(4, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
+	ASSERT_EQ(6, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
 	EXPECT_FALSE(memcmp((const void*)ip.b, (const void *)"zzzz", 4));
+	EXPECT_FALSE(memcmp((const void*)(ip.b + 4), (const void *)"xx", 2));
 }
 
 TEST(TestDhtImpl, TestGetPeersRPC_ipv4)
@@ -1912,8 +1914,9 @@ TEST(TestDhtImpl, TestGetPeersRPC_ipv4)
 	// check the ipv4 address we supplied in SocketAddr sAddr(...) above
 	Buffer ip;
 	ip.b = (byte*)reply->GetString("ip", &ip.len);
-	ASSERT_EQ(4, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
-	EXPECT_FALSE(memcmp((const void*)ip.b, (const void *)"zzzz", ip.len));
+	ASSERT_EQ(6, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
+	EXPECT_FALSE(memcmp((const void*)ip.b, (const void *)"zzzz", 4));
+	EXPECT_FALSE(memcmp((const void*)(ip.b + 4), (const void *)"xx", 2));
 
 	// in the test environment there are no peers.  There should however be a node - this one
 	// expect back the id provided in the query, ip=zzzz port=xx (since the querying node and this node are the same in this test)
@@ -2297,8 +2300,9 @@ TEST(TestDhtImpl, TestAnnouncePeerRPC_ipv4)
 	// check the ipv4 address we supplied in SocketAddr sAddr(...) above
 	Buffer ip;
 	ip.b = (byte*)reply->GetString("ip", &ip.len);
-	ASSERT_EQ(4, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
+	ASSERT_EQ(6, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
 	EXPECT_FALSE(memcmp((const void*)ip.b, (const void *)"zzzz", 4));
+	EXPECT_FALSE(memcmp((const void*)(ip.b + 4), (const void *)"xx", 2));
 }
 
 TEST(TestDhtImpl, TestAnnouncePeerWithImpliedport)
@@ -2543,8 +2547,9 @@ TEST(TestDhtImpl, TestVoteRPC_ipv4)
 	// check the ipv4 address we supplied in SocketAddr sAddr(...) above
 	Buffer ip;
 	ip.b = (byte*)reply->GetString("ip", &ip.len);
-	ASSERT_EQ(4, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
+	ASSERT_EQ(6, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
 	EXPECT_FALSE(memcmp((const void*)ip.b, (const void *)"zzzz", 4));
+	EXPECT_FALSE(memcmp((const void*)(ip.b + 4), (const void *)"xx", 2));
 
 	// get the votes out of the dictionary
 	BencodedList *voteList = reply->GetList("v");
@@ -2686,8 +2691,9 @@ TEST(TestDhtImpl, TestVoteRPC_ipv4_MultipleVotes)
 	// check the ipv4 address we supplied in SocketAddr sAddr(...) above
 	Buffer ip;
 	ip.b = (byte*)reply->GetString("ip", &ip.len);
-	ASSERT_EQ(4, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
+	ASSERT_EQ(6, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
 	EXPECT_FALSE(memcmp((const void*)ip.b, (const void *)"zzzz", 4));
+	EXPECT_FALSE(memcmp((const void*)(ip.b + 4), (const void *)"xx", 2));
 
 	// get the votes out of the dictionary
 	BencodedList *voteList = reply->GetList("v");
@@ -2752,10 +2758,13 @@ bool AnnounceAndVerify(smart_ptr<DhtImpl> &dhtTestObj, std::vector<byte> &messag
 	if(!ip.b){
 		return false;
 	}
-	if(ip.len != sAddr_AddressAsString.size()){
+	if(ip.len != (sAddr_AddressAsString.size() + sAddr_PortAsString.size())){
 		return false;
 	}
 	if(memcmp((const void*)ip.b, (const void *)sAddr_AddressAsString.c_str(), sAddr_AddressAsString.size())){
+		return false;
+	}
+	if(memcmp((const void*)(ip.b + sAddr_AddressAsString.size()), (const void *)sAddr_PortAsString.c_str(), sAddr_PortAsString.size())){
 		return false;
 	}
 
