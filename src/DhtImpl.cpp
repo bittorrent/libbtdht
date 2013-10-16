@@ -171,6 +171,9 @@ DhtImpl::~DhtImpl()
 		}
 		_dht_bucket_allocator.Free(_buckets[i]);
 	}
+	for (std::vector<StoredContainer>::iterator it = _peer_store.begin(); it != _peer_store.end(); it++) {
+		free(it->file_name);
+	}
 #ifdef _DEBUG_MEM_LEAK
 	FreeRequests();
 #endif
@@ -1455,7 +1458,7 @@ bool DhtImpl::ProcessQueryAnnouncePeer(const SockAddr &thisNodeAddress, DHTMessa
 #if defined(_DEBUG_DHT)
 		//TODO: use static temp and strcpy into it
 		char* temp = strdup(format_dht_id(info_hash_id));
-		debug_log("ANNOUNCE_PEER: id='%s', info_hash='%s', host='%A', token='%s'", format_dht_id(peerID.id), temp, &peerID.addr, hexify(message.token.b));
+		debug_log("ANNOUNCE_PEER: id='%s', info_hash='%s', host='%A', token='%s'", format_dht_id(peerID.id), temp, &peerID.addr, hexify(message.token.b)); //TODO: valgrind fishiness
 		free(temp);
 #endif
 
@@ -2440,6 +2443,11 @@ void DhtImpl::SetSHACallback(DhtSHACallback* cb)
 void DhtImpl::SetEd25519VerifyCallback(Ed25519VerifyCallback* cb)
 {
 	_ed25519_verify_callback = cb;
+}
+
+void DhtImpl::SetEd25519SignCallback(Ed25519SignCallback* cb)
+{
+	_ed25519_sign_callback = cb;
 }
 
 void DhtImpl::SetAddNodeResponseCallback(DhtAddNodeResponseCallback* cb)
@@ -4001,7 +4009,7 @@ PutDhtProcess::PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const by
 
 	buf = (char*)this->_pkey;
 	snprintf(buf, PutDhtProcess::BUF_LEN, "1:k32:");
-	memcpy(buf + 6, pkey, 32);
+	memcpy(buf + 6, pkey, 32); //TODO: invalid write
 
 #if g_log_dht
 	dht_log("PutDhtProcess,instantiated,id,%d,time,%d\n", target.id[0], get_milliseconds());
@@ -4034,7 +4042,7 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 	sb.p += snprintf(sb.p, (end - sb.p), "d1:ad");
 	sb.put_buf((byte*)this->_id, 27);
 
-	sb.put_buf((byte*)this->_pkey, 32 + 6);
+	sb.put_buf((byte*)this->_pkey, 32 + 6); //TODO: invalid read
 
 	sb.p += snprintf(sb.p, (end - sb.p), "3:seqi");
 
@@ -4056,9 +4064,9 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 
 	sb.p += snprintf(sb.p, (end - sb.p), "1:v");
 
-	sb.p += snprintf(sb.p, (end - sb.p), "%d:", strlen(v));
+	sb.p += snprintf(sb.p, (end - sb.p), "%d:", strlen(v)); //TODO: invalid read
 
-	sb.p += snprintf(sb.p, (end - sb.p), "%s", v);
+	sb.p += snprintf(sb.p, (end - sb.p), "%s", v); //TODO: invalid read
 
 	sb.p += snprintf(sb.p, (end - sb.p), "e1:q3:put");
 	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4), end);

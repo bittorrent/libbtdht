@@ -47,6 +47,10 @@ typedef bool Ed25519VerifyCallback(const unsigned char *signature,
 		const unsigned char *message, unsigned long long message_len,
 		const unsigned char *key);
 
+typedef void Ed25519SignCallback(unsigned char *signature,
+		const unsigned char *message, unsigned long long message_len,
+		const unsigned char *key);
+
 /**
  * DHT public interface
  */
