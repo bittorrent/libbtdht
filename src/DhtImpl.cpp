@@ -2465,7 +2465,7 @@ void DhtImpl::SetAddNodeResponseCallback(DhtAddNodeResponseCallback* cb)
 		TODO:  Correct the dht process to distinguish between these failure modes
 		       and respond accordingly.
 */
-void DhtImpl::OnBootStrapPingReply(void *userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags)
+void DhtImpl::OnBootStrapPingReply(void* &userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags)
 {
 	// if we are processing a reply to a non-slow peer (the "reply" could be in the
 	// form of an error - ICMP, Timeout, ...) then decrease the count of non-slow
@@ -3332,7 +3332,7 @@ void DhtLookupScheduler::IssueQuery(int nodeIndex)
 	totalOutstandingRequests++;
 }
 
-void DhtLookupScheduler::OnReply(void *userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags)
+void DhtLookupScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags)
 {
 	// if we are processing a reply to a non-slow peer then decrease the count of
 	// non-slow outstanding requests
@@ -3400,7 +3400,6 @@ void DhtLookupScheduler::ImplementationSpecificReplyProcess(void *userdata, cons
 		nodes.b = (byte*)message.replyDict->GetString("nodes", &nodes.len);
 		info_hash.b = (byte*)message.replyDict->GetString("info_hash", &info_hash.len);
 		file_name.b = (byte*)message.replyDict->GetString("n", &file_name.len);
-		//byte *id = (byte*)message.replyDict->GetString("id", 20);
 
 		BencodedList *valuesList = message.replyDict->GetList("values");
 		if (valuesList) {
@@ -3558,7 +3557,7 @@ void DhtBroadcastScheduler::Schedule()
 /**
 Let slow peers continue until they either respond or timeout.
 */
-void DhtBroadcastScheduler::OnReply(void *userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags)
+void DhtBroadcastScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags)
 {
 	if(flags & NORMAL_RESPONSE){
 		// a normal response, let the derived class handle it

@@ -641,7 +641,7 @@ from DhtRequest.
 template <typename T> class DhtRequestListener : public IDhtRequestListener
 {
 public:
-	typedef void (T::*ReplyCallback)(void *userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags);
+	typedef void (T::*ReplyCallback)(void*& userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags);
 
 	DhtRequestListener(T * listener, ReplyCallback callback):_pListener(listener), _pCallback(callback), _userdata(NULL){}
 	DhtRequestListener(T * listener, ReplyCallback callback, void *userdata):_pListener(listener), _pCallback(callback), _userdata(userdata){}
@@ -1042,7 +1042,7 @@ class DhtProcessBase
 		DhtProcessBase(DhtImpl *pImpl, DhtProcessManager &dpm, const DhtID &target2, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks);
 		virtual ~DhtProcessBase();
 		virtual void Start();
-		virtual void OnReply(void *userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags) = 0;
+		virtual void OnReply(void*& userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags) = 0;
 		virtual void ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags){}
 };
 
@@ -1113,7 +1113,7 @@ class DhtLookupScheduler : public DhtProcessBase
 		void IssueQuery(int nodeIndex);
 
 	public:
-		virtual void OnReply(void *userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags);
+		virtual void OnReply(void*& userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags);
 		DhtLookupScheduler(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks, int maxOutstanding);
 		void SetMaxOutstandingLookupQueries(int maxOutstanding);
 };
@@ -1151,7 +1151,7 @@ class DhtBroadcastScheduler : public DhtProcessBase
 		virtual void Schedule();
 
 	public:
-		void OnReply(void *userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags);
+		void OnReply(void*& userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags);
 		DhtBroadcastScheduler(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2
 			, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks)
 			:DhtProcessBase(pDhtImpl,dpm,target2,target2_len,startTime,consumerCallbacks),outstanding(0){}
@@ -1910,7 +1910,7 @@ public:
 	// Implement IDhtProcessCallback::ProcessCallback(), for bootstrap callback
 	void ProcessCallback();
 
-	void OnBootStrapPingReply(void *userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags);
+	void OnBootStrapPingReply(void*& userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags);
 
 	static void AddNodeCallback(void *userdata, void *data2, int error, cstr hostname, const SockAddr& ip, uint32 time);
 
