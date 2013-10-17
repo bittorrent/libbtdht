@@ -1,8 +1,8 @@
 import feature : feature ;
 
-feature clang-cxx11 : off on : composite propagated link-incompatible ;
-feature.compose <clang-cxx11>on : <cxxflags>-std=c++11
-	<cxxflags>-stdlib=libc++ <linkflags>-stdlib=libc++ ;
+#feature clang-cxx11 : off on : composite propagated link-incompatible ;
+#feature.compose <clang-cxx11>on : <cxxflags>-std=c++11
+#	<cxxflags>-stdlib=libc++ <linkflags>-stdlib=libc++ ;
 
 use-project /ut_utils : ut_utils ;
 use-project /tommath : libtommath ;
