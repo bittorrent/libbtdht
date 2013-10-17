@@ -78,6 +78,7 @@ static void debug_log(char const* fmt, ...)
 	char buf[1000];
 	vsnprintf(buf, sizeof(buf), fmt, args);
 	fprintf(stderr, "DHT: %s\n", buf);
+	va_end(args);
 	// TODO: call callback or something
 }
 #endif
@@ -155,6 +156,22 @@ DhtImpl::DhtImpl(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_so
 
 DhtImpl::~DhtImpl()
 {
+	for(int i = 0; i < _buckets.size(); i++) {
+		for (DhtPeer **peer = &_buckets[i]->peers.first(); *peer;) {
+			DhtPeer *p = *peer;
+			// unlinknext will make peer point the following entry
+			// in the linked list, so there's no need to step forward
+			// explicitly.
+			_buckets[i]->peers.unlinknext(peer);
+			_dht_peer_allocator.Free(p);
+		}
+		for (DhtPeer **peer = &_buckets[i]->replacement_peers.first(); *peer;) {
+			DhtPeer *p = *peer;
+			_buckets[i]->replacement_peers.unlinknext(peer);
+			_dht_peer_allocator.Free(p);
+		}
+		_dht_bucket_allocator.Free(_buckets[i]);
+	}
 #ifdef _DEBUG_MEM_LEAK
 	FreeRequests();
 #endif
@@ -1223,7 +1240,7 @@ bool DhtImpl::ParseIncomingICMP(BencEntity &benc, const SockAddr& addr)
 
 	size_t tidlen;
 	byte *tid = (byte*)dict->GetString("t", &tidlen);
-	if (!tid || tidlen > 16)
+	if (!tid || tidlen != sizeof(uint32))
 		return false; // bad/missing tid
 
 #ifdef _DEBUG_DHT
@@ -1239,9 +1256,6 @@ bool DhtImpl::ParseIncomingICMP(BencEntity &benc, const SockAddr& addr)
 	cstr command = dict->GetString("q");
 	if (!command)
 		return false; // bad/missing command.
-
-	if (tidlen != sizeof(uint32))
-		return false; // invalid transaction id format?
 
 	DhtRequest *req = LookupRequest(Read32(tid));
 	if (!req) {
@@ -1440,8 +1454,10 @@ bool DhtImpl::ProcessQueryAnnouncePeer(const SockAddr &thisNodeAddress, DHTMessa
 	}
 
 #if defined(_DEBUG_DHT)
-		char const* temp = format_dht_id(info_hash_id);
+		//TODO: use static temp and strcpy into it
+		char* temp = strdup(format_dht_id(info_hash_id));
 		debug_log("ANNOUNCE_PEER: id='%s', info_hash='%s', host='%A', token='%s'", format_dht_id(peerID.id), temp, &peerID.addr, hexify(message.token.b));
+		free(temp);
 #endif
 
 	// validate the token
@@ -1674,7 +1690,6 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 	char numChars;
 	char const* const end = buf + sizeof(buf);
 	SimpleBencoder sb(buf);
-	bool putSuccessful = true;
 	DhtID targetDhtID;
 
 	// read the token
@@ -3394,7 +3409,7 @@ void DhtLookupScheduler::ImplementationSpecificReplyProcess(void *userdata, cons
 		nodes.b = (byte*)message.replyDict->GetString("nodes", &nodes.len);
 		info_hash.b = (byte*)message.replyDict->GetString("info_hash", &info_hash.len);
 		file_name.b = (byte*)message.replyDict->GetString("n", &file_name.len);
-		byte *id = (byte*)message.replyDict->GetString("id", 20);
+		message.replyDict->GetString("id", 20);
 
 		BencodedList *valuesList = message.replyDict->GetList("values");
 		if (valuesList) {
