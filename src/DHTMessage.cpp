@@ -64,6 +64,7 @@ void DHTMessage::DecodeMessageData(BencodedDict &bDict)
 	// extract the components common to all DHT messages
 	transactionID.b = (byte*)bDict.GetString("t", &transactionID.len);
 	version.b = (byte*)bDict.GetString("v", &version.len);
+	external_ip.b = (byte*)bDict.GetString("ip", &external_ip.len);
 
 	type = bDict.GetString("y", 1);
 	if (!type)
@@ -85,6 +86,10 @@ void DHTMessage::DecodeMessageData(BencodedDict &bDict)
 			replyDict = bDict.GetDict("r");
 			if(replyDict){
 				dhtMessageType = DHT_RESPONSE;
+				sequenceNum = replyDict->GetInt("seq", -1);
+				vBuf.b = (byte*)replyDict->GetString("v", &vBuf.len);
+				signature.b = (byte*)replyDict->GetString("sig", &signature.len);
+				key.b = (byte*)replyDict->GetString("k", &key.len);
 			}
 			else{
 				dhtMessageType = DHT_UNDEFINED_MESSAGE;

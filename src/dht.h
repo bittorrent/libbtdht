@@ -24,7 +24,7 @@ typedef void DhtHashFileNameCallback(void *ctx, const byte *info_hash, const byt
 typedef void DhtAddNodesCallback(void *ctx, const byte *info_hash, const byte *peers, uint num_peers);
 typedef void DhtAddNodeResponseCallback(void *userdata, bool is_response, SockAddr const& addr);
 typedef void DhtScrapeCallback(void *ctx, const byte *target, int downloaders, int seeds);
-typedef void DhtPutCallback(void * ctx, std::vector<char>& buffer, int seq, char * signiture);
+typedef void DhtPutCallback(void * ctx, std::vector<char>& buffer);
 
 // asks the client to save the DHT state
 typedef void DhtSaveCallback(const byte* buf, int len);
@@ -74,7 +74,11 @@ public:
 	virtual void Vote(void *ctx, const sha1_hash* info_hash, int vote, DhtVoteCallback* callb) = 0;
 	
 	virtual void Put(
+		//pkey points to a 32-byte ed25519 public.
 		const byte * pkey,
+		const byte * skey,
+		//This method is called in DhtSendRPC for Put. 
+		//It takes v (from get responses) as an input and may or may not change v to place in Put messages.
 		DhtPutCallback * put_callback,
 		void *ctx,
 		int flags = 0) = 0;

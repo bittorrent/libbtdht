@@ -121,7 +121,7 @@ public:
 	Buffer signature;  // 'sig' for mutable put
 	Buffer key; // 'k' for mutable put
 	Buffer target;
-
+	Buffer external_ip;
 	// this is used to point to the 'v' region of a "put" that is extracted when
 	// a bencstring is parsed.  It is assigned the region's values when it is
 	// determined that a "put" request was made.  Otherwise it is unassigned.

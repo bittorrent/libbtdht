@@ -860,7 +860,7 @@ class DhtLookupNodeList
 		unsigned int numNodes;	// Number of entries in node table
 		DhtFindNodeEntry nodes[KADEMLIA_K*4];		// Table of closest nodes
 		static void FreeNodeEntry(DhtFindNodeEntry &ent) { if (ent.token.b) free(ent.token.b); }
-		std::vector<char> buffer;
+
 	protected:
 		unsigned int seq_max;
 		std::vector<char> data_blk;
@@ -881,7 +881,7 @@ class DhtLookupNodeList
 		void set_seq(unsigned int sq){seq_max = sq;}
 		void set_data_blk(byte * v, int v_len);
 		std::vector<char> &get_data_blk(){return data_blk;}
-		char * get_data_blk_str(){return &data_blk[0];}	
+		char * get_data_blk(size_t & len){len = data_blk.size(); return &data_blk[0];}	
 };
 
 inline DhtLookupNodeList::DhtLookupNodeList():numNodes(0), seq_max(0)
@@ -1461,9 +1461,7 @@ class GetDhtProcess : public DhtLookupScheduler
 
 	public:
 
-		enum ArgBufferLength {BUF_LEN = 32};
-
-		byte _id[BUF_LEN];
+		byte _id[20];
 
 		GetDhtProcess(DhtImpl *pDhtImpl, DhtProcessManager &dpm, const DhtID& target2
 			, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks
@@ -1497,20 +1495,23 @@ class PutDhtProcess : public DhtBroadcastScheduler
 		virtual void ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags);
 		virtual void DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID);
 		virtual void CompleteThisProcess();
-		char signiture[256];
+		std::vector<char> signature;
 
 	public:
-		enum ArgBufferLength {BUF_LEN = 32};
 
-		byte _id[BUF_LEN];
-		byte _pkey[BUF_LEN];
+		byte _id[20];
+		byte _pkey[32];
+		byte _skey[64];
 
-		PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const byte * pkey, time_t startTime, const CallBackPointers &consumerCallbacks);
+		PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const byte * pkey, const byte * skey, time_t startTime, const CallBackPointers &consumerCallbacks);
 		~PutDhtProcess();
 		virtual void Start();
 
+		void Sign(std::vector<char> & signature, std::vector<char> v, byte * skey, unsigned int seq);
+		
 		static DhtProcessBase* Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
 			const byte * pkey,
+			const byte * skey,
 			CallBackPointers &cbPointers,
 			int flags);
 };
@@ -1649,6 +1650,7 @@ public:
 	
 	void Put(
 		const byte * pkey,
+		const byte * skey,
 		DhtPutCallback * put_callback,
 		void *ctx,
 		int flags);
