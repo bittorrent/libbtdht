@@ -3,7 +3,7 @@
 	url = git@github.com:bittorrent/ut_utils.git
 [submodule "libtomcrypt"]
 	path = libtomcrypt
-	url = git@igit.bittorrent.com:utorrent/libtomcrypt.git
+	url = git@git.bittorrent.com:utorrent/libtomcrypt.git
 [submodule "libtommath"]
 	path = libtommath
 	url = git@git.bittorrent.com:utorrent/libtommath.git
