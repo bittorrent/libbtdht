@@ -1144,20 +1144,22 @@ void DhtImpl::AddPeerToStore(const DhtID &info_hash, cstr file_name, const SockA
 
 void DhtImpl::ExpirePeersFromStore(time_t expire_before)
 {
-	for(std::vector<StoredContainer>::iterator it = _peer_store.begin(); it != _peer_store.end(); ++it) {
+	for(std::vector<StoredContainer>::iterator it = _peer_store.begin(); it != _peer_store.end();) {
 		std::vector<StoredPeer> &sp = it->peers;
-		for(uint j=0; j != sp.size(); j++) {
+		for(uint j=0; j != sp.size();) {
 			if (sp[j].time < expire_before) {
 				sp[j] = sp[sp.size()-1];
 				sp.resize(sp.size() - 1);
-				j--;
 				_peers_tracked--;
+			} else {
+				++j;
 			}
 		}
 		if (sp.size() == 0) {
 			free(it->file_name);
-			_peer_store.erase(it);
-			--it;
+			it = _peer_store.erase(it);
+		} else {
+			++it;
 		}
 	}
 
