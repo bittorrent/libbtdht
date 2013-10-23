@@ -5,7 +5,6 @@
 
 // Once we move everything over to ed25519, we can drop this
 // dependency
-#include "tomcrypt.h"
 
 #include "bencoding.h"
 #include "DhtImpl.h"
@@ -171,6 +170,9 @@ DhtImpl::~DhtImpl()
 			_dht_peer_allocator.Free(p);
 		}
 		_dht_bucket_allocator.Free(_buckets[i]);
+	}
+	for (std::vector<StoredContainer>::iterator it = _peer_store.begin(); it != _peer_store.end(); it++) {
+		free(it->file_name);
 	}
 #ifdef _DEBUG_MEM_LEAK
 	FreeRequests();
@@ -1301,16 +1303,19 @@ void DhtImpl::AddIP(SimpleBencoder& sb, byte const* id, SockAddr const& addr)
 	//verify the ip here...we need to notify them if they're using a
 	//peer id that doesn't match with their external ip
 
-	if (!DhtVerifyHardenedID(addr, id, _sha_callback)) {
+//	if (!DhtVerifyHardenedID(addr, id, _sha_callback)) {
+		//We want to always notify nodes of their external IP and port, 
+		//partly because it's a good idea to always know your external IP and port, 
+		//but specifically for BT Chat we want to store our own IP port in an encrypted data blob, in a put request	
 		if (addr.isv4()) {
-			sb.p += snprintf(sb.p, 35, "2:ip4:");
-			sb.p += addr.compact((byte*)sb.p, false);
+			sb.p += snprintf(sb.p, 35, "2:ip6:");
+			sb.p += addr.compact((byte*)sb.p, true);
 		} else {
-			sb.p += snprintf(sb.p, 35, "2:ip16:");
-			sb.p += addr.compact((byte*)sb.p, false);
+			sb.p += snprintf(sb.p, 35, "2:ip18:");
+			sb.p += addr.compact((byte*)sb.p, true);
 		}
 	}
-}
+//}
 
 
 //--------------------------------------------------------------------------------
@@ -1456,7 +1461,7 @@ bool DhtImpl::ProcessQueryAnnouncePeer(const SockAddr &thisNodeAddress, DHTMessa
 #if defined(_DEBUG_DHT)
 		//TODO: use static temp and strcpy into it
 		char* temp = strdup(format_dht_id(info_hash_id));
-		debug_log("ANNOUNCE_PEER: id='%s', info_hash='%s', host='%A', token='%s'", format_dht_id(peerID.id), temp, &peerID.addr, hexify(message.token.b));
+		debug_log("ANNOUNCE_PEER: id='%s', info_hash='%s', host='%A', token='%s'", format_dht_id(peerID.id), temp, &peerID.addr, hexify(message.token.b)); //TODO: valgrind fishiness
 		free(temp);
 #endif
 
@@ -1484,9 +1489,12 @@ bool DhtImpl::ProcessQueryAnnouncePeer(const SockAddr &thisNodeAddress, DHTMessa
 #endif
 
 	// Send a simple reply with my ID
-	sb.p += snprintf(sb.p, (end - sb.p), "d1:rd2:id20:");
-	sb.put_buf(_my_id_bytes, 20);
+	sb.p += snprintf(sb.p, (end - sb.p), "d");
+	
 	AddIP(sb, message.id, thisNodeAddress);
+
+	sb.p += snprintf(sb.p, (end - sb.p), "1:rd2:id20:");
+	sb.put_buf(_my_id_bytes, 20);
 	sb.p += snprintf(sb.p, (end - sb.p), "e");
 
 	put_transaction_id(sb, message.transactionID, end);
@@ -1533,7 +1541,11 @@ bool DhtImpl::ProcessQueryGetPeers(const SockAddr &addr, DHTMessage &message, Dh
 	str file_name = NULL;
 
 	// start the output info
-	sb.Out("d1:rd");
+	sb.Out("d");
+
+	AddIP(sb, message.id, addr);
+
+	sb.Out("1:rd");
 
 	const std::vector<StoredPeer> *sc = GetPeersFromStore(info_hash_id
 			, message.infoHash.len, &correct_info_hash_id, &file_name, num_peers);
@@ -1561,7 +1573,6 @@ bool DhtImpl::ProcessQueryGetPeers(const SockAddr &addr, DHTMessage &message, Dh
 	GenerateWriteToken(&ttoken, peerID);
 	sb.p += snprintf(sb.p, 35, "2:id20:");
 	sb.put_buf(_my_id_bytes, 20);
-	AddIP(sb, message.id, addr);
 
 	if (correct_info_hash_id != null_id) {
 		byte correct_info_hash_id_bytes[20];
@@ -1646,9 +1657,12 @@ bool DhtImpl::ProcessQueryFindNode(const SockAddr &addr, DHTMessage &message, Dh
 	SimpleBencoder sb(buf);
 
 	// Send my own ID
-	sb.p += snprintf(sb.p, (end - sb.p), "d1:rd2:id20:");
-	sb.put_buf(_my_id_bytes, 20);
+	sb.p += snprintf(sb.p, (end - sb.p), "d");
+	
 	AddIP(sb, message.id, addr);
+	
+	sb.p += snprintf(sb.p, (end - sb.p), "1:rd2:id20:");
+	sb.put_buf(_my_id_bytes, 20);
 
 	int size =
 		(sb.p - buf) // written so far
@@ -1671,6 +1685,7 @@ bool DhtImpl::ProcessQueryFindNode(const SockAddr &addr, DHTMessage &message, Dh
 
 	Account(DHT_BW_IN_REQ, packetSize);
 	sb.p += snprintf(sb.p, (end - sb.p), "e");
+
 	put_transaction_id(sb, message.transactionID, end);
 	put_version(sb, end);
 	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:re");
@@ -1727,21 +1742,10 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 			Account(DHT_INVALID_PQ_BAD_PUT_KEY, packetSize);
 			return false;
 		}
-		unsigned long long sig_msg_len = 64 + message.vBuf.len;
-		unsigned long long msg_len;
-		unsigned char* sig_msg = static_cast<unsigned char*>(malloc(sig_msg_len));
-		assert(sig_msg);
-		unsigned char* msg = static_cast<unsigned char*>(malloc(sig_msg_len));
-		assert(msg);
-		memcpy(sig_msg, message.signature.b, 64);
-		if (!_ed25519_open_callback(msg, &msg_len, sig_msg, sig_msg_len, message.key.b)) {
+		if (!_ed25519_verify_callback(message.signature.b, message.vBuf.b, message.vBuf.len, message.key.b)) {
 			Account(DHT_INVALID_PQ_BAD_PUT_SIGNATURE, packetSize);
-			free(sig_msg);
-			free(msg);
 			return false;
 		}
-		free(sig_msg);
-		free(msg);
 
 		// make a hash of the address for the DataStores to use to record usage of an item
 		const sha1_hash addrHashPtr = _sha_callback((const byte*)addr.get_hash_key(), addr.get_hash_key_len());
@@ -1967,9 +1971,12 @@ bool DhtImpl::ProcessQueryVote(const SockAddr &addr, DHTMessage &message, DhtPee
 	}
 
 	// Send my own ID
-	sb.p += snprintf(sb.p, (end - sb.p), "d1:rd2:id20:");
-	sb.put_buf(_my_id_bytes, 20);
+	sb.p += snprintf(sb.p, (end - sb.p), "d");
+
 	AddIP(sb, message.id, addr);
+
+	sb.p += snprintf(sb.p, (end - sb.p), "1:rd2:id20:");
+	sb.put_buf(_my_id_bytes, 20);
 
 	if (message.vote > 5) message.vote = 5;
 	else if (message.vote < 0) message.vote = 0;
@@ -1981,6 +1988,7 @@ bool DhtImpl::ProcessQueryVote(const SockAddr &addr, DHTMessage &message, DhtPee
 	Account(DHT_BW_IN_REQ, packetSize);
 
 	sb.p += snprintf(sb.p, (end - sb.p), "e");
+
 	put_transaction_id(sb, message.transactionID, end);
 	put_version(sb, end);
 	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:re");
@@ -2002,9 +2010,13 @@ bool DhtImpl::ProcessQueryPing(const SockAddr &addr, DHTMessage &message, DhtPee
 #if defined(_DEBUG_DHT)
 		debug_log("PING");
 #endif
-	sb.p += snprintf(sb.p, (end - sb.p), "d1:rd2:id20:");
-	sb.put_buf(_my_id_bytes, 20);
+
+	sb.p += snprintf(sb.p, (end - sb.p), "d");
+
 	AddIP(sb, message.id, addr);
+
+	sb.p += snprintf(sb.p, (end - sb.p), "1:rd2:id20:");
+	sb.put_buf(_my_id_bytes, 20);
 	sb.p += snprintf(sb.p, (end - sb.p), "e");
 
 	put_transaction_id(sb, message.transactionID, end);
@@ -2129,12 +2141,12 @@ bool DhtImpl::ProcessResponse(const SockAddr& addr,
 	// Count the reported external IP address, if any
 	if(message.dhtMessageType == DHT_RESPONSE){ // only if we have a valid "r" dictionary
 		SockAddr myIp;
-		Buffer external_ip;
-		external_ip.b = (byte*)message.replyDict->GetString("ip", &external_ip.len);
-		if(external_ip.len == 4){
-			myIp.set_addr4(*((uint32 *) external_ip.b));
-		}else if(external_ip.len == 16){
-			myIp.set_addr6(*((in6_addr *) external_ip.b));
+		if(message.external_ip.len == 6){
+			myIp.set_addr4(*((uint32 *) message.external_ip.b));
+			myIp.set_port(ReadBE16(message.external_ip.b+4));
+		}else if(message.external_ip.len == 18){
+			myIp.set_addr6(*((in6_addr *) message.external_ip.b));
+			myIp.set_port(ReadBE16(message.external_ip.b+16));
 		}
 		if (!myIp.is_addr_any()){
 			CountExternalIPReport(myIp, req->peer.addr);
@@ -2447,9 +2459,14 @@ void DhtImpl::SetSHACallback(DhtSHACallback* cb)
 	_sha_callback = cb;
 }
 
-void DhtImpl::SetEd25519OpenCallback(Ed25519OpenCallback* cb)
+void DhtImpl::SetEd25519VerifyCallback(Ed25519VerifyCallback* cb)
 {
-	_ed25519_open_callback = cb;
+	_ed25519_verify_callback = cb;
+}
+
+void DhtImpl::SetEd25519SignCallback(Ed25519SignCallback* cb)
+{
+	_ed25519_sign_callback = cb;
 }
 
 void DhtImpl::SetAddNodeResponseCallback(DhtAddNodeResponseCallback* cb)
@@ -2571,6 +2588,43 @@ void DhtImpl::Vote(void *ctx_ptr, const sha1_hash* info_hash, int vote, DhtVoteC
 	_allow_new_job = false;
 }
 
+void DhtImpl::Put(
+		const byte * pkey,
+		const byte * skey,
+		DhtPutCallback * put_callback,
+		void *ctx,
+		int flags)
+{
+
+	int maxOutstanding = (flags & announce_non_aggressive)
+		? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA
+		: KADEMLIA_LOOKUP_OUTSTANDING;
+
+	sha1_hash pkey_hash = _sha_callback(pkey, sizeof(pkey));
+	DhtID target;
+	CopyBytesToDhtID(target, pkey_hash.value);
+
+	DhtPeerID *ids[32];
+	int num = AssembleNodeList(target, ids, lenof(ids));
+
+
+	DhtProcessManager *dpm = new DhtProcessManager(ids, num, target);
+
+	CallBackPointers cbPtrs;
+	cbPtrs.putCallback = put_callback;
+	cbPtrs.callbackContext = ctx;
+
+	DhtProcessBase* getProc = GetDhtProcess::Create(this, *dpm, target, 20, cbPtrs, flags, maxOutstanding);
+	// processes will be exercised in the order they are added
+	dpm->AddDhtProcess(getProc); // add get_peers first
+
+	if ((flags & announce_only_get) == 0) {
+	DhtProcessBase* putProc = PutDhtProcess::Create(this, *dpm, pkey, skey,
+		cbPtrs, flags);
+		dpm->AddDhtProcess(putProc); // add announce second
+	}
+	dpm->Start();
+}
 
 /**
  * The BT code calls this to announce itself to the DHT network.
@@ -3225,6 +3279,10 @@ void DhtLookupNodeList::SetNodeIds(DhtPeerID** ids, unsigned int numId, const Dh
 		InsertPeer(*ids[x], target);
 }
 
+void DhtLookupNodeList::set_data_blk(byte * v, int v_len)
+{
+	data_blk.assign(v, v + v_len);
+}
 
 //*****************************************************************************
 //
@@ -3294,10 +3352,10 @@ void DhtLookupScheduler::Schedule()
 		}
 		++nodeIndex;
 	}
-
 	// No outstanding requests. Means we're finished.
-	if (totalOutstandingRequests == 0)
+	if (totalOutstandingRequests == 0){
 		CompleteThisProcess();
+	}
 }
 
 /**
@@ -3339,7 +3397,6 @@ void DhtLookupScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id, DhtR
 	if(!req->slow_peer){
 		--numNonSlowRequestsOutstanding;
 	}
-
 	// If a "slow" problem, mark the node as slow and see if another query can be issued.
 	if (flags & PROCESS_AS_SLOW){
 		--numNonSlowRequestsOutstanding;
@@ -3508,6 +3565,15 @@ void DhtLookupScheduler::ImplementationSpecificReplyProcess(void *userdata, cons
 				assert(dfnh->token.b == NULL);
 				dfnh->token.b = (byte*)malloc(token.len);
 				memcpy(dfnh->token.b, token.b, token.len);
+			}
+			//We are looking for the response message with the maximum seq number.
+			if(message.sequenceNum > processManager.seq()){ 
+            	if(message.signature.len > 0  && message.vBuf.len > 0 && message.key.len > 0 && 
+            	   impl->_ed25519_verify_callback(message.signature.b, message.vBuf.b, message.vBuf.len, message.key.b)){
+					//The maximum seq and the vBuf are saved by the processManager and will be used in creating Put messages.
+					processManager.set_data_blk(message.vBuf.b, message.vBuf.len);
+					processManager.set_seq(message.sequenceNum);
+				}
 			}
 		}
 	}
@@ -3885,6 +3951,191 @@ void AnnounceDhtProcess::CompleteThisProcess()
 	DhtProcessBase::CompleteThisProcess();
 }
 
+//*****************************************************************************
+//
+// GetDhtProcess			get
+//
+//*****************************************************************************
+
+GetDhtProcess::GetDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
+	, const DhtID & target_2, int target_2_len, time_t startTime, const CallBackPointers &consumerCallbacks, int maxOutstanding)
+	: DhtLookupScheduler(pDhtImpl,dpm,target_2,target_2_len,startTime,consumerCallbacks,maxOutstanding)
+{
+	
+	char* buf = (char*)this->_id;
+	memcpy(buf, pDhtImpl->_my_id_bytes, 20);
+
+
+#if g_log_dht
+	dht_log("GetDhtProcess,instantiated,id,%d,time,%d\n", target.id[0], get_milliseconds());
+#endif
+
+}
+
+DhtProcessBase* GetDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
+	const DhtID & target2, int target2_len,
+	CallBackPointers &cbPointers, int flags, int maxOutstanding)
+{
+	GetDhtProcess* process = new GetDhtProcess(pDhtImpl, dpm, target2, target2_len, time(NULL), cbPointers, maxOutstanding);
+
+	return process;
+}
+
+void GetDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
+{
+	const int bufLen = 1024;
+	char buf[bufLen];
+
+	SimpleBencoder sb(buf);
+	char const* end = buf + sizeof(buf);
+
+	sb.p += snprintf(sb.p, (end - sb.p), "d1:ad");
+
+	sb.p += snprintf(sb.p, (end - sb.p), "2:id20:");
+	sb.put_buf((byte*)this->_id, 20);
+
+	sb.p += snprintf(sb.p, (end - sb.p), "6:target20:");
+
+	byte targetAsID[20];
+
+	DhtIDToBytes(targetAsID, target);
+	sb.put_buf(targetAsID, 20);
+
+	sb.p += snprintf(sb.p, (end - sb.p), "e1:q3:get");
+	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4), end);
+	impl->put_version(sb, end);
+	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:qe");
+	
+	impl->SendTo(nodeInfo.id, buf, sb.p - buf);
+}
+
+//*****************************************************************************
+//
+// PutDhtProcess			put
+//
+//*****************************************************************************
+
+PutDhtProcess::PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const byte * pkey, const byte * skey, time_t startTime, const CallBackPointers &consumerCallbacks)
+	: DhtBroadcastScheduler(pDhtImpl,dpm,target,target_len,startTime,consumerCallbacks)
+{
+
+	signature.clear();
+	char* buf = (char*)this->_id;
+	memcpy(buf, pDhtImpl->_my_id_bytes, 20);
+
+	buf = (char*)this->_pkey;
+	memcpy(buf, pkey, 32);
+
+	buf = (char*)this->_skey;
+	memcpy(buf, skey, 64);
+
+#if g_log_dht
+	dht_log("PutDhtProcess,instantiated,id,%d,time,%d\n", target.id[0], get_milliseconds());
+#endif
+
+}
+
+DhtProcessBase* PutDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
+	const byte * pkey,
+	const byte * skey,
+	CallBackPointers &cbPointers, int flags)
+{
+	PutDhtProcess* process = new PutDhtProcess(pDhtImpl, dpm, pkey, skey, time(NULL), cbPointers);
+
+	return process;
+}
+
+void PutDhtProcess::Sign(std::vector<char> &signature, std::vector<char> v, byte * skey, unsigned int seq)
+{
+	unsigned char sig[64];
+	char buf[1024];
+	unsigned int index = 0;
+
+	index += sprintf(buf, "i%de1:v%lu:", seq, v.size());
+
+	v.insert(v.begin(), buf, buf+index);	
+
+	impl->_ed25519_sign_callback(sig, (unsigned char *)&v[0], v.size(), skey);
+
+	signature.assign(sig, sig+64);
+}
+
+void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
+{
+
+	if(signature.size() == 0){
+		callbackPointers.putCallback(callbackPointers.callbackContext, processManager.get_data_blk());
+		Sign(signature, processManager.get_data_blk(), _skey, processManager.seq());
+	}
+	
+	const int bufLen = 1024;
+	char buf[bufLen];
+
+	SimpleBencoder sb(buf);
+	char const* end = buf + sizeof(buf);
+
+	sb.p += snprintf(sb.p, (end - sb.p), "d1:ad");
+	
+	sb.p += snprintf(sb.p, (end - sb.p), "2:id20:");
+	sb.put_buf((byte*)this->_id, 20);
+
+	sb.p += snprintf(sb.p, (end - sb.p), "1:k32:");
+	sb.put_buf((byte*)this->_pkey, 32);
+
+	sb.p += snprintf(sb.p, (end - sb.p), "3:seqi");
+	sb.p += snprintf(sb.p, (end - sb.p), "%d", processManager.seq()+1);
+
+	sb.p += snprintf(sb.p, (end - sb.p), "e3:sig64:");
+	sb.put_buf((byte*)&signature[0], 64);
+	printf("%s \n", &signature[0]);
+	sb.p += snprintf(sb.p, (end - sb.p), "5:token");
+	sb.p += snprintf(sb.p, (end - sb.p), "%d:", int(nodeInfo.token.len));
+	sb.put_buf((byte*)nodeInfo.token.b, int(nodeInfo.token.len));
+
+	Buffer v;
+	v.b = (byte*)processManager.get_data_blk(v.len);
+	sb.p += snprintf(sb.p, (end - sb.p), "1:v");
+	sb.p += snprintf(sb.p, (end - sb.p), "%d:", int(v.len));
+	sb.put_buf(v.b, v.len);
+
+	sb.p += snprintf(sb.p, (end - sb.p), "e1:q3:put");
+
+	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4), end);
+	
+	impl->put_version(sb, end);
+	
+	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:qe");
+	printf("%s \n", buf);
+	// send the query
+	impl->SendTo(nodeInfo.id, buf, sb.p - buf);
+}
+
+void PutDhtProcess::ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags)
+{
+	// handle errors
+	if(message.dhtMessageType != DHT_RESPONSE){
+		impl->UpdateError(peer_id);
+	}
+}
+
+void PutDhtProcess::CompleteThisProcess()
+{
+	if (callbackPointers.processListener)
+		callbackPointers.processListener->ProcessCallback();
+
+	// Tell it that we're done
+	if (callbackPointers.addnodesCallback) {
+		byte bytes[20];
+		DhtIDToBytes(bytes, target);
+		callbackPointers.addnodesCallback(callbackPointers.callbackContext, bytes, NULL, 0);
+	}
+	signature.clear();
+
+#if g_log_dht
+	dht_log("PutDhtProcess,complete_announce,id,%d,time,%d\n", target.id[0], get_milliseconds());
+#endif
+	DhtProcessBase::CompleteThisProcess();
+}
 
 //*****************************************************************************
 //

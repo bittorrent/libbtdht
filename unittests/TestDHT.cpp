@@ -356,6 +356,13 @@ bool AnnouncePeer(smart_ptr<DhtImpl> &dht, const std::string &id, const std::vec
 		return false;
 	}
 
+	// did we get an ip back
+	Buffer ip;
+	ip.b = (byte*)dict->GetString("ip", &ip.len);
+	if(!ip.b){
+		return false;
+	}
+
 	// now look into the response data
 	BencodedDict *reply = dict->GetDict("r");
 	if (!reply) {
@@ -368,12 +375,6 @@ bool AnnouncePeer(smart_ptr<DhtImpl> &dht, const std::string &id, const std::vec
 		return false;
 	}
 
-	// did we get an ip back
-	Buffer ip;
-	ip.b = (byte*)reply->GetString("ip", &ip.len);
-	if(!ip.b){
-		return false;
-	}
 
 	// cleanup the dht for the consumer
 	dht->Tick();
@@ -791,6 +792,7 @@ MutableComponents GetComponents(smart_ptr<DhtImpl> &dhtTestObj, std::vector<byte
 	}
 
 	// return the key info
+	free(vBuf.b);
 	vBuf.len = 0;
 	vBuf.b = (byte*)reply->GetString("key", &vBuf.len);
 	returnData.key.clear();
@@ -1757,6 +1759,13 @@ TEST(TestDhtImpl, TestPingRPC_ipv4)
 	ASSERT_EQ(2, tid.len);
 	EXPECT_FALSE(memcmp((const void*)tid.b, (const void *)"aa", 2));
 
+	// check the ipv4 address we supplied in SocketAddr sAddr(...) above
+	Buffer ip;
+	ip.b = (byte*)dict->GetString("ip", &ip.len);
+	ASSERT_EQ(6, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
+	EXPECT_FALSE(memcmp((const void*)ip.b, (const void *)"zzzz", 4));
+	EXPECT_FALSE(memcmp((const void*)(ip.b + 4), (const void *)"xx", 2));
+
 	// now look into the response data
 	BencodedDict *reply = dict->GetDict("r");
 	if (!reply) {
@@ -1769,11 +1778,6 @@ TEST(TestDhtImpl, TestPingRPC_ipv4)
 	}
 	EXPECT_FALSE(memcmp((const void*)id, (const void *)"AAAABBBBCCCCDDDDEEEE", 20));
 
-	// check the ipv4 address we supplied in SocketAddr sAddr(...) above
-	Buffer ip;
-	ip.b = (byte*)reply->GetString("ip", &ip.len);
-	ASSERT_EQ(4, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
-	EXPECT_FALSE(memcmp((const void*)ip.b, (const void *)"zzzz", 4));
 }
 
 TEST(TestDhtImpl, TestPingRPC_ipv4_ParseKnownPackets)
@@ -1830,6 +1834,13 @@ TEST(TestDhtImpl, TestPingRPC_ipv4_ParseKnownPackets)
 	ASSERT_EQ(4, tid.len);
 	EXPECT_FALSE(memcmp((const void*)tid.b, (const void *)"wxyz", 4));
 
+	// check the ipv4 address we supplied in SocketAddr sAddr(...) above
+	Buffer ip;
+	ip.b = (byte*)dict->GetString("ip", &ip.len);
+	ASSERT_EQ(6, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
+	EXPECT_FALSE(memcmp((const void*)ip.b, (const void *)"zzzz", 4));
+	EXPECT_FALSE(memcmp((const void*)(ip.b + 4), (const void *)"xx", 2));
+
 	// now look into the response data
 	BencodedDict *reply = dict->GetDict("r");
 	if (!reply) {
@@ -1842,11 +1853,6 @@ TEST(TestDhtImpl, TestPingRPC_ipv4_ParseKnownPackets)
 	}
 	EXPECT_FALSE(memcmp((const void*)id, (const void *)"AAAABBBBCCCCDDDDEEEE", 20));
 
-	// check the ipv4 address we supplied in SocketAddr sAddr(...) above
-	Buffer ip;
-	ip.b = (byte*)reply->GetString("ip", &ip.len);
-	ASSERT_EQ(4, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
-	EXPECT_FALSE(memcmp((const void*)ip.b, (const void *)"zzzz", 4));
 }
 
 TEST(TestDhtImpl, TestGetPeersRPC_ipv4)
@@ -1879,6 +1885,13 @@ TEST(TestDhtImpl, TestGetPeersRPC_ipv4)
 		FAIL() << "ERROR:  The response is not a bencoded dictionary";
 	}
 
+	// check the ipv4 address we supplied in SocketAddr sAddr(...) above
+	Buffer ip;
+	ip.b = (byte*)dict->GetString("ip", &ip.len);
+	ASSERT_EQ(6, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
+	EXPECT_FALSE(memcmp((const void*)ip.b, (const void *)"zzzz", 4));
+	EXPECT_FALSE(memcmp((const void*)(ip.b + 4), (const void *)"xx", 2));
+
 	// is there a type and is it "r" for response
 	cstr type = dict->GetString("y", 1);
 	EXPECT_TRUE(type);
@@ -1909,11 +1922,6 @@ TEST(TestDhtImpl, TestGetPeersRPC_ipv4)
 	}
 	EXPECT_FALSE(memcmp((const void*)id, (const void *)"AAAABBBBCCCCDDDDEEEE", 20));
 
-	// check the ipv4 address we supplied in SocketAddr sAddr(...) above
-	Buffer ip;
-	ip.b = (byte*)reply->GetString("ip", &ip.len);
-	ASSERT_EQ(4, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
-	EXPECT_FALSE(memcmp((const void*)ip.b, (const void *)"zzzz", ip.len));
 
 	// in the test environment there are no peers.  There should however be a node - this one
 	// expect back the id provided in the query, ip=zzzz port=xx (since the querying node and this node are the same in this test)
@@ -1996,6 +2004,206 @@ TEST(TestDhtImpl, TestFindNodeRPC_ipv4)
 	EXPECT_FALSE(memcmp((const void*)nodes.b, (const void *)"abcdefghij0123456789zzzzxx", nodes.len));
 }
 
+void put_call_back(void * ctx, std::vector<char>& buffer){
+	buffer.push_back('s');
+	buffer.push_back('a');
+	buffer.push_back('m');
+	buffer.push_back('p');	
+	buffer.push_back('l');	
+	buffer.push_back('e');	
+	printf("%s\n", "In put call back function");
+}
+void ed255callback(unsigned char * sig, const unsigned char * v, unsigned long long size, const unsigned char * key)
+{
+  for(int i = 0; i < 64; i++){
+    sig[i] ='a'; 
+  }
+} 
+TEST(TestDhtImpl, TestPutRPC_ipv4)
+{
+	UnitTestUDPSocket socket4;
+	UnitTestUDPSocket socket6;
+	BencodedDict bDictGetPeer;
+	SockAddr sAddr(0x7a7a7a7a,0x7878); // ip = zzzz and socket = xx
+	socket4.SetBindAddr(sAddr);
+	smart_ptr<DhtImpl> dhtTestObj(new DhtImpl(&socket4, &socket6));
+	dhtTestObj->SetSHACallback(&sha1_callback);
+	dhtTestObj->SetEd25519SignCallback(&ed255callback);
+
+	// prepare the object for use
+	dhtTestObj->Enable(true,0);
+	SetDHT_my_id_Bytes(dhtTestObj);
+
+	// put a peer into the dht for it to work with
+	DhtPeerID peerID;
+	peerID.id.id[0] = '1111'; // 1111
+	peerID.id.id[1] = 'BBBB'; // BBBB
+	peerID.id.id[2] = 'CCCC'; // CCCC
+	peerID.id.id[3] = 'DDDD'; // DDDD
+	peerID.id.id[4] = '0000'; // 0000
+	peerID.addr.set_port(128);
+	peerID.addr.set_addr4(0xf0f0f0f0);
+	dhtTestObj->Update(peerID, 0, false);
+	Buffer peerIDBuffer;
+	peerIDBuffer.len = 20;
+	peerIDBuffer.b = (byte*)&peerID.id.id[0];
+
+	DhtID target;
+	target.id[0] = 'FFFF'; // FFFF
+	target.id[1] = 'GGGG'; // GGGG
+	target.id[2] = 'HHHH'; // HHHH
+	target.id[3] = 'IIII'; // IIII
+	target.id[4] = 'JJJJ'; // JJJJ
+
+	// *****************************************************
+	// Make the dht emit an announce message (the get_peers rpc)
+	// Just tell it that the target is only 16 bytes long (instead of 20)
+	// *****************************************************
+	byte * pkey = (byte *)"dhuieheuu383y8yr7yy3hd3hdh3gfhg3";
+	byte * skey = (byte *)"dhuieheuu383y8yr7yy3hd3hdh3gfhg3dhuieheuu383y8yr7yy3hd3hdh3gfhg3";
+	EXPECT_FALSE(dhtTestObj->IsBusy()) << "The dht should not be busy yet";
+	dhtTestObj->Put(pkey, skey, &put_call_back, NULL, 0);
+	//EXPECT_TRUE(dhtTestObj->IsBusy()) << "The dht should be busy";
+
+	// *****************************************************
+	// grab from the socket the emitted message and extract
+	// the transaction ID and verify the remainder of the
+	// message
+	// *****************************************************
+	std::string getOutput = socket4.GetSentDataAsString();
+	BencEntity bEntityGetQuery;
+	// verify the bencoded string that went out the socket
+	BencEntity::Parse((const byte *)getOutput.c_str(), bEntityGetQuery, (const byte *)(getOutput.c_str() + getOutput.length()));
+
+	// get the query dictionary
+	BencodedDict *dictForGet = BencodedDict::AsDict(&bEntityGetQuery);
+	EXPECT_TRUE(dictForGet);
+	if (!dictForGet) {
+		FAIL() << "ERROR:  The dht did not emit a bencoded dictionary for announce";
+	}
+
+	Buffer type;
+	type.b = (byte*)dictForGet->GetString("y" ,&type.len);
+	ASSERT_EQ(1, type.len) << "ERROR: the 'y' type length is wrong (should be 1 for 'q', 'r', or 'e')";
+	ASSERT_EQ('q', type.b[0]) << "ERROR: 'y' type is wrong; should be 'q' for query instead of:  " << type.b[0];
+
+	Buffer command;
+	command.b = (byte*)dictForGet->GetString("q" ,&command.len);
+	EXPECT_EQ(3, command.len);
+	EXPECT_FALSE(memcmp("get", command.b, 3)) << "ERROR: 'q' command is wrong";
+
+	// get the transaction ID to use later
+	Buffer tid;
+	tid.b = (byte*)dictForGet->GetString("t" ,&tid.len);
+	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
+
+	// now look into the query data
+	BencodedDict *getQuery = dictForGet->GetDict("a");
+	if (!getQuery) {
+		FAIL() << "ERROR:  Failed to extract 'a' dictionary from get_peer response";
+	}
+
+	Buffer id;
+	id.b = (byte*)getQuery->GetString("id" ,&id.len);
+	EXPECT_EQ(20, id.len);
+	EXPECT_FALSE(memcmp("AAAABBBBCCCCDDDDEEEE", id.b, 20)) << "ERROR: announced id is wrong";
+
+
+	Buffer pkey_buf;
+	pkey_buf.b = (byte*)getQuery->GetString("target" ,&pkey_buf.len);
+	EXPECT_EQ(20, pkey_buf.len);
+	EXPECT_FALSE(memcmp(sha1_callback(pkey, sizeof(pkey)).value, pkey_buf.b, 20)) << "ERROR: pkey is not the correct target";
+
+	std::vector<byte>	messageBytes;
+	std::vector<byte>	replyDictionaryBytes;
+
+	std::string responseToken("20_byte_reply_token.");
+	//std::string nearistNode  ("26_byte_nearist_node_addr.");
+	std::string nearistNode  ("");
+
+	std::string v("sample");
+
+	int seq = 0;
+	// construct the message bytes
+	BencStartDictionary(replyDictionaryBytes);
+	{
+		BencAddNameValuePair(replyDictionaryBytes,"id",peerIDBuffer);
+		BencAddNameValuePair(replyDictionaryBytes,"nodes",nearistNode);
+		BencAddNameValuePair(replyDictionaryBytes,"token",responseToken);
+		BencAddNameValuePair(replyDictionaryBytes,"seq",seq);
+		BencAddNameValuePair(replyDictionaryBytes,"v",v);		
+	}
+	BencEndDictionary(replyDictionaryBytes);
+
+	BencStartDictionary(messageBytes);
+	{
+		BencAddNameValuePair(messageBytes,"ip","abcdxy");
+		BencAddNameAndBencodedDictionary(messageBytes,"r",replyDictionaryBytes);
+		BencAddNameValuePair(messageBytes,"t",tid);
+		BencAddNameValuePair(messageBytes,"y","r");
+	}
+	BencEndDictionary(messageBytes);
+
+	// clear the socket and "send" the reply
+
+	socket4.Reset();
+	dhtTestObj->ProcessIncoming((byte*)&messageBytes.front(), messageBytes.size(), peerID.addr);
+
+	EXPECT_TRUE(dhtTestObj->IsBusy()) << "The dht should still be busy";
+
+	//Checking the put messages
+
+	std::string putOutput = socket4.GetSentDataAsString();
+	BencEntity bEntityPutQuery;
+	// verify the bencoded string that went out the socket
+	BencEntity::Parse((const byte *)putOutput.c_str(), bEntityPutQuery, (const byte *)(putOutput.c_str() + putOutput.length()));
+
+	// get the query dictionary
+	BencodedDict *dictForPut = BencodedDict::AsDict(&bEntityPutQuery);
+	EXPECT_TRUE(dictForPut);
+	if (!dictForPut) {
+		FAIL() << "ERROR:  The dht did not emit a bencoded dictionary for announce";
+	}
+
+	type.b = (byte*)dictForPut->GetString("y" ,&type.len);
+	ASSERT_EQ(1, type.len) << "ERROR: the 'y' type length is wrong (should be 1 for 'q', 'r', or 'e')";
+	ASSERT_EQ('q', type.b[0]) << "ERROR: 'y' type is wrong; should be 'q' for query instead of:  " << type.b[0];
+
+	command.b = (byte*)dictForPut->GetString("q" ,&command.len);
+	EXPECT_EQ(3, command.len);
+	EXPECT_FALSE(memcmp("put", command.b, 3)) << "ERROR: 'q' command is wrong";
+
+	// get the transaction ID to use later
+	tid.b = (byte*)dictForPut->GetString("t" ,&tid.len);
+	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
+
+	// now look into the query data
+	BencodedDict *putQuery = dictForPut->GetDict("a");
+	if (!putQuery) {
+		FAIL() << "ERROR:  Failed to extract 'a' dictionary from put_peer response";
+	}
+
+	id.b = (byte*)putQuery->GetString("id" ,&id.len);
+	EXPECT_EQ(20, id.len);
+	EXPECT_FALSE(memcmp("AAAABBBBCCCCDDDDEEEE", id.b, 20)) << "ERROR: announced id is wrong";
+
+	EXPECT_EQ(seq+1, putQuery->GetInt("seq"));
+
+	Buffer sig;
+	sig.b = (byte*)putQuery->GetString("sig" ,&sig.len);
+	EXPECT_EQ(64, sig.len);
+
+	Buffer token;
+	token.b = (byte*)putQuery->GetString("token" ,&token.len);
+	EXPECT_EQ(20, token.len);
+	EXPECT_FALSE(memcmp(responseToken.c_str(), token.b, 20)) << "ERROR: announced token is wrong";
+
+	Buffer v_out;
+	v_out.b = (byte*)putQuery->GetString("v" ,&v_out.len);
+	EXPECT_EQ(v.size(), v_out.len);
+	EXPECT_FALSE(memcmp(v.c_str(), v_out.b, v.size())) << "ERROR: v is wrong";
+
+}
 
 TEST(TestDhtImpl, TestAnnouncePeerRPC_ipv4)
 {
@@ -2037,6 +2245,13 @@ TEST(TestDhtImpl, TestAnnouncePeerRPC_ipv4)
 		FAIL() << "ERROR:  The response is not a bencoded dictionary for a get_peers query";
 	}
 
+	// check the ipv4 address we supplied in SocketAddr sAddr(...) above
+	Buffer ip;
+	ip.b = (byte*)dictForPeer->GetString("ip", &ip.len);
+	ASSERT_EQ(6, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
+	EXPECT_FALSE(memcmp((const void*)ip.b, (const void *)"zzzz", 4));
+	EXPECT_FALSE(memcmp((const void*)(ip.b + 4), (const void *)"xx", 2));
+
 	// now look into the response data
 	BencodedDict *replyGetPeer = dictForPeer->GetDict("r");
 	if (!replyGetPeer) {
@@ -2075,6 +2290,7 @@ TEST(TestDhtImpl, TestAnnouncePeerRPC_ipv4)
 		FAIL() << "ERROR:  The response is not a bencoded dictionary";
 	}
 
+
 	// is there a type and is it "r" for response
 	cstr type = dict->GetString("y", 1);
 	EXPECT_TRUE(type);
@@ -2106,11 +2322,6 @@ TEST(TestDhtImpl, TestAnnouncePeerRPC_ipv4)
 	}
 	EXPECT_FALSE(memcmp((const void*)id, (const void *)"AAAABBBBCCCCDDDDEEEE", 20));
 
-	// check the ipv4 address we supplied in SocketAddr sAddr(...) above
-	Buffer ip;
-	ip.b = (byte*)reply->GetString("ip", &ip.len);
-	ASSERT_EQ(4, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
-	EXPECT_FALSE(memcmp((const void*)ip.b, (const void *)"zzzz", 4));
 }
 
 TEST(TestDhtImpl, TestAnnouncePeerWithImpliedport)
@@ -2340,6 +2551,13 @@ TEST(TestDhtImpl, TestVoteRPC_ipv4)
 	ASSERT_EQ(2, tid.len);
 	EXPECT_FALSE(memcmp((const void*)tid.b, (const void *)"aa", tid.len));
 
+	// check the ipv4 address we supplied in SocketAddr sAddr(...) above
+	Buffer ip;
+	ip.b = (byte*)dict->GetString("ip", &ip.len);
+	ASSERT_EQ(6, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
+	EXPECT_FALSE(memcmp((const void*)ip.b, (const void *)"zzzz", 4));
+	EXPECT_FALSE(memcmp((const void*)(ip.b + 4), (const void *)"xx", 2));
+
 	// now look into the response data
 	BencodedDict *reply = dict->GetDict("r");
 	if (!reply) {
@@ -2352,11 +2570,6 @@ TEST(TestDhtImpl, TestVoteRPC_ipv4)
 	}
 	EXPECT_FALSE(memcmp((const void*)id, (const void *)"AAAABBBBCCCCDDDDEEEE", 20));
 
-	// check the ipv4 address we supplied in SocketAddr sAddr(...) above
-	Buffer ip;
-	ip.b = (byte*)reply->GetString("ip", &ip.len);
-	ASSERT_EQ(4, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
-	EXPECT_FALSE(memcmp((const void*)ip.b, (const void *)"zzzz", 4));
 
 	// get the votes out of the dictionary
 	BencodedList *voteList = reply->GetList("v");
@@ -2483,6 +2696,13 @@ TEST(TestDhtImpl, TestVoteRPC_ipv4_MultipleVotes)
 	ASSERT_EQ(2, tid.len);
 	EXPECT_FALSE(memcmp((const void*)tid.b, (const void *)"aa", tid.len));
 
+	// check the ipv4 address we supplied in SocketAddr sAddr(...) above
+	Buffer ip;
+	ip.b = (byte*)dict->GetString("ip", &ip.len);
+	ASSERT_EQ(6, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
+	EXPECT_FALSE(memcmp((const void*)ip.b, (const void *)"zzzz", 4));
+	EXPECT_FALSE(memcmp((const void*)(ip.b + 4), (const void *)"xx", 2));
+
 	// now look into the response data
 	BencodedDict *reply = dict->GetDict("r");
 	if (!reply) {
@@ -2495,11 +2715,6 @@ TEST(TestDhtImpl, TestVoteRPC_ipv4_MultipleVotes)
 	}
 	EXPECT_FALSE(memcmp((const void*)id, (const void *)"AAAABBBBCCCCDDDDEEEE", 20));
 
-	// check the ipv4 address we supplied in SocketAddr sAddr(...) above
-	Buffer ip;
-	ip.b = (byte*)reply->GetString("ip", &ip.len);
-	ASSERT_EQ(4, ip.len) << "ERROR:  The length of the ip address extracted from the response arguments is the wrong size";
-	EXPECT_FALSE(memcmp((const void*)ip.b, (const void *)"zzzz", 4));
 
 	// get the votes out of the dictionary
 	BencodedList *voteList = reply->GetList("v");
@@ -2544,6 +2759,13 @@ bool AnnounceAndVerify(smart_ptr<DhtImpl> &dhtTestObj, std::vector<byte> &messag
 		return false;
 	}
 
+	// check the ipv4 address we supplied in SocketAddr sAddr(...) above
+	Buffer ip;
+	ip.b = (byte*)dict->GetString("ip", &ip.len);
+	if(!ip.b){
+		return false;
+	}
+
 	// now look into the response data
 	BencodedDict *reply = dict->GetDict("r");
 	if (!reply) {
@@ -2558,16 +2780,13 @@ bool AnnounceAndVerify(smart_ptr<DhtImpl> &dhtTestObj, std::vector<byte> &messag
 		return false;
 	}
 
-	// check the ipv4 address we supplied in SocketAddr sAddr(...) above
-	Buffer ip;
-	ip.b = (byte*)reply->GetString("ip", &ip.len);
-	if(!ip.b){
-		return false;
-	}
-	if(ip.len != sAddr_AddressAsString.size()){
+	if(ip.len != (sAddr_AddressAsString.size() + sAddr_PortAsString.size())){
 		return false;
 	}
 	if(memcmp((const void*)ip.b, (const void *)sAddr_AddressAsString.c_str(), sAddr_AddressAsString.size())){
+		return false;
+	}
+	if(memcmp((const void*)(ip.b + sAddr_AddressAsString.size()), (const void *)sAddr_PortAsString.c_str(), sAddr_PortAsString.size())){
 		return false;
 	}
 

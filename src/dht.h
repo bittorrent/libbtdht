@@ -6,6 +6,7 @@
  */
 
 #include <stddef.h> // for size_t
+#include <vector> 
 #include "utypes.h"
 #include "sha1_hash.h"
 #include "sockaddr.h"
@@ -23,6 +24,7 @@ typedef void DhtHashFileNameCallback(void *ctx, const byte *info_hash, const byt
 typedef void DhtAddNodesCallback(void *ctx, const byte *info_hash, const byte *peers, uint num_peers);
 typedef void DhtAddNodeResponseCallback(void*& userdata, bool is_response, SockAddr const& addr);
 typedef void DhtScrapeCallback(void *ctx, const byte *target, int downloaders, int seeds);
+typedef void DhtPutCallback(void * ctx, std::vector<char>& buffer);
 
 // asks the client to save the DHT state
 typedef void DhtSaveCallback(const byte* buf, int len);
@@ -41,9 +43,13 @@ typedef int DhtPortCallback();
 typedef sha1_hash DhtSHACallback(byte const* buf, int len);
 
 // callback to ed25519 crypto_sign_open used for message verification
-typedef int Ed25519OpenCallback(unsigned char *m, unsigned long long *mlen,
-		const unsigned char *sm, unsigned long long smlen,
-		const unsigned char *pk);
+typedef bool Ed25519VerifyCallback(const unsigned char *signature,
+		const unsigned char *message, unsigned long long message_len,
+		const unsigned char *key);
+
+typedef void Ed25519SignCallback(unsigned char *signature,
+		const unsigned char *message, unsigned long long message_len,
+		const unsigned char *key);
 
 /**
  * DHT public interface
@@ -66,6 +72,17 @@ public:
 	virtual bool handleICMP(UDPSocketInterface *socket, byte *buffer, size_t len, const SockAddr& addr) = 0;
 	virtual void Tick() = 0;
 	virtual void Vote(void *ctx, const sha1_hash* info_hash, int vote, DhtVoteCallback* callb) = 0;
+	
+	virtual void Put(
+		//pkey points to a 32-byte ed25519 public.
+		const byte * pkey,
+		const byte * skey,
+		//This method is called in DhtSendRPC for Put. 
+		//It takes v (from get responses) as an input and may or may not change v to place in Put messages.
+		DhtPutCallback * put_callback,
+		void *ctx,
+		int flags = 0) = 0;
+
 	virtual void AnnounceInfoHash(
 		const byte *info_hash,
 		int info_hash_len,
@@ -96,7 +113,7 @@ public:
 	virtual void SetPacketCallback(DhtPacketCallback* cb) = 0;
 	virtual void SetAddNodeResponseCallback(DhtAddNodeResponseCallback* cb) = 0;
 	virtual void SetSHACallback(DhtSHACallback* cb) = 0;
-	virtual void SetEd25519OpenCallback(Ed25519OpenCallback* cb) = 0;
+	virtual void SetEd25519VerifyCallback(Ed25519VerifyCallback* cb) = 0;
 	virtual void AddBootstrapNode(SockAddr const& addr) = 0;
 	
 	// userdata pointer is passed on to the AddNodeReponseCallback
