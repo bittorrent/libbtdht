@@ -4,8 +4,6 @@ import modules ;
 BOOST_ROOT = [ modules.peek : BOOST_ROOT ] ;
 use-project /boost : $(BOOST_ROOT) ;
 use-project /ut_dht : .. ;
-#use-project /tomcrypt : ../libtomcrypt ;
-#use-project /tommath : ../libtommath ;
 
 GTEST_ROOT = ../ut_utils/vendor/gtest-1.6.0 ;
 GMOCK_ROOT = ../ut_utils/vendor/gmock-1.6.0 ;
@@ -24,8 +22,6 @@ exe unit_tests
 	<define>_DEBUG_DHT=1
 #	<define>ENABLE_SRP=1
 	<library>/ut_dht//ut_dht/<clang-cxx11>off/<link>static
-#	<library>/tommath//tommath/<link>static
-#	<library>/tomcrypt//tomcrypt/<link>static
 	<library>/boost//system/<link>static
 
 	<include>$(GTEST_ROOT)/include
@@ -41,7 +37,6 @@ exe unit_tests
 	<toolset>clang:<cxxflags>-Wno-invalid-source-encoding
 	<toolset>clang:<cxxflags>-Wno-multichar
 	<toolset>clang:<cxxflags>-Wno-unused-private-field
-#	libtommath makes the below completely impractical
 #	<warnings-as-errors>on
 	: # default build
 	;
