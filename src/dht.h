@@ -114,6 +114,7 @@ public:
 	virtual void SetAddNodeResponseCallback(DhtAddNodeResponseCallback* cb) = 0;
 	virtual void SetSHACallback(DhtSHACallback* cb) = 0;
 	virtual void SetEd25519VerifyCallback(Ed25519VerifyCallback* cb) = 0;
+	virtual void SetEd25519SignCallback(Ed25519SignCallback* cb) = 0;
 	virtual void AddBootstrapNode(SockAddr const& addr) = 0;
 	
 	// userdata pointer is passed on to the AddNodeReponseCallback
