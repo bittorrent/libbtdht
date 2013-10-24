@@ -21,7 +21,7 @@ exe unit_tests
 	: # requirements
 	<define>_DEBUG_DHT=1
 #	<define>ENABLE_SRP=1
-	<library>/ut_dht//ut_dht/<clang-cxx11>off/<link>static
+	<library>/ut_dht//ut_dht/<link>static
 	<library>/boost//system/<link>static
 
 	<include>$(GTEST_ROOT)/include
@@ -33,7 +33,6 @@ exe unit_tests
 	<include>../src
 	<include>/opt/local/include
 
-	<toolset>clang:<clang-cxx11>on
 	<toolset>clang:<cxxflags>-Wno-invalid-source-encoding
 	<toolset>clang:<cxxflags>-Wno-multichar
 	<toolset>clang:<cxxflags>-Wno-unused-private-field
