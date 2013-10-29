@@ -33,3 +33,8 @@ Makefile.in
 
 /ar-lib
 /ltmain.sh
+
+# temporary editor files etc
+*~
+*.swp
+tags
