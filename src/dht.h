@@ -66,6 +66,7 @@ public:
 		announce_seed = 1,
 		announce_non_aggressive = 2,
 		announce_only_get = 4,
+		with_cas = 8, // use cas for DHT put
 	};
 
 	virtual bool handleReadEvent(UDPSocketInterface *socket, byte *buffer, size_t len, const SockAddr& addr) = 0;

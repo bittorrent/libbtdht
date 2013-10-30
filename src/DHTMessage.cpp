@@ -87,7 +87,8 @@ void DHTMessage::DecodeMessageData(BencodedDict &bDict)
 			if(replyDict){
 				dhtMessageType = DHT_RESPONSE;
 				sequenceNum = replyDict->GetInt("seq", -1);
-				vBuf.b = (byte*)replyDict->GetString("v", &vBuf.len);
+				//this is really bad, but there's no alternative
+				vBuf.b = SerializeBencEntity(replyDict->Get("v"), &vBuf.len);
 				signature.b = (byte*)replyDict->GetString("sig", &signature.len);
 				key.b = (byte*)replyDict->GetString("k", &key.len);
 			}
@@ -170,6 +171,7 @@ void DHTMessage::DecodeQuery(BencodedDict &bDict)
 		signature.b = (byte*)args->GetString("sig", &signature.len); // 256 bytes
 		key.b = (byte*)args->GetString("k", &key.len); // 268 bytes
 		sequenceNum = args->GetInt("seq", 0);
+		cas = reinterpret_cast<const byte*>(args->GetString("cas", 20));
 	}
 	else if(strcmp(command,"ping") == 0){
 		dhtCommand = DHT_QUERY_PING;
@@ -233,6 +235,7 @@ void DHTMessage::CopyFrom(DHTMessage &src)
 	region = src.region;
 	vBuf = src.vBuf;
 	impliedPort = src.impliedPort;
+	cas = src.cas;
 
 	// Warning:  If this was set, it will still point to the dictionary
 	// created by the original _bDict object

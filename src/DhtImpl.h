@@ -535,9 +535,11 @@ This simple struct collects the information from a mutable put rpc.
 // *****************************************************************************
 struct MutableData
 {
-	long sequenceNum;
+	int64_t sequenceNum;
 	byte rsaSignature[256];  // rsa signatures are either 128 or 256 bytes
 	unsigned int rsaSignatureLen;
+	sha1_hash cas; // hash of sequence number and value
+	bool cas_initialized;
 	std::vector<byte> rsaKey;
 	std::vector<byte> v;
 };
@@ -795,6 +797,7 @@ struct DhtFindNodeEntry {
 	DhtPeerID id;
 	byte queried;
 	Buffer token;
+	sha1_hash cas; // hash of seq / value of node's data
 };
 
 struct DhtGetNodeResult {
@@ -877,8 +880,8 @@ class DhtLookupNodeList
 		void SetAllQueriedStatus(QueriedStatus status);
 		void SetNodeIds(DhtPeerID** ids, unsigned int numId, const DhtID &target);
 		void CompactList();
-		int seq(){return seq_max;}
-		void set_seq(unsigned int sq){seq_max = sq;}
+		int64_t seq(){return seq_max;}
+		void set_seq(int64_t sq){seq_max = sq;}
 		void set_data_blk(byte * v, int v_len);
 		std::vector<char> &get_data_blk(){return data_blk;}
 		char * get_data_blk(size_t & len){len = data_blk.size(); return &data_blk[0];}	
@@ -1120,6 +1123,7 @@ class DhtLookupScheduler : public DhtProcessBase
 		DhtLookupScheduler(DhtProcessManager &dpm):DhtProcessBase(dpm){assert(false);}
 		virtual void Schedule();
 		virtual void ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags);
+		DhtFindNodeEntry* ProcessMetadataAndPeer(const DhtPeerID &peer_id, DHTMessage &message, uint flags);
 		void IssueOneAdditionalQuery();
 		void IssueQuery(int nodeIndex);
 
@@ -1454,9 +1458,10 @@ inline AnnounceDhtProcess::~AnnounceDhtProcess()
 //*****************************************************************************
 class GetDhtProcess : public DhtLookupScheduler
 {
-
 	protected:
+		bool _with_cas;
 		virtual void DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID);
+		virtual void ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags);
 		virtual void CompleteThisProcess();
 
 	public:
@@ -1465,7 +1470,7 @@ class GetDhtProcess : public DhtLookupScheduler
 
 		GetDhtProcess(DhtImpl *pDhtImpl, DhtProcessManager &dpm, const DhtID& target2
 			, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks
-			, int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING);
+			, int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING, bool with_cas = false);
 		static DhtProcessBase* Create(DhtImpl* pImpl, DhtProcessManager &dpm,
 			const DhtID &target2, int target2_len,
 			CallBackPointers &cbPointers,
@@ -1507,7 +1512,7 @@ class PutDhtProcess : public DhtBroadcastScheduler
 		~PutDhtProcess();
 		virtual void Start();
 
-		void Sign(std::vector<char> & signature, std::vector<char> v, byte * skey, unsigned int seq);
+		void Sign(std::vector<char> & signature, std::vector<char> v, byte * skey, int64_t seq);
 		
 		static DhtProcessBase* Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
 			const byte * pkey,
@@ -1831,6 +1836,7 @@ public:
 		DHT_INVALID_PQ_BAD_PUT_NO_V,
 		DHT_INVALID_PQ_BAD_PUT_BAD_V_SIZE,
 		DHT_INVALID_PQ_BAD_PUT_SIGNATURE,
+		DHT_INVALID_PQ_BAD_PUT_CAS,
 		DHT_INVALID_PQ_BAD_PUT_KEY,
 		DHT_INVALID_PQ_BAD_GET_TARGET,
 		DHT_INVALID_PQ_UNKNOWN_COMMAND,
@@ -1859,7 +1865,7 @@ public:
 	void Account(int slot, int size);
 
 	void DumpAccountingInfo();
-
+	bool Verify(byte const * signature, byte const * message, int message_length, byte *pkey, int64_t seq);
 
 #if !STABLE_VERSION || defined _DEBUG || defined BRANDED_MAC
 	bool ValidateEncoding( const void * data, uint len );

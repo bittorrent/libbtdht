@@ -20,8 +20,10 @@
 #include <algorithm> // for std::min
 
 #include <stdarg.h>
+#include <cinttypes>
 
 #define lenof(x) (sizeof(x)/sizeof(x[0]))
+#define MUTABLE_PAYLOAD_FORMAT "3:seqi%" PRId64 "e1:v"
 
 bool DhtVerifyHardenedID(const SockAddr& addr, byte const* node_id, DhtSHACallback* sha);
 void DhtCalculateHardenedID(const SockAddr& addr, byte *node_id, DhtSHACallback* sha);
@@ -1736,13 +1738,12 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 
 	if(message.key.len && message.sequenceNum && message.signature.len)
 	{ // mutable put
-		assert(message.vBuf.len < 800);
 
 		if(message.key.len != 32 || message.signature.len != 64) {
 			Account(DHT_INVALID_PQ_BAD_PUT_KEY, packetSize);
 			return false;
 		}
-		if (!_ed25519_verify_callback(message.signature.b, message.vBuf.b, message.vBuf.len, message.key.b)) {
+		if (!Verify(message.signature.b, message.vBuf.b, message.vBuf.len, message.key.b, message.sequenceNum)) {
 			Account(DHT_INVALID_PQ_BAD_PUT_SIGNATURE, packetSize);
 			return false;
 		}
@@ -1769,26 +1770,39 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 			for (int x=0; x<message.key.len; ++x){
 				containerPtr->value.rsaKey.push_back(message.key.b[x]);
 			}
+			byte to_hash[800]; // 767 byte message + seq + formatting
+			int written = snprintf(reinterpret_cast<char*>(to_hash), 800, MUTABLE_PAYLOAD_FORMAT, message.sequenceNum);
+			assert((written + message.vBuf.len) <= 800);
+			memcpy(to_hash + written, message.vBuf.b, message.vBuf.len);
+			//fprintf(stderr, "in put: %s\n", (char*)to_hash);
+			containerPtr->value.cas = _sha_callback(to_hash, written + message.vBuf.len);
 			// update the time
 			containerPtr->lastUse = time(NULL);
 		} else {
 			// check that the sequence num is larger (newer) than what is currently in the store, and update 'v' bytes, sequence num, and signature
 			// No need to update the key here, we already have it and it is not changing.
-			if (message.sequenceNum > containerPtr->value.sequenceNum){
-				// update the sequence number
-				containerPtr->value.sequenceNum = message.sequenceNum;
-				// update the value stored
-				containerPtr->value.v.clear();
-				for (int x=0; x<message.vBuf.len; ++x){
-					containerPtr->value.v.push_back(message.vBuf.b[x]);
+			if (message.sequenceNum >= containerPtr->value.sequenceNum){
+				if (!(message.cas.is_all_zero()) &&
+						message.cas != containerPtr->value.cas) {
+					Account(DHT_INVALID_PQ_BAD_PUT_CAS, packetSize);
+				} else {
+					if (message.sequenceNum > containerPtr->value.sequenceNum) {
+						// update the sequence number
+						containerPtr->value.sequenceNum = message.sequenceNum;
+						// update the value stored
+						containerPtr->value.v.clear();
+						for (int x=0; x<message.vBuf.len; ++x){
+							containerPtr->value.v.push_back(message.vBuf.b[x]);
+						}
+						// update the signature
+						containerPtr->value.rsaSignatureLen = message.signature.len;
+						for (int x=0; x<message.signature.len; ++x){
+							containerPtr->value.rsaSignature[x] = message.signature.b[x];
+						}
+					}
+					// update the last time accessed
+					containerPtr->lastUse = time(NULL);
 				}
-				// update the signature
-				containerPtr->value.rsaSignatureLen = message.signature.len;
-				for (int x=0; x<message.signature.len; ++x){
-					containerPtr->value.rsaSignature[x] = message.signature.b[x];
-				}
-				// update the last time accessed
-				containerPtr->lastUse = time(NULL);
 			}
 		}
 	}
@@ -3440,8 +3454,7 @@ void DhtLookupScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id, DhtR
 	Schedule();
 }
 
-void DhtLookupScheduler::ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags)
-{
+DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(const DhtPeerID &peer_id, DHTMessage &message, uint flags) {
 	DhtFindNodeEntry *dfnh = NULL;
 	bool errored = false;
 
@@ -3551,30 +3564,50 @@ void DhtLookupScheduler::ImplementationSpecificReplyProcess(void *userdata, cons
 		if (dfnh) dfnh->queried = QUERIED_ERROR;
 		impl->UpdateError(peer_id);
 	}
-	else{
+	else if (dfnh) {
 		// mark that the peer replied.
-		if (dfnh) {
-			dfnh->queried = QUERIED_REPLIED;
-			// When getting peers, remember the write-token.
-			// This is needed to be able to announce to the peers.
-			// it's also required to cast votes
-			Buffer token;
-			token.b = (byte*)message.replyDict->GetString("token", &token.len);
-			if (token.b && token.len <= 20) {
-				dfnh->token.len = token.len;
-				assert(dfnh->token.b == NULL);
-				dfnh->token.b = (byte*)malloc(token.len);
-				memcpy(dfnh->token.b, token.b, token.len);
+		dfnh->queried = QUERIED_REPLIED;
+		// When getting peers, remember the write-token.
+		// This is needed to be able to announce to the peers.
+		// it's also required to cast votes
+		Buffer token;
+		token.b = (byte*)message.replyDict->GetString("token", &token.len);
+		if (token.b && token.len <= 20) {
+			dfnh->token.len = token.len;
+			assert(dfnh->token.b == NULL);
+			dfnh->token.b = (byte*)malloc(token.len);
+			memcpy(dfnh->token.b, token.b, token.len);
+		}
+		return dfnh;
+	}
+	return nullptr;
+}
+
+void DhtLookupScheduler::ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags) {
+	ProcessMetadataAndPeer(peer_id, message, flags);
+}
+
+void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags) {
+	DhtFindNodeEntry *dfnh = ProcessMetadataAndPeer(peer_id, message, flags);
+	if (dfnh) {
+		//We are looking for the response message with the maximum seq number.
+		if(message.sequenceNum > processManager.seq()){ 
+			if(message.signature.len > 0  && message.vBuf.len > 0 &&
+					message.key.len > 0 &&
+					impl->Verify(message.signature.b, message.vBuf.b, message.vBuf.len,
+						message.key.b, message.sequenceNum)){
+				//The maximum seq and the vBuf are saved by the processManager and will be used in creating Put messages.
+				processManager.set_data_blk(message.vBuf.b, message.vBuf.len);
+				processManager.set_seq(message.sequenceNum);
 			}
-			//We are looking for the response message with the maximum seq number.
-			if(message.sequenceNum > processManager.seq()){ 
-            	if(message.signature.len > 0  && message.vBuf.len > 0 && message.key.len > 0 && 
-            	   impl->_ed25519_verify_callback(message.signature.b, message.vBuf.b, message.vBuf.len, message.key.b)){
-					//The maximum seq and the vBuf are saved by the processManager and will be used in creating Put messages.
-					processManager.set_data_blk(message.vBuf.b, message.vBuf.len);
-					processManager.set_seq(message.sequenceNum);
-				}
-			}
+		}
+		if (_with_cas) { // _with_cas
+			byte to_hash[800];
+			int written = snprintf(reinterpret_cast<char*>(to_hash), 800, MUTABLE_PAYLOAD_FORMAT, message.sequenceNum);
+			assert((written + message.vBuf.len) <= 800);
+			memcpy(to_hash + written, message.vBuf.b, message.vBuf.len);
+			//fprintf(stderr, "in get: %s\n", (char*)to_hash);
+			dfnh->cas = impl->_sha_callback(to_hash, written + message.vBuf.len);
 		}
 	}
 }
@@ -3958,8 +3991,8 @@ void AnnounceDhtProcess::CompleteThisProcess()
 //*****************************************************************************
 
 GetDhtProcess::GetDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
-	, const DhtID & target_2, int target_2_len, time_t startTime, const CallBackPointers &consumerCallbacks, int maxOutstanding)
-	: DhtLookupScheduler(pDhtImpl,dpm,target_2,target_2_len,startTime,consumerCallbacks,maxOutstanding)
+	, const DhtID & target_2, int target_2_len, time_t startTime, const CallBackPointers &consumerCallbacks, int maxOutstanding, bool with_cas)
+	: DhtLookupScheduler(pDhtImpl,dpm,target_2,target_2_len,startTime,consumerCallbacks,maxOutstanding), _with_cas(with_cas)
 {
 	
 	char* buf = (char*)this->_id;
@@ -3976,7 +4009,7 @@ DhtProcessBase* GetDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
 	const DhtID & target2, int target2_len,
 	CallBackPointers &cbPointers, int flags, int maxOutstanding)
 {
-	GetDhtProcess* process = new GetDhtProcess(pDhtImpl, dpm, target2, target2_len, time(NULL), cbPointers, maxOutstanding);
+	GetDhtProcess* process = new GetDhtProcess(pDhtImpl, dpm, target2, target2_len, time(NULL), cbPointers, maxOutstanding, flags & IDht::with_cas);
 
 	return process;
 }
@@ -4045,19 +4078,25 @@ DhtProcessBase* PutDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
 	return process;
 }
 
-void PutDhtProcess::Sign(std::vector<char> &signature, std::vector<char> v, byte * skey, unsigned int seq)
-{
+void PutDhtProcess::Sign(std::vector<char> &signature, std::vector<char> v, byte * skey, int64_t seq) {
 	unsigned char sig[64];
 	char buf[1024];
 	unsigned int index = 0;
 
-	index += sprintf(buf, "i%de1:v%lu:", seq, v.size());
+	index += sprintf(buf, MUTABLE_PAYLOAD_FORMAT, seq);
 
 	v.insert(v.begin(), buf, buf+index);	
 
 	impl->_ed25519_sign_callback(sig, (unsigned char *)&v[0], v.size(), skey);
 
 	signature.assign(sig, sig+64);
+}
+
+bool DhtImpl::Verify(byte const * signature, byte const * message, int message_length, byte *pkey, int64_t seq) {
+	unsigned char buf[1024];
+	int index = sprintf(reinterpret_cast<char*>(buf), MUTABLE_PAYLOAD_FORMAT, seq);
+	memcpy(buf + index, message, message_length);
+	return _ed25519_verify_callback(signature, buf, message_length + index, pkey);
 }
 
 void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
@@ -4075,6 +4114,11 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 	char const* end = buf + sizeof(buf);
 
 	sb.p += snprintf(sb.p, (end - sb.p), "d1:ad");
+
+	if (!nodeInfo.cas.is_all_zero()) {
+		sb.p += snprintf(sb.p, (end - sb.p), "3:cas20:");
+		sb.put_buf(nodeInfo.cas.value, 20);
+	}
 	
 	sb.p += snprintf(sb.p, (end - sb.p), "2:id20:");
 	sb.put_buf((byte*)this->_id, 20);
@@ -4083,7 +4127,7 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 	sb.put_buf((byte*)this->_pkey, 32);
 
 	sb.p += snprintf(sb.p, (end - sb.p), "3:seqi");
-	sb.p += snprintf(sb.p, (end - sb.p), "%d", processManager.seq()+1);
+	sb.p += snprintf(sb.p, (end - sb.p), "%" PRId64, processManager.seq()+1);
 
 	sb.p += snprintf(sb.p, (end - sb.p), "e3:sig64:");
 	sb.put_buf((byte*)&signature[0], 64);

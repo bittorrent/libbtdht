@@ -2,7 +2,9 @@
 #define __DHT_Message__
 
 #include "Buffer.h"
+#include <cinttypes>
 #include <utility> // for std::pair
+#include "sha1_hash.h"
 
 enum DHTMessageTypes
 {
@@ -110,8 +112,9 @@ public:
 	int seed;
 	int noseed;
 	int scrape;
-	int sequenceNum;  // 'seq' for mutable put
+	int64_t sequenceNum;  // 'seq' for mutable put
 	int impliedPort;
+	sha1_hash cas; // hash of expected previous value for compare-and-swap operations
 	Buffer filename;
 	Buffer infoHash;
 	Buffer token;
