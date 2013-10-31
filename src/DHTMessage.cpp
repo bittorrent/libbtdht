@@ -88,7 +88,8 @@ void DHTMessage::DecodeMessageData(BencodedDict &bDict)
 				dhtMessageType = DHT_RESPONSE;
 				sequenceNum = replyDict->GetInt("seq", -1);
 				//this is really bad, but there's no alternative
-				vBuf.b = SerializeBencEntity(replyDict->Get("v"), &vBuf.len);
+				BencEntity* buf = replyDict->Get("v");
+				if (buf) vBuf.b = SerializeBencEntity(buf, &vBuf.len);
 				signature.b = (byte*)replyDict->GetString("sig", &signature.len);
 				key.b = (byte*)replyDict->GetString("k", &key.len);
 			}
