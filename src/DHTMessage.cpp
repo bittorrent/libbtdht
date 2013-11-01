@@ -86,12 +86,12 @@ void DHTMessage::DecodeMessageData(BencodedDict &bDict)
 			replyDict = bDict.GetDict("r");
 			if(replyDict){
 				dhtMessageType = DHT_RESPONSE;
-				sequenceNum = replyDict->GetInt("seq", -1);
+				sequenceNum = replyDict->GetInt("seq", 1);
 				//this is really bad, but there's no alternative
 				BencEntity* buf = replyDict->Get("v");
 				if (buf) vBuf.b = SerializeBencEntity(buf, &vBuf.len);
 				signature.b = (byte*)replyDict->GetString("sig", &signature.len);
-				key.b = (byte*)replyDict->GetString("k", &key.len);
+				key.b = (byte*)replyDict->GetString("key", &key.len);
 			}
 			else{
 				dhtMessageType = DHT_UNDEFINED_MESSAGE;

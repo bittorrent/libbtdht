@@ -18,7 +18,7 @@
 #include "ExternalIPCounter.h"
 #include <string.h> // for strlen
 #include <algorithm> // for std::min
-
+#include <Math.h>
 #include <stdarg.h>
 #include <cinttypes>
 
@@ -1735,7 +1735,6 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 		Account(DHT_INVALID_PQ_BAD_PUT_BAD_V_SIZE, packetSize);
 		return false;
 	}
-
 	if(message.key.len && message.sequenceNum && message.signature.len)
 	{ // mutable put
 
@@ -1774,9 +1773,10 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 			int written = snprintf(reinterpret_cast<char*>(to_hash), 800, MUTABLE_PAYLOAD_FORMAT, message.sequenceNum);
 			assert((written + message.vBuf.len) <= 800);
 			memcpy(to_hash + written, message.vBuf.b, message.vBuf.len);
+
 			//fprintf(stderr, "in put: %s\n", (char*)to_hash);
 			containerPtr->value.cas = _sha_callback(to_hash, written + message.vBuf.len);
-			// update the time
+			// update the time	
 			containerPtr->lastUse = time(NULL);
 		} else {
 			// check that the sequence num is larger (newer) than what is currently in the store, and update 'v' bytes, sequence num, and signature
@@ -1854,7 +1854,7 @@ bool DhtImpl::ProcessQueryGet(const SockAddr &addr, DHTMessage &message, DhtPeer
 	Buffer signatureToReturn;
 	Buffer keyToReturn;
 	DataStore<DhtID, MutableData>::pair_iterator mutableStoreIterator;
-
+	int64_t sequenceNum;
 	// if there is no target, there is nothing to do
 	if (message.target.len == 0){
 		Account(DHT_INVALID_PQ_BAD_GET_TARGET, packetSize);
@@ -1886,6 +1886,7 @@ bool DhtImpl::ProcessQueryGet(const SockAddr &addr, DHTMessage &message, DhtPeer
 		signatureToReturn.b = (byte*)(mutableStoreIterator->second.value.rsaSignature);
 		keyToReturn.len = mutableStoreIterator->second.value.rsaKey.size();
 		keyToReturn.b = &(mutableStoreIterator->second.value.rsaKey.front());
+		sequenceNum = mutableStoreIterator->second.value.sequenceNum;
 		mutableStoreIterator->second.lastUse = time(NULL);
 	}
 	else if (message.key.len == 0)
@@ -1911,8 +1912,9 @@ bool DhtImpl::ProcessQueryGet(const SockAddr &addr, DHTMessage &message, DhtPeer
 		+ valueToReturn.len ? 3 + valueToReturn.len : 0    // "1:v" + num bytes for value 'v'
 		+ 30 // token
 		+ 7 + message.transactionID.len + 18; // tail (t, v and y)
-	assert(size <= mtu);
+		//+ 7 + floor(log10(abs(sequenceNum))) + 1; //seq
 
+	assert(size <= mtu);
 	// start the output info
 	sb.Out("d1:rd");
 	sb.p += snprintf(sb.p, 35, "2:id20:");
@@ -1924,6 +1926,9 @@ bool DhtImpl::ProcessQueryGet(const SockAddr &addr, DHTMessage &message, DhtPeer
 	}
 
 	BuildFindNodesPacket(sb, targetId, mtu - size);
+
+	sb.p += snprintf(sb.p, (end - sb.p), "3:seqi");
+	sb.p += snprintf(sb.p, (end - sb.p), "%" PRId64 "e", sequenceNum);
 
 	if (signatureToReturn.len){	// add a "sig" field to the response, if there is one
 		sb.p += snprintf(sb.p, (end-sb.p), "3:sig%d:", int(signatureToReturn.len));
@@ -2614,7 +2619,7 @@ void DhtImpl::Put(
 		? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA
 		: KADEMLIA_LOOKUP_OUTSTANDING;
 
-	sha1_hash pkey_hash = _sha_callback(pkey, sizeof(pkey));
+	sha1_hash pkey_hash = _sha_callback(pkey, 32);
 	DhtID target;
 	CopyBytesToDhtID(target, pkey_hash.value);
 
@@ -4104,7 +4109,7 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 
 	if(signature.size() == 0){
 		callbackPointers.putCallback(callbackPointers.callbackContext, processManager.get_data_blk());
-		Sign(signature, processManager.get_data_blk(), _skey, processManager.seq());
+		Sign(signature, processManager.get_data_blk(), _skey, processManager.seq()+1 );
 	}
 	
 	const int bufLen = 1024;
@@ -4128,10 +4133,10 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 
 	sb.p += snprintf(sb.p, (end - sb.p), "3:seqi");
 	sb.p += snprintf(sb.p, (end - sb.p), "%" PRId64, processManager.seq()+1);
-
+	
 	sb.p += snprintf(sb.p, (end - sb.p), "e3:sig64:");
 	sb.put_buf((byte*)&signature[0], 64);
-	printf("%s \n", &signature[0]);
+
 	sb.p += snprintf(sb.p, (end - sb.p), "5:token");
 	sb.p += snprintf(sb.p, (end - sb.p), "%d:", int(nodeInfo.token.len));
 	sb.put_buf((byte*)nodeInfo.token.b, int(nodeInfo.token.len));
@@ -4139,7 +4144,7 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 	Buffer v;
 	v.b = (byte*)processManager.get_data_blk(v.len);
 	sb.p += snprintf(sb.p, (end - sb.p), "1:v");
-	sb.p += snprintf(sb.p, (end - sb.p), "%d:", int(v.len));
+	//sb.p += snprintf(sb.p, (end - sb.p), "%d:", int(v.len));
 	sb.put_buf(v.b, v.len);
 
 	sb.p += snprintf(sb.p, (end - sb.p), "e1:q3:put");
@@ -4149,7 +4154,6 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 	impl->put_version(sb, end);
 	
 	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:qe");
-	printf("%s \n", buf);
 	// send the query
 	impl->SendTo(nodeInfo.id, buf, sb.p - buf);
 }
