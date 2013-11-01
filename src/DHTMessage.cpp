@@ -12,7 +12,8 @@
 */
 void DHTMessage::DecodeMessageData(byte* bencMessageBytes, int numBytes)
 {
-	if(!BencEntity::ParseInPlace(bencMessageBytes, *_bDict, bencMessageBytes + numBytes, "a\0v\0", &region)){
+	std::vector<const char*> keys = {"a\0v\0", "r\0v\0"};
+	if(!BencEntity::ParseInPlace(bencMessageBytes, *_bDict, bencMessageBytes + numBytes, keys, &region)){
 		_parseSuccessful = false;
 		dhtMessageType = DHT_UNDEFINED_MESSAGE;
 		return;
@@ -87,9 +88,6 @@ void DHTMessage::DecodeMessageData(BencodedDict &bDict)
 			if(replyDict){
 				dhtMessageType = DHT_RESPONSE;
 				sequenceNum = replyDict->GetInt("seq", -1);
-				//this is really bad, but there's no alternative
-				BencEntity* buf = replyDict->Get("v");
-				if (buf) vBuf.b = SerializeBencEntity(buf, &vBuf.len);
 				signature.b = (byte*)replyDict->GetString("sig", &signature.len);
 				key.b = (byte*)replyDict->GetString("k", &key.len);
 			}
