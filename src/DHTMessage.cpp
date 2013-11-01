@@ -12,7 +12,9 @@
 */
 void DHTMessage::DecodeMessageData(byte* bencMessageBytes, int numBytes)
 {
-	std::vector<const char*> keys = {"a\0v\0", "r\0v\0"};
+	std::vector<const char*> keys;
+	keys.push_back("a\0v\0");
+	keys.push_back("r\0v\0");
 	if(!BencEntity::ParseInPlace(bencMessageBytes, *_bDict, bencMessageBytes + numBytes, keys, &region)){
 		_parseSuccessful = false;
 		dhtMessageType = DHT_UNDEFINED_MESSAGE;

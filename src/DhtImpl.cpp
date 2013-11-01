@@ -20,7 +20,7 @@
 #include <algorithm> // for std::min
 
 #include <stdarg.h>
-#include <cinttypes>
+#include <inttypes.h>
 
 #define lenof(x) (sizeof(x)/sizeof(x[0]))
 #define MUTABLE_PAYLOAD_FORMAT "3:seqi%" PRId64 "e1:v"
@@ -3580,7 +3580,7 @@ DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(const DhtPeerID &pe
 		}
 		return dfnh;
 	}
-	return nullptr;
+	return NULL;
 }
 
 void DhtLookupScheduler::ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags) {
