@@ -18,7 +18,7 @@
 #include "ExternalIPCounter.h"
 #include <string.h> // for strlen
 #include <algorithm> // for std::min
-#include <Math.h>
+#include <math.h>
 #include <stdarg.h>
 #include <cinttypes>
 
