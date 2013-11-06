@@ -2602,12 +2602,8 @@ void DhtImpl::Vote(void *ctx_ptr, const sha1_hash* info_hash, int vote, DhtVoteC
 	_allow_new_job = false;
 }
 
-void DhtImpl::Put(
-		const byte * pkey,
-		const byte * skey,
-		DhtPutCallback * put_callback,
-		void *ctx,
-		int flags)
+void DhtImpl::Put(const byte * pkey, const byte * skey,
+		DhtPutCallback * put_callback, void *ctx, int flags, int64_t seq)
 {
 
 	int maxOutstanding = (flags & announce_non_aggressive)
@@ -2623,6 +2619,7 @@ void DhtImpl::Put(
 
 
 	DhtProcessManager *dpm = new DhtProcessManager(ids, num, target);
+	dpm->set_seq(seq);
 
 	CallBackPointers cbPtrs;
 	cbPtrs.putCallback = put_callback;
@@ -2632,6 +2629,9 @@ void DhtImpl::Put(
 	// processes will be exercised in the order they are added
 	dpm->AddDhtProcess(getProc); // add get_peers first
 
+	// announce_only_get appears to be worthless because peers will get queried
+	// and then nothing will happen with the result, as the callback only happens
+	// below
 	if ((flags & announce_only_get) == 0) {
 	DhtProcessBase* putProc = PutDhtProcess::Create(this, *dpm, pkey, skey,
 		cbPtrs, flags);
@@ -4102,9 +4102,10 @@ bool DhtImpl::Verify(byte const * signature, byte const * message, int message_l
 void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
 {
 
+	int64_t seq = processManager.seq() + 1;
 	if(signature.size() == 0){
-		callbackPointers.putCallback(callbackPointers.callbackContext, processManager.get_data_blk());
-		Sign(signature, processManager.get_data_blk(), _skey, processManager.seq());
+		callbackPointers.putCallback(callbackPointers.callbackContext, processManager.get_data_blk(), seq);
+		Sign(signature, processManager.get_data_blk(), _skey, seq);
 	}
 	
 	const int bufLen = 1024;
@@ -4127,7 +4128,7 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 	sb.put_buf((byte*)this->_pkey, 32);
 
 	sb.p += snprintf(sb.p, (end - sb.p), "3:seqi");
-	sb.p += snprintf(sb.p, (end - sb.p), "%" PRId64, processManager.seq()+1);
+	sb.p += snprintf(sb.p, (end - sb.p), "%" PRId64, seq);
 
 	sb.p += snprintf(sb.p, (end - sb.p), "e3:sig64:");
 	sb.put_buf((byte*)&signature[0], 64);
