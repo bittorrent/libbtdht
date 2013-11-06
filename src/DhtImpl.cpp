@@ -20,7 +20,7 @@
 #include <algorithm> // for std::min
 #include <math.h>
 #include <stdarg.h>
-#include <cinttypes>
+#include <inttypes.h>
 
 #define lenof(x) (sizeof(x)/sizeof(x[0]))
 #define MUTABLE_PAYLOAD_FORMAT "3:seqi%" PRId64 "e1:v"
@@ -1729,8 +1729,8 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 		return false;
 	}
 
-	// make sure v is not larger than 767 bytes or smaller than is possible for a bencoded element
-	if(message.vBuf.len < 2 || message.vBuf.len > 767)
+	// make sure v is not larger than 1000 bytes or smaller than is possible for a bencoded element
+	if(message.vBuf.len < 2 || message.vBuf.len > 1000)
 	{	// v is too big or small
 		Account(DHT_INVALID_PQ_BAD_PUT_BAD_V_SIZE, packetSize);
 		return false;
@@ -1740,11 +1740,11 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 
 		if(message.key.len != 32 || message.signature.len != 64) {
 			Account(DHT_INVALID_PQ_BAD_PUT_KEY, packetSize);
-			return false;
+			return true;
 		}
 		if (!Verify(message.signature.b, message.vBuf.b, message.vBuf.len, message.key.b, message.sequenceNum)) {
 			Account(DHT_INVALID_PQ_BAD_PUT_SIGNATURE, packetSize);
-			return false;
+			return true;
 		}
 
 		// make a hash of the address for the DataStores to use to record usage of an item
@@ -1769,9 +1769,9 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 			for (int x=0; x<message.key.len; ++x){
 				containerPtr->value.rsaKey.push_back(message.key.b[x]);
 			}
-			byte to_hash[800]; // 767 byte message + seq + formatting
-			int written = snprintf(reinterpret_cast<char*>(to_hash), 800, MUTABLE_PAYLOAD_FORMAT, message.sequenceNum);
-			assert((written + message.vBuf.len) <= 800);
+			byte to_hash[1040]; // 1000 byte message + seq + formatting
+			int written = snprintf(reinterpret_cast<char*>(to_hash), 1040, MUTABLE_PAYLOAD_FORMAT, message.sequenceNum);
+			assert((written + message.vBuf.len) <= 1040);
 			memcpy(to_hash + written, message.vBuf.b, message.vBuf.len);
 
 			//fprintf(stderr, "in put: %s\n", (char*)to_hash);
@@ -3585,7 +3585,7 @@ DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(const DhtPeerID &pe
 		}
 		return dfnh;
 	}
-	return nullptr;
+	return NULL;
 }
 
 void DhtLookupScheduler::ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags) {
@@ -3607,9 +3607,9 @@ void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata, const Dht
 			}
 		}
 		if (_with_cas) { // _with_cas
-			byte to_hash[800];
-			int written = snprintf(reinterpret_cast<char*>(to_hash), 800, MUTABLE_PAYLOAD_FORMAT, message.sequenceNum);
-			assert((written + message.vBuf.len) <= 800);
+			byte to_hash[1040];
+			int written = snprintf(reinterpret_cast<char*>(to_hash), 1040, MUTABLE_PAYLOAD_FORMAT, message.sequenceNum);
+			assert((written + message.vBuf.len) <= 1040);
 			memcpy(to_hash + written, message.vBuf.b, message.vBuf.len);
 			//fprintf(stderr, "in get: %s\n", (char*)to_hash);
 			dfnh->cas = impl->_sha_callback(to_hash, written + message.vBuf.len);

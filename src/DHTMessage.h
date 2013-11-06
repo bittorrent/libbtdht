@@ -2,7 +2,7 @@
 #define __DHT_Message__
 
 #include "Buffer.h"
-#include <cinttypes>
+#include <inttypes.h>
 #include <utility> // for std::pair
 #include "sha1_hash.h"
 
