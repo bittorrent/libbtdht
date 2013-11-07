@@ -2,8 +2,8 @@
 #define __DHT_Message__
 
 #include "Buffer.h"
-#include <inttypes.h>
 #include <utility> // for std::pair
+#include <cstdint> // for int64_t
 #include "sha1_hash.h"
 
 enum DHTMessageTypes

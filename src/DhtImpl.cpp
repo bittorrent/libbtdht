@@ -20,7 +20,7 @@
 #include <algorithm> // for std::min
 #include <math.h>
 #include <stdarg.h>
-#include <inttypes.h>
+#include <cstdint>
 
 #define lenof(x) (sizeof(x)/sizeof(x[0]))
 #define MUTABLE_PAYLOAD_FORMAT "3:seqi%" PRId64 "e1:v"
