@@ -71,7 +71,7 @@ public:
 inline unsigned int DhtID::GetBit(unsigned int bitIndex)
 {
 	assert(bitIndex < 160);
-	register unsigned int wordIndex = 4-(bitIndex >> 5);  // divide by 32 and invert
+	unsigned int wordIndex = 4-(bitIndex >> 5);  // divide by 32 and invert
 	return (id[wordIndex] >> (bitIndex & 0x1f)) & 0x00000001;
 }
 
