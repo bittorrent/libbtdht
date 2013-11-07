@@ -12,6 +12,7 @@
 #include "sockaddr.h"
 #include "RefBase.h"
 #include "smart_ptr.h"
+#include <cstdint>
 
 class UDPSocketInterface;
 class ExternalIPCounter;
