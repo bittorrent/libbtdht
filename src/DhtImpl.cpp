@@ -1735,6 +1735,7 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 		Account(DHT_INVALID_PQ_BAD_PUT_BAD_V_SIZE, packetSize);
 		return false;
 	}
+
 	if(message.key.len && message.sequenceNum && message.signature.len)
 	{ // mutable put
 
@@ -1776,7 +1777,7 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 
 			//fprintf(stderr, "in put: %s\n", (char*)to_hash);
 			containerPtr->value.cas = _sha_callback(to_hash, written + message.vBuf.len);
-			// update the time	
+			// update the time
 			containerPtr->lastUse = time(NULL);
 		} else {
 			// check that the sequence num is larger (newer) than what is currently in the store, and update 'v' bytes, sequence num, and signature
@@ -1912,9 +1913,8 @@ bool DhtImpl::ProcessQueryGet(const SockAddr &addr, DHTMessage &message, DhtPeer
 		+ valueToReturn.len ? 3 + valueToReturn.len : 0    // "1:v" + num bytes for value 'v'
 		+ 30 // token
 		+ 7 + message.transactionID.len + 18; // tail (t, v and y)
-		//+ 7 + floor(log10(abs(sequenceNum))) + 1; //seq
-
 	assert(size <= mtu);
+
 	// start the output info
 	sb.Out("d1:rd");
 	sb.p += snprintf(sb.p, 35, "2:id20:");
@@ -4133,7 +4133,7 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 
 	sb.p += snprintf(sb.p, (end - sb.p), "3:seqi");
 	sb.p += snprintf(sb.p, (end - sb.p), "%" PRId64, processManager.seq()+1);
-	
+
 	sb.p += snprintf(sb.p, (end - sb.p), "e3:sig64:");
 	sb.put_buf((byte*)&signature[0], 64);
 
