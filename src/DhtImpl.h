@@ -1652,23 +1652,14 @@ public:
 	void Vote(void *ctx, const sha1_hash* info_hash, int vote, DhtVoteCallback* callb);
 
 	void SetId(byte new_id_bytes[20]);
-	
-	void Put(
-		const byte * pkey,
-		const byte * skey,
-		DhtPutCallback * put_callback,
-		void *ctx,
-		int flags);
 
-	void AnnounceInfoHash(
-		const byte *info_hash,
-		int info_hash_len,
+	void Put( const byte * pkey, const byte * skey, DhtPutCallback * put_callback,
+		void *ctx, int flags = 0, int64_t seq = 0);
+
+	void AnnounceInfoHash(const byte *info_hash, int info_hash_len,
 		DhtPartialHashCompletedCallback *partial_callback,
-		DhtAddNodesCallback *addnodes_callback,
-		DhtPortCallback* pcb,
-		cstr file_name,
-		void *ctx,
-		int flags);
+		DhtAddNodesCallback *addnodes_callback, DhtPortCallback* pcb, cstr file_name,
+		void *ctx, int flags);
 
 	void SetRate(int bytes_per_second);
 	void SetVersion(char const* client, int major, int minor);

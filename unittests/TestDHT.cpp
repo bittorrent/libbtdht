@@ -2004,7 +2004,10 @@ TEST(TestDhtImpl, TestFindNodeRPC_ipv4)
 	EXPECT_FALSE(memcmp((const void*)nodes.b, (const void *)"abcdefghij0123456789zzzzxx", nodes.len));
 }
 
-void put_call_back(void * ctx, std::vector<char>& buffer){
+void put_call_back(void* ctx, std::vector<char>& buffer, int64_t seq){
+	if (ctx != NULL) {
+		*(reinterpret_cast<int64_t*>(ctx)) = seq;
+	}
 	buffer = { 's', 'a', 'm', 'p', 'l', 'e' };
 }
 void ed255callback(unsigned char * sig, const unsigned char * v, unsigned long long size, const unsigned char * key)
@@ -2056,7 +2059,8 @@ TEST(TestDhtImpl, TestPutRPC_ipv4)
 	byte * pkey = (byte *)"dhuieheuu383y8yr7yy3hd3hdh3gfhg3";
 	byte * skey = (byte *)"dhuieheuu383y8yr7yy3hd3hdh3gfhg3dhuieheuu383y8yr7yy3hd3hdh3gfhg3";
 	EXPECT_FALSE(dhtTestObj->IsBusy()) << "The dht should not be busy yet";
-	dhtTestObj->Put(pkey, skey, &put_call_back, NULL, 0);
+	int64_t seq_result = 0;
+	dhtTestObj->Put(pkey, skey, &put_call_back, &seq_result, 0);
 	//EXPECT_TRUE(dhtTestObj->IsBusy()) << "The dht should be busy";
 
 	// *****************************************************
@@ -2117,7 +2121,7 @@ TEST(TestDhtImpl, TestPutRPC_ipv4)
 
 	std::string v("sample");
 
-	int seq = 0;
+	int64_t seq = 0;
 	// construct the message bytes
 	BencStartDictionary(replyDictionaryBytes);
 	{
@@ -2196,6 +2200,7 @@ TEST(TestDhtImpl, TestPutRPC_ipv4)
 	v_out.b = (byte*)putQuery->GetString("v" ,&v_out.len);
 	EXPECT_EQ(v.size(), v_out.len);
 	EXPECT_FALSE(memcmp(v.c_str(), v_out.b, v.size())) << "ERROR: v is wrong";
+	EXPECT_EQ(int64_t(1), seq_result);
 
 }
 
