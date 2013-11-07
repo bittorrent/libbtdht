@@ -24,7 +24,7 @@ typedef void DhtHashFileNameCallback(void *ctx, const byte *info_hash, const byt
 typedef void DhtAddNodesCallback(void *ctx, const byte *info_hash, const byte *peers, uint num_peers);
 typedef void DhtAddNodeResponseCallback(void*& userdata, bool is_response, SockAddr const& addr);
 typedef void DhtScrapeCallback(void *ctx, const byte *target, int downloaders, int seeds);
-typedef void DhtPutCallback(void * ctx, std::vector<char>& buffer);
+typedef void DhtPutCallback(void * ctx, std::vector<char>& buffer, int64_t seq);
 
 // asks the client to save the DHT state
 typedef void DhtSaveCallback(const byte* buf, int len);
@@ -82,7 +82,11 @@ public:
 		//It takes v (from get responses) as an input and may or may not change v to place in Put messages.
 		DhtPutCallback * put_callback,
 		void *ctx,
-		int flags = 0) = 0;
+		int flags = 0,
+		// seq is an optional provided monotonically increasing sequence number to be
+		// used in a Put request if the requester is keeping sequence number state
+		// this number will be used if higher than any numbers gotten from peers
+		int64_t seq = 0) = 0;
 
 	virtual void AnnounceInfoHash(
 		const byte *info_hash,
