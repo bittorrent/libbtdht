@@ -422,9 +422,9 @@ bool DhtImpl::ValidateEncoding( const void * data, uint len )
 	if( BencEntity::Parse((const byte*) data, dict, ((const byte*) data ) + len)) {
 		size_t parselen = 0;
 		byte *b = dict.Serialize(&parselen);
-		if(b) {
+		if (b) {
 			bReturn = (memcmp(data, b, len) == 0);
-			free( b );
+			free(b);
 		}
 	}
 	assert(bReturn);
