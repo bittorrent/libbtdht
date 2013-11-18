@@ -1875,9 +1875,13 @@ bool DhtImpl::ProcessQueryGet(const SockAddr &addr, DHTMessage &message, DhtPeer
 	CopyBytesToDhtID(targetId, message.target.b);
 
 	// make a hash of the address for the DataStores to use to record usage of an item
-	const sha1_hash hashPtr = _sha_callback((const byte*)addr.get_hash_key(), addr.get_hash_key_len());
+	const sha1_hash hashPtr = _sha_callback((const byte*)addr.get_hash_key()
+		, addr.get_hash_key_len());
 
-	mutableStoreIterator = _mutablePutStore.FindInList(targetId, time(NULL), hashPtr); // look in the mutable table first
+	// look in the mutable table first
+	mutableStoreIterator = _mutablePutStore.FindInList(targetId
+		, time(NULL), hashPtr);
+
 	if (mutableStoreIterator != _mutablePutStore.end()) {
 		// we have found a match in the mutable table
 		assert(mutableStoreIterator->first == targetId);
@@ -1930,7 +1934,8 @@ bool DhtImpl::ProcessQueryGet(const SockAddr &addr, DHTMessage &message, DhtPeer
 	sb.p += snprintf(sb.p, (end - sb.p), "3:seqi");
 	sb.p += snprintf(sb.p, (end - sb.p), "%" PRId64 "e", sequenceNum);
 
-	if (signatureToReturn.len){	// add a "sig" field to the response, if there is one
+	if (signatureToReturn.len) {
+		// add a "sig" field to the response, if there is one
 		sb.p += snprintf(sb.p, (end-sb.p), "3:sig%d:", int(signatureToReturn.len));
 		sb.put_buf((byte*)signatureToReturn.b, signatureToReturn.len);
 	}
@@ -3588,32 +3593,39 @@ DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(const DhtPeerID &pe
 	return NULL;
 }
 
-void DhtLookupScheduler::ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags) {
+void DhtLookupScheduler::ImplementationSpecificReplyProcess(void *userdata
+	, const DhtPeerID &peer_id, DHTMessage &message, uint flags)
+{
 	ProcessMetadataAndPeer(peer_id, message, flags);
 }
 
-void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags) {
+void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata
+	, const DhtPeerID &peer_id, DHTMessage &message, uint flags)
+{
 	DhtFindNodeEntry *dfnh = ProcessMetadataAndPeer(peer_id, message, flags);
-	if (dfnh) {
-		//We are looking for the response message with the maximum seq number.
-		if(message.sequenceNum > processManager.seq()){ 
-			if(message.signature.len > 0  && message.vBuf.len > 0 &&
-					message.key.len > 0 &&
-					impl->Verify(message.signature.b, message.vBuf.b, message.vBuf.len,
-						message.key.b, message.sequenceNum)){
-				//The maximum seq and the vBuf are saved by the processManager and will be used in creating Put messages.
-				processManager.set_data_blk(message.vBuf.b, message.vBuf.len);
-				processManager.set_seq(message.sequenceNum);
-			}
-		}
-		if (_with_cas) { // _with_cas
-			byte to_hash[1040];
-			int written = snprintf(reinterpret_cast<char*>(to_hash), 1040, MUTABLE_PAYLOAD_FORMAT, message.sequenceNum);
-			assert((written + message.vBuf.len) <= 1040);
-			memcpy(to_hash + written, message.vBuf.b, message.vBuf.len);
-			//fprintf(stderr, "in get: %s\n", (char*)to_hash);
-			dfnh->cas = impl->_sha_callback(to_hash, written + message.vBuf.len);
-		}
+	if (dfnh == NULL) return;
+
+	//We are looking for the response message with the maximum seq number.
+	if (message.sequenceNum >= processManager.seq()
+		&& message.signature.len > 0
+		&& message.vBuf.len > 0
+		&& message.key.len > 0
+		&& impl->Verify(message.signature.b, message.vBuf.b
+			, message.vBuf.len, message.key.b, message.sequenceNum)) {
+		// The maximum seq and the vBuf are saved by the
+		// processManager and will be used in creating Put messages.
+		processManager.set_data_blk(message.vBuf.b, message.vBuf.len);
+		processManager.set_seq(message.sequenceNum);
+	}
+
+	if (_with_cas) {
+		byte to_hash[1040];
+		int written = snprintf(reinterpret_cast<char*>(to_hash)
+			, 1040, MUTABLE_PAYLOAD_FORMAT, message.sequenceNum);
+		assert((written + message.vBuf.len) <= 1040);
+		memcpy(to_hash + written, message.vBuf.b, message.vBuf.len);
+		//fprintf(stderr, "in get: %s\n", (char*)to_hash);
+		dfnh->cas = impl->_sha_callback(to_hash, written + message.vBuf.len);
 	}
 }
 
@@ -3640,7 +3652,8 @@ void DhtBroadcastScheduler::Schedule()
 				nodeInfo.queried = QUERIED_YES;
 				DhtRequest *req = impl->AllocateRequest(nodeInfo.id);
 				DhtSendRPC(nodeInfo, req->tid);
-				req->_pListener = new DhtRequestListener<DhtProcessBase>(this, &DhtProcessBase::OnReply);
+				req->_pListener = new DhtRequestListener<DhtProcessBase>(this
+					, &DhtProcessBase::OnReply);
 				outstanding++;
 				break;
 			}
