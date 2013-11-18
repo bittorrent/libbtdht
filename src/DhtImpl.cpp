@@ -415,7 +415,7 @@ void DhtImpl::Account(int slot, int size)
 
 #if !STABLE_VERSION || defined _DEBUG || defined BRANDED_MAC
 
-bool DhtImpl::ValidateEncoding( const void * data, uint len )
+bool ValidateEncoding( const void * data, uint len )
 {
 	BencodedDict dict;
 	bool bReturn = false;
@@ -4122,8 +4122,20 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 
 	int64_t seq = processManager.seq() + 1;
 	if(signature.size() == 0){
-		callbackPointers.putCallback(callbackPointers.callbackContext, processManager.get_data_blk(), seq);
-		Sign(signature, processManager.get_data_blk(), _skey, seq);
+		callbackPointers.putCallback(callbackPointers.callbackContext
+			, processManager.get_data_blk(), seq);
+		std::vector<char> blk = processManager.get_data_blk();
+
+		// the callback must return either an empty buffer, or
+		// a valid bencoded structure
+		if (blk.empty()) {
+			char empty_string[] = "0:";
+			blk.insert(blk.begin(), empty_string, empty_string + 2);
+		} else {
+			assert(ValidateEncoding(&blk[0], blk.size()));
+		}
+
+		Sign(signature, blk, _skey, seq);
 	}
 	
 	const int bufLen = 1024;
@@ -4145,10 +4157,9 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 	sb.p += snprintf(sb.p, (end - sb.p), "1:k32:");
 	sb.put_buf((byte*)this->_pkey, 32);
 
-	sb.p += snprintf(sb.p, (end - sb.p), "3:seqi");
-	sb.p += snprintf(sb.p, (end - sb.p), "%" PRId64, seq);
+	sb.p += snprintf(sb.p, (end - sb.p), "3:seqi%" PRId64 "e", seq);
 
-	sb.p += snprintf(sb.p, (end - sb.p), "e3:sig64:");
+	sb.p += snprintf(sb.p, (end - sb.p), "3:sig64:");
 	sb.put_buf((byte*)&signature[0], 64);
 
 	sb.p += snprintf(sb.p, (end - sb.p), "5:token");
