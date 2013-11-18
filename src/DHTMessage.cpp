@@ -116,7 +116,7 @@ void DHTMessage::DecodeMessageData(BencodedDict &bDict)
 }
 
 void DHTMessage::DecodeError(BencodedDict &bDict) {
-	BencodedList* l = bDict.get("e");
+	BencodedList* l = bDict.GetList("e");
 	if (l != NULL) {
 		error_code = l->GetInt(0);
 		error_message = l->GetString(1);

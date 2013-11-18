@@ -1161,6 +1161,7 @@ class DhtBroadcastScheduler : public DhtProcessBase
 {
 	protected:
 		int outstanding;
+		bool aborted;
 
 		DhtBroadcastScheduler(DhtProcessManager &dpm):DhtProcessBase(dpm),outstanding(0){assert(false);}
 		virtual void Schedule();
@@ -1169,7 +1170,8 @@ class DhtBroadcastScheduler : public DhtProcessBase
 		void OnReply(void*& userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags);
 		DhtBroadcastScheduler(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2
 			, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks)
-			:DhtProcessBase(pDhtImpl,dpm,target2,target2_len,startTime,consumerCallbacks),outstanding(0){}
+			:DhtProcessBase(pDhtImpl,dpm,target2,target2_len,startTime,consumerCallbacks),outstanding(0), aborted(false) {}
+		virtual void Abort() { aborted = true; }
 };
 
 
@@ -1496,7 +1498,6 @@ inline void GetDhtProcess::CompleteThisProcess()
 class PutDhtProcess : public DhtBroadcastScheduler
 {
 	protected:
-
 		virtual void ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags);
 		virtual void DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID);
 		virtual void CompleteThisProcess();
@@ -1509,7 +1510,7 @@ class PutDhtProcess : public DhtBroadcastScheduler
 		byte _pkey[32];
 		byte _skey[64];
 
-		PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const byte * pkey, const byte * skey, time_t startTime, const CallBackPointers &consumerCallbacks, GetDhtProcess* getProc);
+		PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const byte * pkey, const byte * skey, time_t startTime, const CallBackPointers &consumerCallbacks, int flags);
 		~PutDhtProcess();
 		virtual void Start();
 
@@ -1519,7 +1520,10 @@ class PutDhtProcess : public DhtBroadcastScheduler
 			const byte * pkey,
 			const byte * skey,
 			CallBackPointers &cbPointers,
-			int flags, GetDhtProcess* getProc);
+			int flags);
+
+	protected:
+		bool _with_cas;
 };
 
 inline void PutDhtProcess::Start()

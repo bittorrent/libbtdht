@@ -2677,7 +2677,7 @@ void DhtImpl::Put(const byte * pkey, const byte * skey,
 	// below
 	if ((flags & announce_only_get) == 0) {
 	DhtProcessBase* putProc = PutDhtProcess::Create(this, *dpm, pkey, skey,
-		cbPtrs, flags, getProc);
+		cbPtrs, flags);
 		dpm->AddDhtProcess(putProc); // add announce second
 	}
 	dpm->Start();
@@ -3484,7 +3484,7 @@ void DhtLookupScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id, DhtR
 		}
 		return;
 	}
-
+	
 	// a normal response, let the derived class handle it
 #if g_log_dht
 	dht_log("DhtLookupScheduler,normal_reply,id,%d,time,%d\n", target.id[0], get_milliseconds());
@@ -3674,13 +3674,16 @@ void DhtBroadcastScheduler::Schedule()
 		switch(processManager[index].queried){
 			case QUERIED_NO:
 			{
-				DhtFindNodeEntry &nodeInfo = processManager[index];
-				nodeInfo.queried = QUERIED_YES;
-				DhtRequest *req = impl->AllocateRequest(nodeInfo.id);
-				DhtSendRPC(nodeInfo, req->tid);
-				req->_pListener = new DhtRequestListener<DhtProcessBase>(this, &DhtProcessBase::OnReply);
-				outstanding++;
-				break;
+				if (!aborted) {
+					DhtFindNodeEntry &nodeInfo = processManager[index];
+					nodeInfo.queried = QUERIED_YES;
+					DhtRequest *req = impl->AllocateRequest(nodeInfo.id);
+					DhtSendRPC(nodeInfo, req->tid);
+					req->_pListener = new DhtRequestListener<DhtProcessBase>(this,
+							&DhtProcessBase::OnReply);
+					outstanding++;
+					break;
+				}
 			}
 			case QUERIED_REPLIED:
 			{
@@ -4091,8 +4094,8 @@ void GetDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 //
 //*****************************************************************************
 
-PutDhtProcess::PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const byte * pkey, const byte * skey, time_t startTime, const CallBackPointers &consumerCallbacks, GetDhtProcess* getProc)
-	: DhtBroadcastScheduler(pDhtImpl,dpm,target,target_len,startTime,consumerCallbacks), getProc(getProc)
+PutDhtProcess::PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const byte * pkey, const byte * skey, time_t startTime, const CallBackPointers &consumerCallbacks, int flags)
+	: DhtBroadcastScheduler(pDhtImpl,dpm,target,target_len,startTime,consumerCallbacks), _with_cas(flags & IDht::with_cas)
 {
 
 	signature.clear();
@@ -4113,9 +4116,9 @@ PutDhtProcess::PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const by
 DhtProcessBase* PutDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
 	const byte * pkey,
 	const byte * skey,
-	CallBackPointers &cbPointers, int flags, GetDhtProcess* getProc)
+	CallBackPointers &cbPointers, int flags)
 {
-	PutDhtProcess* process = new PutDhtProcess(pDhtImpl, dpm, pkey, skey, time(NULL), cbPointers, getProc);
+	PutDhtProcess* process = new PutDhtProcess(pDhtImpl, dpm, pkey, skey, time(NULL), cbPointers, flags);
 
 	return process;
 }
@@ -4204,9 +4207,11 @@ void PutDhtProcess::ImplementationSpecificReplyProcess(void *userdata, const Dht
 	}
 	if(message.dhtMessageType == DHT_ERROR) {
 		if (message.error_code == LOWER_SEQ) {
-			//FIX ME
-			processManager.addDhtProcess(getProc);
-			processManager.addDhtProcess(this);
+			Abort();
+			DhtProcessBase* getProc = GetDhtProcess::Create(impl.get(), processManager, target, target_len, callbackPointers, _with_cas ? IDht::with_cas : 0);
+			processManager.AddDhtProcess(getProc);
+			DhtProcessBase* putProc = PutDhtProcess::Create(impl.get(), processManager,  _pkey, _skey, callbackPointers, _with_cas ? IDht::with_cas : 0);
+			processManager.AddDhtProcess(putProc);
 		}
 	}
 }
