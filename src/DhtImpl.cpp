@@ -3682,8 +3682,8 @@ void DhtBroadcastScheduler::Schedule()
 					req->_pListener = new DhtRequestListener<DhtProcessBase>(this,
 							&DhtProcessBase::OnReply);
 					outstanding++;
-					break;
 				}
+				break;
 			}
 			case QUERIED_REPLIED:
 			{
@@ -3706,7 +3706,9 @@ void DhtBroadcastScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id, D
 {
 	if(flags & NORMAL_RESPONSE){
 		// a normal response, let the derived class handle it
-		ImplementationSpecificReplyProcess(userdata, peer_id, message, flags);
+		if (!aborted) {
+			ImplementationSpecificReplyProcess(userdata, peer_id, message, flags);
+		}
 
 		DhtFindNodeEntry *dfnh = processManager.FindQueriedPeer(peer_id);
 		if (dfnh) dfnh->queried = QUERIED_REPLIED;
@@ -4206,7 +4208,7 @@ void PutDhtProcess::ImplementationSpecificReplyProcess(void *userdata, const Dht
 		impl->UpdateError(peer_id);
 	}
 	if(message.dhtMessageType == DHT_ERROR) {
-		if (message.error_code == LOWER_SEQ) {
+		if (message.error_code == LOWER_SEQ || message.error_code == CAS_MISMATCH) {
 			Abort();
 			DhtProcessBase* getProc = GetDhtProcess::Create(impl.get(), processManager, target, target_len, callbackPointers, _with_cas ? IDht::with_cas : 0);
 			processManager.AddDhtProcess(getProc);
