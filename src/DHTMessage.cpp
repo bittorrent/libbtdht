@@ -47,6 +47,8 @@ void DHTMessage::Init()
 	args = NULL;
 	region.first = region.second = NULL;
 	portNum = vote = seed = scrape = noseed = sequenceNum = 0;
+	error_code = 0;
+	error_message = NULL;
 }
 
 /** This version of DecodeMessageData() can NOT extract a 'v' region
@@ -105,11 +107,19 @@ void DHTMessage::DecodeMessageData(BencodedDict &bDict)
 		case 'e':
 		{
 			dhtMessageType = DHT_ERROR;
-//future			DecodeError(bDict);
+			DecodeError(bDict);
 			break;
 		}
 		default:
 			dhtMessageType = DHT_UNDEFINED_MESSAGE;
+	}
+}
+
+void DHTMessage::DecodeError(BencodedDict &bDict) {
+	BencodedList* l = bDict.get("e");
+	if (l != NULL) {
+		error_code = l->GetInt(0);
+		error_message = l->GetString(1);
 	}
 }
 

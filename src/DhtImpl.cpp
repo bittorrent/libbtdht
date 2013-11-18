@@ -25,6 +25,11 @@
 #define lenof(x) (sizeof(x)/sizeof(x[0]))
 #define MUTABLE_PAYLOAD_FORMAT "3:seqi%" PRId64 "e1:v"
 
+#define MESSAGE_TOO_BIG 205
+#define INVALID_SIGNATURE 206
+#define CAS_MISMATCH 301
+#define LOWER_SEQ 302
+
 bool DhtVerifyHardenedID(const SockAddr& addr, byte const* node_id, DhtSHACallback* sha);
 void DhtCalculateHardenedID(const SockAddr& addr, byte *node_id, DhtSHACallback* sha);
 
@@ -1700,8 +1705,43 @@ bool DhtImpl::ProcessQueryFindNode(const SockAddr &addr, DHTMessage &message, Dh
 	return true;
 }
 
-bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeerID &peerID, int packetSize)
-{
+void DhtImpl::send_put_response(SimpleBencoder& sb, char const* end,
+		Buffer& transaction_id, int packetSize, DhtPeerID &peerID) {
+	char const * const original = sb.p;
+	sb.p += snprintf(sb.p, (end - sb.p), "d1:rd2:id20:");
+	sb.put_buf(_my_id_bytes, 20);
+	sb.p += snprintf(sb.p, (end - sb.p), "e");
+
+	put_transaction_id(sb, transaction_id, end);
+	put_version(sb, end);
+	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:re");
+	assert(sb.p < end);
+	Account(DHT_BW_IN_REQ, packetSize);
+	Account(DHT_BW_OUT_REPL, sb.p - original);
+	SendTo(peerID, original, sb.p - original);
+}
+
+void DhtImpl::send_put_response(SimpleBencoder& sb, char const* end,
+		Buffer& transaction_id, int packetSize, DhtPeerID &peerID,
+		unsigned int error_code, char const* error_message) {
+	assert(error_message != NULL);
+	char const * const original = sb.p;
+	sb.p += snprintf(sb.p, (end - sb.p), "d1:eli%ue%zu:%se", error_code,
+			strlen(error_message), error_message);
+	sb.p += snprintf(sb.p, (end - sb.p), "1:rd2:id20:");
+	sb.put_buf(_my_id_bytes, 20);
+	sb.p += snprintf(sb.p, (end - sb.p), "e");
+
+	put_transaction_id(sb, transaction_id, end);
+	put_version(sb, end);
+	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:ee");
+	assert(sb.p < end);
+	Account(DHT_BW_IN_REQ, packetSize);
+	Account(DHT_BW_OUT_REPL, sb.p - original);
+	SendTo(peerID, original, sb.p - original);
+}
+
+bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeerID &peerID, int packetSize) {
 	char buf[256];
 	char const* const end = buf + sizeof(buf);
 	SimpleBencoder sb(buf);
@@ -1726,14 +1766,16 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 	assert(peerID.addr.isv4());
 	if (!peerID.addr.isv4()) {
 		Account(DHT_INVALID_PQ_IPV6, packetSize);
-		return false;
+		return true;
 	}
 
 	// make sure v is not larger than 1000 bytes or smaller than is possible for a bencoded element
 	if(message.vBuf.len < 2 || message.vBuf.len > 1000)
 	{	// v is too big or small
 		Account(DHT_INVALID_PQ_BAD_PUT_BAD_V_SIZE, packetSize);
-		return false;
+		send_put_response(sb, end, message.transactionID, packetSize, peerID,
+				MESSAGE_TOO_BIG, "Message exceeds maximum size.");
+		return true;
 	}
 
 	if(message.key.len && message.sequenceNum && message.signature.len)
@@ -1745,6 +1787,8 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 		}
 		if (!Verify(message.signature.b, message.vBuf.b, message.vBuf.len, message.key.b, message.sequenceNum)) {
 			Account(DHT_INVALID_PQ_BAD_PUT_SIGNATURE, packetSize);
+			send_put_response(sb, end, message.transactionID, packetSize, peerID,
+					INVALID_SIGNATURE, "Invalid message signature.");
 			return true;
 		}
 
@@ -1771,7 +1815,8 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 				containerPtr->value.rsaKey.push_back(message.key.b[x]);
 			}
 			byte to_hash[1040]; // 1000 byte message + seq + formatting
-			int written = snprintf(reinterpret_cast<char*>(to_hash), 1040, MUTABLE_PAYLOAD_FORMAT, message.sequenceNum);
+			int written = snprintf(reinterpret_cast<char*>(to_hash), 1040,
+					MUTABLE_PAYLOAD_FORMAT, message.sequenceNum);
 			assert((written + message.vBuf.len) <= 1040);
 			memcpy(to_hash + written, message.vBuf.b, message.vBuf.len);
 
@@ -1780,12 +1825,16 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 			// update the time
 			containerPtr->lastUse = time(NULL);
 		} else {
-			// check that the sequence num is larger (newer) than what is currently in the store, and update 'v' bytes, sequence num, and signature
+			// check that the sequence num is larger (newer) than what is currently in
+			// the store, and update 'v' bytes, sequence num, and signature
 			// No need to update the key here, we already have it and it is not changing.
-			if (message.sequenceNum >= containerPtr->value.sequenceNum){
+			if (message.sequenceNum >= containerPtr->value.sequenceNum) {
 				if (!(message.cas.is_all_zero()) &&
 						message.cas != containerPtr->value.cas) {
 					Account(DHT_INVALID_PQ_BAD_PUT_CAS, packetSize);
+					send_put_response(sb, end, message.transactionID, packetSize, peerID,
+							CAS_MISMATCH, "Invalid CAS.");
+					return true;
 				} else {
 					if (message.sequenceNum > containerPtr->value.sequenceNum) {
 						// update the sequence number
@@ -1804,11 +1853,13 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 					// update the last time accessed
 					containerPtr->lastUse = time(NULL);
 				}
+			} else {
+					send_put_response(sb, end, message.transactionID, packetSize, peerID,
+							LOWER_SEQ, "Replacement sequence number is lower.");
+					return true;
 			}
 		}
-	}
-	else
-	{
+	} else {
 		// immutable put
 		// make a hash of the address for the DataStores to use to record usage of an item
 		const sha1_hash addrHashPtr = _sha_callback((const byte*)addr.get_hash_key(), addr.get_hash_key_len());
@@ -1825,20 +1876,7 @@ bool DhtImpl::ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeer
 	}
 
 	// build a simple reply with this node's ID
-	sb.p += snprintf(sb.p, (end - sb.p), "d1:rd2:id20:");
-	sb.put_buf(_my_id_bytes, 20);
-	sb.p += snprintf(sb.p, (end - sb.p), "e");
-
-	put_transaction_id(sb, message.transactionID, end);
-	put_version(sb, end);
-	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:re");
-
-	Account(DHT_BW_IN_REQ, packetSize);
-	assert(sb.p < buf + sizeof(buf));
-	Account(DHT_BW_OUT_REPL, sb.p - buf);
-
-	// Send the reply
-	SendTo(peerID, buf, sb.p - buf);
+	send_put_response(sb, end, message.transactionID, packetSize, peerID);
 	return true;
 }
 
@@ -2639,7 +2677,7 @@ void DhtImpl::Put(const byte * pkey, const byte * skey,
 	// below
 	if ((flags & announce_only_get) == 0) {
 	DhtProcessBase* putProc = PutDhtProcess::Create(this, *dpm, pkey, skey,
-		cbPtrs, flags);
+		cbPtrs, flags, getProc);
 		dpm->AddDhtProcess(putProc); // add announce second
 	}
 	dpm->Start();
@@ -4053,8 +4091,8 @@ void GetDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 //
 //*****************************************************************************
 
-PutDhtProcess::PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const byte * pkey, const byte * skey, time_t startTime, const CallBackPointers &consumerCallbacks)
-	: DhtBroadcastScheduler(pDhtImpl,dpm,target,target_len,startTime,consumerCallbacks)
+PutDhtProcess::PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const byte * pkey, const byte * skey, time_t startTime, const CallBackPointers &consumerCallbacks, GetDhtProcess* getProc)
+	: DhtBroadcastScheduler(pDhtImpl,dpm,target,target_len,startTime,consumerCallbacks), getProc(getProc)
 {
 
 	signature.clear();
@@ -4070,15 +4108,14 @@ PutDhtProcess::PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const by
 #if g_log_dht
 	dht_log("PutDhtProcess,instantiated,id,%d,time,%d\n", target.id[0], get_milliseconds());
 #endif
-
 }
 
 DhtProcessBase* PutDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
 	const byte * pkey,
 	const byte * skey,
-	CallBackPointers &cbPointers, int flags)
+	CallBackPointers &cbPointers, int flags, GetDhtProcess* getProc)
 {
-	PutDhtProcess* process = new PutDhtProcess(pDhtImpl, dpm, pkey, skey, time(NULL), cbPointers);
+	PutDhtProcess* process = new PutDhtProcess(pDhtImpl, dpm, pkey, skey, time(NULL), cbPointers, getProc);
 
 	return process;
 }
@@ -4164,6 +4201,13 @@ void PutDhtProcess::ImplementationSpecificReplyProcess(void *userdata, const Dht
 	// handle errors
 	if(message.dhtMessageType != DHT_RESPONSE){
 		impl->UpdateError(peer_id);
+	}
+	if(message.dhtMessageType == DHT_ERROR) {
+		if (message.error_code == LOWER_SEQ) {
+			//FIX ME
+			processManager.addDhtProcess(getProc);
+			processManager.addDhtProcess(this);
+		}
 	}
 }
 

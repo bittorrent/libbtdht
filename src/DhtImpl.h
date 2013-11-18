@@ -1501,6 +1501,7 @@ class PutDhtProcess : public DhtBroadcastScheduler
 		virtual void DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID);
 		virtual void CompleteThisProcess();
 		std::vector<char> signature;
+		GetDhtProcess* getProc;
 
 	public:
 
@@ -1508,7 +1509,7 @@ class PutDhtProcess : public DhtBroadcastScheduler
 		byte _pkey[32];
 		byte _skey[64];
 
-		PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const byte * pkey, const byte * skey, time_t startTime, const CallBackPointers &consumerCallbacks);
+		PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const byte * pkey, const byte * skey, time_t startTime, const CallBackPointers &consumerCallbacks, GetDhtProcess* getProc);
 		~PutDhtProcess();
 		virtual void Start();
 
@@ -1518,7 +1519,7 @@ class PutDhtProcess : public DhtBroadcastScheduler
 			const byte * pkey,
 			const byte * skey,
 			CallBackPointers &cbPointers,
-			int flags);
+			int flags, GetDhtProcess* getProc);
 };
 
 inline void PutDhtProcess::Start()
@@ -1962,7 +1963,13 @@ public:
 
 	void put_transaction_id(SimpleBencoder& sb, Buffer tid, char const* end);
 	void put_version(SimpleBencoder& sb, char const* end);
+private:
+	void send_put_response(SimpleBencoder& sb, char const* end, Buffer& transaction_id, int packetSize, DhtPeerID &peerID);
+	void send_put_response(SimpleBencoder& sb, char const* end,
+			Buffer& transaction_id, int packetSize, DhtPeerID &peerID, unsigned int error_code,
+			char const* error_message);
 
+public:
 	bool ProcessQueryPing(const SockAddr &addr, DHTMessage &message, DhtPeerID &peerID, int packetSize);
 	bool ProcessQueryFindNode(const SockAddr &addr, DHTMessage &message, DhtPeerID &peerID, int packetSize);
 	bool ProcessQueryGetPeers(const SockAddr &addr, DHTMessage &message, DhtPeerID &peerID, int packetSize);

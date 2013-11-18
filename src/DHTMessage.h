@@ -32,7 +32,7 @@ class BencodedDict;
  DHTMessage class
 
  This class is currently concerned with extracting the information for DHT
- queries.  In the future it may be expanded to accomodate responses and errors.
+ queries.
 
  NOTE:  The BencodedDictionary object from which the message data is extracted
  must be maintained for as long as you want to use the data in the public
@@ -77,11 +77,9 @@ private:
 	std::pair<unsigned char*, unsigned char*> region;
 
 	void CopyFrom(DHTMessage &src);
+	void DecodeError(BencodedDict &bDict);
 	void DecodeQuery(BencodedDict &bDict);
 	void Init();
-	/* future
-	void DecodeError(BencodedDict &bDict);
-	*/
 
 public:
 	DHTMessage();
@@ -132,6 +130,9 @@ public:
 
 	// reply specific components
 	BencodedDict* replyDict;
+
+	int error_code;
+	const char* error_message;
 };
 
 inline DHTMessage::DHTMessage()
