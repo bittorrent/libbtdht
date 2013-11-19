@@ -2008,7 +2008,7 @@ void put_call_back(void* ctx, std::vector<char>& buffer, int64_t seq){
 	if (ctx != NULL) {
 		*(reinterpret_cast<int64_t*>(ctx)) = seq;
 	}
-	buffer = { 's', 'a', 'm', 'p', 'l', 'e' };
+	buffer = { '6', ':', 's', 'a', 'm', 'p', 'l', 'e' };
 }
 void ed255callback(unsigned char * sig, const unsigned char * v, unsigned long long size, const unsigned char * key)
 {
@@ -2016,8 +2016,8 @@ void ed255callback(unsigned char * sig, const unsigned char * v, unsigned long l
     sig[i] ='a'; 
   }
 } 
-TEST(TestDhtImpl, TestPutRPC_ipv4)
-{
+
+TEST(TestDhtImpl, TestPutRPC_ipv4) {
 	UnitTestUDPSocket socket4;
 	UnitTestUDPSocket socket6;
 	BencodedDict bDictGetPeer;
@@ -2399,7 +2399,6 @@ TEST(TestDhtImpl, TestPutRPC_ipv4_cas)
 	v_out.b = (byte*)putQuery->GetString("v" ,&v_out.len);
 	EXPECT_EQ(v.size(), v_out.len);
 	EXPECT_FALSE(memcmp(v.c_str(), v_out.b, v.size())) << "ERROR: v is wrong";
-
 }
 
 TEST(TestDhtImpl, TestAnnouncePeerRPC_ipv4)
