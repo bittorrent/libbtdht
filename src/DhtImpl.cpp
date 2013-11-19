@@ -3802,8 +3802,10 @@ const char* const GetPeersDhtProcess::ArgsNamesStr[] =
 };
 
 GetPeersDhtProcess::GetPeersDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
-	, const DhtID &target2, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks, int maxOutstanding)
-	: DhtLookupScheduler(pDhtImpl,dpm,target2,target2_len,startTime,consumerCallbacks,maxOutstanding)
+	, const DhtID &target2, int target2_len, time_t startTime
+	, const CallBackPointers &consumerCallbacks, int maxOutstanding)
+	: DhtLookupScheduler(pDhtImpl, dpm, target2, target2_len, startTime
+		, consumerCallbacks,maxOutstanding)
 {
 	byte infoHashBytes[20];
 
@@ -4039,8 +4041,12 @@ void AnnounceDhtProcess::CompleteThisProcess()
 //*****************************************************************************
 
 GetDhtProcess::GetDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
-	, const DhtID & target_2, int target_2_len, time_t startTime, const CallBackPointers &consumerCallbacks, int maxOutstanding, bool with_cas)
-	: DhtLookupScheduler(pDhtImpl,dpm,target_2,target_2_len,startTime,consumerCallbacks,maxOutstanding), _with_cas(with_cas)
+	, const DhtID & target_2, int target_2_len, time_t startTime
+	, const CallBackPointers &consumerCallbacks, int maxOutstanding
+	, bool with_cas)
+	: DhtLookupScheduler(pDhtImpl, dpm, target_2, target_2_len, startTime
+		, consumerCallbacks, maxOutstanding)
+	, _with_cas(with_cas)
 {
 	
 	char* buf = (char*)this->_id;

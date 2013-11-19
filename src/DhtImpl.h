@@ -1120,26 +1120,38 @@ class DhtLookupScheduler : public DhtProcessBase
 		int numNonSlowRequestsOutstanding;
 		int totalOutstandingRequests;
 
-		DhtLookupScheduler(DhtProcessManager &dpm):DhtProcessBase(dpm){assert(false);}
+		DhtLookupScheduler(DhtProcessManager &dpm):DhtProcessBase(dpm)
+		{ assert(false); }
 		virtual void Schedule();
-		virtual void ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags);
-		DhtFindNodeEntry* ProcessMetadataAndPeer(const DhtPeerID &peer_id, DHTMessage &message, uint flags);
+		virtual void ImplementationSpecificReplyProcess(void *userdata
+			, const DhtPeerID &peer_id, DHTMessage &message, uint flags);
+		DhtFindNodeEntry* ProcessMetadataAndPeer(const DhtPeerID &peer_id
+			, DHTMessage &message, uint flags);
 		void IssueOneAdditionalQuery();
 		void IssueQuery(int nodeIndex);
 
 	public:
-		virtual void OnReply(void*& userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags);
-		DhtLookupScheduler(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks, int maxOutstanding);
+		virtual void OnReply(void*& userdata, const DhtPeerID &peer_id
+			, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags);
+
+		DhtLookupScheduler(DhtImpl* pDhtImpl, DhtProcessManager &dpm
+			, const DhtID &target2, int target2_len, time_t startTime
+			, const CallBackPointers &consumerCallbacks, int maxOutstanding);
 		void SetMaxOutstandingLookupQueries(int maxOutstanding);
 };
 
-inline DhtLookupScheduler::DhtLookupScheduler(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks, int maxOutstanding)
-	:DhtProcessBase(pDhtImpl,dpm,target2,target2_len,startTime,consumerCallbacks),
-		maxOutstandingLookupQueries(maxOutstanding),numNonSlowRequestsOutstanding(0),totalOutstandingRequests(0)
+inline DhtLookupScheduler::DhtLookupScheduler(DhtImpl* pDhtImpl
+	, DhtProcessManager &dpm, const DhtID &target2, int target2_len
+	, time_t startTime, const CallBackPointers &consumerCallbacks
+	, int maxOutstanding)
+	: DhtProcessBase(pDhtImpl, dpm, target2, target2_len
+		, startTime,consumerCallbacks), maxOutstandingLookupQueries(maxOutstanding)
+		, numNonSlowRequestsOutstanding(0), totalOutstandingRequests(0)
 {
 	assert(maxOutstandingLookupQueries > 0);
 #if g_log_dht
-	dht_log("DhtLookupScheduler,instantiated,id,%d,time,%d\n", target.id[0], get_microseconds());
+	dht_log("DhtLookupScheduler,instantiated,id,%d,time,%d\n", target.id[0]
+		, get_microseconds());
 #endif
 }
 
@@ -1163,14 +1175,20 @@ class DhtBroadcastScheduler : public DhtProcessBase
 		int outstanding;
 		bool aborted;
 
-		DhtBroadcastScheduler(DhtProcessManager &dpm):DhtProcessBase(dpm),outstanding(0){assert(false);}
+		DhtBroadcastScheduler(DhtProcessManager &dpm)
+			: DhtProcessBase(dpm), outstanding(0) { assert(false); }
 		virtual void Schedule();
 
 	public:
-		void OnReply(void*& userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags);
-		DhtBroadcastScheduler(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2
-			, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks)
-			:DhtProcessBase(pDhtImpl,dpm,target2,target2_len,startTime,consumerCallbacks),outstanding(0), aborted(false) {}
+		void OnReply(void*& userdata, const DhtPeerID &peer_id, DhtRequest *req
+			, DHTMessage &message, DhtProcessFlags flags);
+
+		DhtBroadcastScheduler(DhtImpl* pDhtImpl, DhtProcessManager &dpm
+			, const DhtID &target2, int target2_len, time_t startTime
+			, const CallBackPointers &consumerCallbacks)
+			: DhtProcessBase(pDhtImpl, dpm, target2, target2_len, startTime
+			, consumerCallbacks), outstanding(0), aborted(false) {}
+
 		virtual void Abort() { aborted = true; }
 };
 
