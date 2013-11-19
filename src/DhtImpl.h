@@ -1044,20 +1044,27 @@ class DhtProcessBase
 		time_t start_time;
 		DhtProcessManager &processManager;
 
-		DhtProcessBase(DhtProcessManager &dpm):processManager(dpm){assert(false);} // this constructor should never be used.
+		// this constructor should never be used.
+		DhtProcessBase(DhtProcessManager& dpm): processManager(dpm)
+		{ assert(false); }
 
-		virtual void DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID) = 0;
+		virtual void DhtSendRPC(const DhtFindNodeEntry &nodeInfo
+			, const unsigned int transactionID) = 0;
 		virtual void Schedule() = 0;
 		virtual void CompleteThisProcess();
 
 	public:
 		static DHTMessage dummyMessage;
 
-		DhtProcessBase(DhtImpl *pImpl, DhtProcessManager &dpm, const DhtID &target2, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks);
+		DhtProcessBase(DhtImpl *pImpl, DhtProcessManager &dpm
+			, const DhtID &target2, int target2_len, time_t startTime
+			, const CallBackPointers &consumerCallbacks);
 		virtual ~DhtProcessBase();
 		virtual void Start();
-		virtual void OnReply(void*& userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags) = 0;
-		virtual void ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags){}
+		virtual void OnReply(void*& userdata, const DhtPeerID &peer_id
+			, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags) = 0;
+		virtual void ImplementationSpecificReplyProcess(void *userdata
+			, const DhtPeerID &peer_id, DHTMessage &message, uint flags) {}
 };
 
 inline void DhtProcessBase::Start()
@@ -1082,14 +1089,14 @@ inline void DhtProcessBase::CompleteThisProcess()
 inline void DhtProcessManager::Start()
 {
 	_currentProcessNumber = 0;
-	if(_dhtProcesses.size() > 0)
+	if (_dhtProcesses.size() > 0)
 		_dhtProcesses[0]->Start();
 }
 
 inline void DhtProcessManager::Next()
 {
 	_currentProcessNumber++;  // increment to the next process
-	if(_currentProcessNumber < _dhtProcesses.size())
+	if (_currentProcessNumber < _dhtProcesses.size())
 		_dhtProcesses[_currentProcessNumber]->Start();
 	else
 		delete this; // all processes have completed; terminate the manager
@@ -1120,7 +1127,8 @@ class DhtLookupScheduler : public DhtProcessBase
 		int numNonSlowRequestsOutstanding;
 		int totalOutstandingRequests;
 
-		DhtLookupScheduler(DhtProcessManager &dpm):DhtProcessBase(dpm)
+		DhtLookupScheduler(DhtProcessManager &dpm)
+			: DhtProcessBase(dpm)
 		{ assert(false); }
 		virtual void Schedule();
 		virtual void ImplementationSpecificReplyProcess(void *userdata
@@ -2073,13 +2081,15 @@ void LoadDHTFeed();
 // DhtProcessBase  (members that needed to be defined after DhtImpl definition
 //
 //*****************************************************************************
-inline DhtProcessBase::DhtProcessBase(DhtImpl *pImpl, DhtProcessManager &dpm, const DhtID &target2, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks):
-	callbackPointers(consumerCallbacks),
-	target(target2),
-	target_len(target2_len),
-	impl(pImpl),
-	start_time(startTime),
-	processManager(dpm)
+inline DhtProcessBase::DhtProcessBase(DhtImpl *pImpl, DhtProcessManager &dpm
+	, const DhtID &target2, int target2_len, time_t startTime
+	, const CallBackPointers &consumerCallbacks)
+	: callbackPointers(consumerCallbacks)
+	, target(target2)
+	, target_len(target2_len)
+	, impl(pImpl)
+	, start_time(startTime)
+	, processManager(dpm)
 {
 	// let the DHT know there is an active process
 	impl->_dht_busy++;
