@@ -4131,8 +4131,6 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 		if (blk.empty()) {
 			char empty_string[] = "0:";
 			blk.insert(blk.begin(), empty_string, empty_string + 2);
-		} else {
-			assert(ValidateEncoding(&blk[0], blk.size()));
 		}
 
 		Sign(signature, blk, _skey, seq);
