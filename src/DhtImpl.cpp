@@ -3380,31 +3380,40 @@ void DhtLookupScheduler::Schedule()
 	int numOutstandingRequestsToClosestNodes = 0;
 	int K = KADEMLIA_K;
 	int nodeIndex=0;
-	while(nodeIndex < processManager.size() // so long as the index is still within the size of the nodes array
-		  && nodeIndex < K // and so long as we have not queried KADEMLIA_K (8) non-errored nodes (as a terminating condition)
-		  && (numOutstandingRequestsToClosestNodes < maxOutstandingLookupQueries  // if the first 4 (default value) good nodes in the list do not yet have queries out to them - continue making queries
-		      || numNonSlowRequestsOutstanding < maxOutstandingLookupQueries  // if the number of uncompromised outstanding queries is less than max outstanding allowed - continue making queries
+
+	// so long as the index is still within the size of the nodes array
+	// and so long as we have not queried KADEMLIA_K (8) non-errored nodes (as a terminating condition)
+	// if the first 4 (default value) good nodes in the list do not yet have queries out to them - continue making queries
+	// if the number of uncompromised outstanding queries is less than max outstanding allowed - continue making queries
+	while (nodeIndex < processManager.size()
+		  && nodeIndex < K
+		  && (numOutstandingRequestsToClosestNodes < maxOutstandingLookupQueries
+		      || numNonSlowRequestsOutstanding < maxOutstandingLookupQueries
 			 )
-		  ){
-		switch(processManager[nodeIndex].queried){
-			case QUERIED_NO:{
+		  ) {
+		switch (processManager[nodeIndex].queried){
+			case QUERIED_NO: {
 				IssueQuery(nodeIndex);
 				// NOTE: break is intentionally omitted here
 			}
 			case QUERIED_YES:
-			case QUERIED_SLOW:{  // if a node is marked as slow, a query to the next unqueried node has already been sent in its place.
+
+			// if a node is marked as slow, a query to the next unqueried node has already been sent in its place.
+			case QUERIED_SLOW: {
 				numOutstandingRequestsToClosestNodes++;
 				break;
 			}
-			case QUERIED_ERROR:{
-				++K;  // if a node has errored, advance how far down the list we are allowed to travel
+			case QUERIED_ERROR: {
+				// if a node has errored, advance how far down the list we are allowed to travel
+				++K;
 				break;
 			}
 			case QUERIED_REPLIED:{
 				break;
 			}
-			default:{
-				assert(false); // an illegal status was set to a node
+			default: {
+				// an illegal status was set to a node
+				assert(false);
 			}
 		}
 		++nodeIndex;
@@ -3626,7 +3635,9 @@ DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(const DhtPeerID &pe
 	return NULL;
 }
 
-void DhtLookupScheduler::ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags) {
+void DhtLookupScheduler::ImplementationSpecificReplyProcess(void *userdata
+	, const DhtPeerID &peer_id, DHTMessage &message, uint flags)
+{
 	ProcessMetadataAndPeer(peer_id, message, flags);
 }
 
