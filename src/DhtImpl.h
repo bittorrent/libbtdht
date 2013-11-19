@@ -2046,9 +2046,11 @@ public:
 	// Implement IDhtProcessCallback::ProcessCallback(), for bootstrap callback
 	void ProcessCallback();
 
-	void OnBootStrapPingReply(void*& userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags);
+	void OnBootStrapPingReply(void*& userdata, const DhtPeerID &peer_id
+		, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags);
 
-	static void AddNodeCallback(void *userdata, void *data2, int error, cstr hostname, const SockAddr& ip, uint32 time);
+	static void AddNodeCallback(void *userdata, void *data2, int error
+		, cstr hostname, const SockAddr& ip, uint32 time);
 
 	void SetId(DhtID id);
 

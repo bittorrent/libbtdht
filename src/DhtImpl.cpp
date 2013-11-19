@@ -4218,18 +4218,23 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 	impl->SendTo(nodeInfo.id, buf, sb.p - buf);
 }
 
-void PutDhtProcess::ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags)
+void PutDhtProcess::ImplementationSpecificReplyProcess(void *userdata
+	, const DhtPeerID &peer_id, DHTMessage &message, uint flags)
 {
 	// handle errors
-	if(message.dhtMessageType != DHT_RESPONSE){
+	if (message.dhtMessageType != DHT_RESPONSE){
 		impl->UpdateError(peer_id);
 	}
-	if(message.dhtMessageType == DHT_ERROR) {
+	if (message.dhtMessageType == DHT_ERROR) {
 		if (message.error_code == LOWER_SEQ || message.error_code == CAS_MISMATCH) {
 			Abort();
-			DhtProcessBase* getProc = GetDhtProcess::Create(impl.get(), processManager, target, target_len, callbackPointers, _with_cas ? IDht::with_cas : 0);
+			DhtProcessBase* getProc = GetDhtProcess::Create(impl.get()
+				, processManager, target, target_len, callbackPointers
+				, _with_cas ? IDht::with_cas : 0);
 			processManager.AddDhtProcess(getProc);
-			DhtProcessBase* putProc = PutDhtProcess::Create(impl.get(), processManager,  _pkey, _skey, callbackPointers, _with_cas ? IDht::with_cas : 0);
+			DhtProcessBase* putProc = PutDhtProcess::Create(impl.get()
+				, processManager,  _pkey, _skey, callbackPointers
+				, _with_cas ? IDht::with_cas : 0);
 			processManager.AddDhtProcess(putProc);
 		}
 	}
@@ -4249,7 +4254,8 @@ void PutDhtProcess::CompleteThisProcess()
 	signature.clear();
 
 #if g_log_dht
-	dht_log("PutDhtProcess,complete_announce,id,%d,time,%d\n", target.id[0], get_milliseconds());
+	dht_log("PutDhtProcess,complete_announce,id,%d,time,%d\n", target.id[0]
+		, get_milliseconds());
 #endif
 	DhtProcessBase::CompleteThisProcess();
 }
