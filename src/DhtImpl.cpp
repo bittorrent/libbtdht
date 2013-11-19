@@ -2648,7 +2648,6 @@ void DhtImpl::Vote(void *ctx_ptr, const sha1_hash* info_hash, int vote, DhtVoteC
 void DhtImpl::Put(const byte * pkey, const byte * skey,
 		DhtPutCallback * put_callback, void *ctx, int flags, int64_t seq)
 {
-
 	int maxOutstanding = (flags & announce_non_aggressive)
 		? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA
 		: KADEMLIA_LOOKUP_OUTSTANDING;
@@ -2660,7 +2659,6 @@ void DhtImpl::Put(const byte * pkey, const byte * skey,
 	DhtPeerID *ids[32];
 	int num = AssembleNodeList(target, ids, lenof(ids));
 
-
 	DhtProcessManager *dpm = new DhtProcessManager(ids, num, target);
 	dpm->set_seq(seq);
 
@@ -2668,7 +2666,8 @@ void DhtImpl::Put(const byte * pkey, const byte * skey,
 	cbPtrs.putCallback = put_callback;
 	cbPtrs.callbackContext = ctx;
 
-	DhtProcessBase* getProc = GetDhtProcess::Create(this, *dpm, target, 20, cbPtrs, flags, maxOutstanding);
+	DhtProcessBase* getProc = GetDhtProcess::Create(this, *dpm, target
+		, 20, cbPtrs, flags, maxOutstanding);
 	// processes will be exercised in the order they are added
 	dpm->AddDhtProcess(getProc); // add get_peers first
 
@@ -4113,8 +4112,11 @@ void GetDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 //
 //*****************************************************************************
 
-PutDhtProcess::PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const byte * pkey, const byte * skey, time_t startTime, const CallBackPointers &consumerCallbacks, int flags)
-	: DhtBroadcastScheduler(pDhtImpl,dpm,target,target_len,startTime,consumerCallbacks), _with_cas(flags & IDht::with_cas)
+PutDhtProcess::PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
+	, const byte * pkey, const byte * skey, time_t startTime
+	, const CallBackPointers &consumerCallbacks, int flags)
+	: DhtBroadcastScheduler(pDhtImpl, dpm, target, target_len
+		,startTime, consumerCallbacks), _with_cas(flags & IDht::with_cas)
 {
 
 	signature.clear();
@@ -4225,18 +4227,14 @@ void PutDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 	if (message.dhtMessageType != DHT_RESPONSE){
 		impl->UpdateError(peer_id);
 	}
-	if (message.dhtMessageType == DHT_ERROR) {
-		if (message.error_code == LOWER_SEQ || message.error_code == CAS_MISMATCH) {
-			Abort();
-			DhtProcessBase* getProc = GetDhtProcess::Create(impl.get()
-				, processManager, target, target_len, callbackPointers
-				, _with_cas ? IDht::with_cas : 0);
-			processManager.AddDhtProcess(getProc);
-			DhtProcessBase* putProc = PutDhtProcess::Create(impl.get()
-				, processManager,  _pkey, _skey, callbackPointers
-				, _with_cas ? IDht::with_cas : 0);
-			processManager.AddDhtProcess(putProc);
-		}
+	if (message.dhtMessageType == DHT_ERROR
+		&& (message.error_code == LOWER_SEQ
+			|| message.error_code == CAS_MISMATCH)) {
+		Abort();
+		impl->Put(_pkey, _skey
+			, callbackPointers.putCallback
+			, callbackPointers.callbackContext
+			, _with_cas ? IDht::with_cas : 0, processManager.seq());
 	}
 }
 

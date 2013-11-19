@@ -951,7 +951,8 @@ class DhtProcessManager : public DhtLookupNodeList
 
 	public:
 		DhtProcessManager():_currentProcessNumber(0){}
-		DhtProcessManager(DhtPeerID** ids, unsigned int numId, const DhtID &target):DhtLookupNodeList(ids,numId,target){}
+		DhtProcessManager(DhtPeerID** ids, unsigned int numId, const DhtID &target)
+			:DhtLookupNodeList(ids,numId,target) {}
 		~DhtProcessManager();
 		unsigned int AddDhtProcess(DhtProcessBase *process);
 		void Start();
