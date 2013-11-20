@@ -8,17 +8,14 @@ use-project /ut_dht : .. ;
 GTEST_ROOT = ../ut_utils/vendor/gtest-1.6.0 ;
 GMOCK_ROOT = ../ut_utils/vendor/gmock-1.6.0 ;
 
-DHT_SOURCES = DHTMessage DhtImpl ExternalIPCounter blockallocator dht ;
-TEST_SOURCES = UnitTestUDPSocket TestDHT TestDHTMessageObject TestDHTRoutingTable ;
+TEST_SOURCES = TestDHT TestDHTMessageObject TestDHTRoutingTable ;
 
-exe unit_tests
-	: # sources
-	../src/$(DHT_SOURCES).cpp
-	$(TEST_SOURCES).cpp
-	$(GTEST_ROOT)/src/gtest-all.cc
-  $(GMOCK_ROOT)/src/gmock-all.cc
-  $(GMOCK_ROOT)/src/gmock_main.cc
-	: # requirements
+project
+	: requirements
+	<source>UnitTestUDPSocket.cpp
+	<source>$(GTEST_ROOT)/src/gtest-all.cc
+	<source>$(GMOCK_ROOT)/src/gmock-all.cc
+	<source>$(GMOCK_ROOT)/src/gmock_main.cc
 	<define>_DEBUG_DHT=1
 #	<define>ENABLE_SRP=1
 	<library>/ut_dht//ut_dht/<link>static
@@ -37,5 +34,11 @@ exe unit_tests
 	<toolset>clang:<cxxflags>-Wno-multichar
 	<toolset>clang:<cxxflags>-Wno-unused-private-field
 #	<warnings-as-errors>on
-	: # default build
 	;
+
+test-suite dht-tests :
+	[ run TestDHT.cpp ]
+	[ run TestDHTMessageObject.cpp ]
+	[ run TestDHTRoutingTable.cpp ]
+	;
+
