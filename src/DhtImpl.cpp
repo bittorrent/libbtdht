@@ -3063,6 +3063,7 @@ void DhtImpl::SaveState()
 
 void DhtImpl::LoadState()
 {
+	if (_load_callback == NULL) return;
 	BencEntity base;
 
 	_load_callback(&base);
