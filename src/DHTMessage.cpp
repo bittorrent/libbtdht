@@ -95,7 +95,7 @@ void DHTMessage::DecodeMessageData(BencodedDict &bDict)
 				vBuf.len = region.second - region.first;
 				vBuf.b = region.first;
 				signature.b = (byte*)replyDict->GetString("sig", &signature.len);
-				key.b = (byte*)replyDict->GetString("key", &key.len);
+				key.b = (byte*)replyDict->GetString("k", &key.len);
 			}
 			else{
 				dhtMessageType = DHT_UNDEFINED_MESSAGE;

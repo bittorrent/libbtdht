@@ -41,7 +41,7 @@ const std::string DHTID_BYTES("AAAABBBBCCCCDDDDEEEE"); // the dht ID should be 2
 const SockAddr    sAddr('zzzz', ('x' << 8) + 'x'); // ip = zzzz and socket = xx
 const std::string sAddr_AddressAsString("zzzz"); // **** keep coordinated with sAddr above
 const std::string sAddr_PortAsString("xx"); // **** keep coordinated with sAddr above
-const int keyBufferSize = 2048;
+//const int keyBufferSize = 2048;
 
 
 // defined in DhtImpl.cpp
@@ -2110,7 +2110,7 @@ TEST(TestDhtImpl, TestPutRPC_ipv4) {
 	Buffer pkey_buf;
 	pkey_buf.b = (byte*)getQuery->GetString("target" ,&pkey_buf.len);
 	EXPECT_EQ(20, pkey_buf.len);
-	EXPECT_FALSE(memcmp(sha1_callback(pkey, sizeof(pkey)).value, pkey_buf.b, 20)) << "ERROR: pkey is not the correct target";
+	EXPECT_FALSE(memcmp(sha1_callback(pkey, 32).value, pkey_buf.b, 20)) << "ERROR: pkey is not the correct target";
 
 	std::vector<byte>	messageBytes;
 	std::vector<byte>	replyDictionaryBytes;
@@ -2297,7 +2297,7 @@ TEST(TestDhtImpl, TestPutRPC_ipv4_cas)
 	Buffer pkey_buf;
 	pkey_buf.b = (byte*)getQuery->GetString("target" ,&pkey_buf.len);
 	EXPECT_EQ(20, pkey_buf.len);
-	EXPECT_FALSE(memcmp(sha1_callback(pkey, sizeof(pkey)).value, pkey_buf.b, 20)) << "ERROR: pkey is not the correct target";
+	EXPECT_FALSE(memcmp(sha1_callback(pkey, 32).value, pkey_buf.b, 20)) << "ERROR: pkey is not the correct target";
 
 	std::vector<byte>	messageBytes;
 	std::vector<byte>	replyDictionaryBytes;
