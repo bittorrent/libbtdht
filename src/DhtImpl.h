@@ -1651,6 +1651,9 @@ inline void VoteDhtProcess::Start()
 	DhtProcessBase::Start();
 }
 
+#if !STABLE_VERSION || defined _DEBUG || defined BRANDED_MAC
+	bool ValidateEncoding( const void * data, uint len );
+#endif
 
 //--------------------------------------------------------------------------------
 
@@ -1889,11 +1892,6 @@ public:
 
 	void DumpAccountingInfo();
 	bool Verify(byte const * signature, byte const * message, int message_length, byte *pkey, int64_t seq);
-
-#if !STABLE_VERSION || defined _DEBUG || defined BRANDED_MAC
-	bool ValidateEncoding( const void * data, uint len );
-#endif
-
 
 	//--------------------------------------------------------------------------------
 
