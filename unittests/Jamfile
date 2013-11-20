@@ -8,8 +8,6 @@ use-project /ut_dht : .. ;
 GTEST_ROOT = ../ut_utils/vendor/gtest-1.6.0 ;
 GMOCK_ROOT = ../ut_utils/vendor/gmock-1.6.0 ;
 
-TEST_SOURCES = TestDHT TestDHTMessageObject TestDHTRoutingTable ;
-
 project
 	: requirements
 	<source>UnitTestUDPSocket.cpp
