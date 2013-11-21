@@ -64,6 +64,8 @@ public:
 	}
 };
 
+const char *format_dht_id(const DhtID &id);
+
 /**
  Returns the bit at bitIndex.  id[0] contains the upper most bits and
  id[4] containes the lowest bits in the 160 bit string

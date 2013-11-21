@@ -197,7 +197,8 @@ void DhtImpl::SetVersion(char const* client, int major, int minor)
 /**
  * UDP handler
  */
-bool DhtImpl::handleReadEvent(UDPSocketInterface *socket, byte *buffer, size_t len, const SockAddr& addr)
+bool DhtImpl::handleReadEvent(UDPSocketInterface *socket, byte *buffer
+	, size_t len, const SockAddr& addr)
 {
 	// Check if it appears to be a DHT message. If so, call the DHT handler.
 	if (len > 10 && buffer[0] == 'd' && buffer[len-1] == 'e' && buffer[2] == ':') {
@@ -210,7 +211,8 @@ bool DhtImpl::handleReadEvent(UDPSocketInterface *socket, byte *buffer, size_t l
 /**
  * Initialize DHT
  */
-void DhtImpl::Initialize(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_socket_mgr )
+void DhtImpl::Initialize(UDPSocketInterface *udp_socket_mgr
+	, UDPSocketInterface *udp6_socket_mgr )
 {
 	_udp_socket_mgr = udp_socket_mgr;
 	_udp6_socket_mgr = udp6_socket_mgr;
@@ -3204,40 +3206,44 @@ DhtPeer* DhtImpl::Update(const DhtPeerID &id, uint origin, bool seen, int rtt)
 
 	// Otherwise, try replacing a node in the active peers list
 	candidateNode.ComputeSubPrefix(bucket.span, KADEMLIA_BUCKET_SIZE_POWER);
-	bool replacementAvailable = bucket.FindReplacementCandidate(this, candidateNode, DhtBucket::peer_list, &returnNode);
+	bool replacementAvailable = bucket.FindReplacementCandidate(this
+		, candidateNode, DhtBucket::peer_list, &returnNode);
 
-	if(replacementAvailable){
+	// did we find a candidate to replace?
+	if (replacementAvailable) {
 
-		// if the candidate node is in the replacement list, remove it (to prevent it from possibly being in both lists simultainously)
+		// if the candidate node is in the replacement list, remove it (to
+		// prevent it from possibly being in both lists simultainously)
 		bucket.RemoveFromList(this, candidateNode.id.id, DhtBucket::replacement_list);
 
 		// a replacement candidate has been identified in the active peers list.
 
-		// If the candidate for replacement in the active peer list is errored, just replace it
-		if(returnNode->num_fail){
-			(*returnNode).CopyAllButNext(candidateNode); // replace the node with the candidate
+		// If the candidate for replacement in the active peer list is errored,
+		// just replace it
+		if (returnNode->num_fail) {
+			// replace the node with the candidate
+			(*returnNode).CopyAllButNext(candidateNode);
 			return returnNode;
 		}
 
-		// The replacement candidate isn't errored, see if there is a place for it in the reserve list.
+		// The replacement candidate isn't errored, see if there is a place
+		// for it in the reserve list.
 		DhtPeer* replaceNode = NULL;
 		added = bucket.InsertOrUpdateNode(this, *returnNode, DhtBucket::replacement_list, &replaceNode);
-		if(added){
+		if (added) {
 			// the peer list node is now in the replacement list, put the new
 			// node in the peer list
 			(*returnNode).CopyAllButNext(candidateNode); // replace the node with the candidate
-		}
-		else{
+		} else {
 			// the replacement candidate was not added directly to the replace list (full), see
 			// if there is a sub-prefix or rtt that should be replaced
 			replacementAvailable = bucket.FindReplacementCandidate(this, *returnNode, DhtBucket::replacement_list, &replaceNode);
-			if(replacementAvailable){
+			if (replacementAvailable) {
 				replaceNode = returnNode;
 			}
 			(*returnNode).CopyAllButNext(candidateNode); // replace the node with the candidate
 		}
-	}
-	else{
+	} else {
 		// no suitable replacement node was identified in the active peers list,
 		// see if the candidate node belongs in the replacement list
 		added = bucket.InsertOrUpdateNode(this, candidateNode, DhtBucket::replacement_list, &returnNode);
@@ -3246,11 +3252,10 @@ DhtPeer* DhtImpl::Update(const DhtPeerID &id, uint origin, bool seen, int rtt)
 			// can be replaced with the candidate node to either improve the sub-prefix distribution
 			// or significantly improve the rtt of the reserve.
 			replacementAvailable = bucket.FindReplacementCandidate(this, candidateNode, DhtBucket::replacement_list, &returnNode);
-			if(replacementAvailable){
+			if (replacementAvailable) {
 				(*returnNode).CopyAllButNext(candidateNode); // replace the node with the candidate
 				return returnNode;
-			}
-			else{
+			} else {
 				return NULL; // the candidate node is being discarded
 			}
 		}
@@ -4541,18 +4546,16 @@ DhtPeer* DhtBucketList::PopBestNode(int desiredSubPrefix)
 	DhtPeer** candidate = &first();
 	for (DhtPeer **peer = &first(); *peer; peer=&(*peer)->next) {
 		p = *peer;
-		if(p->GetSubprefixInt() == desiredSubPrefix){
-			if(!subPrefixMatchFound){
+		if (p->GetSubprefixInt() == desiredSubPrefix) {
+			if (!subPrefixMatchFound) {
 				subPrefixMatchFound = true;
 				candidate = peer;
-			}
-			else{
-				if(((*candidate)->rtt > p->rtt)  || ((*candidate)->num_fail > p->num_fail)){
+			} else {
+				if (((*candidate)->rtt > p->rtt)  || ((*candidate)->num_fail > p->num_fail)){
 					candidate = peer;
 				}
 			}
-		}
-		else if(!subPrefixMatchFound){
+		} else if (!subPrefixMatchFound) {
 			if (((*candidate)->rtt > p->rtt)  || ((*candidate)->num_fail > p->num_fail))
 				candidate = peer;
 		}
@@ -4628,7 +4631,8 @@ bool DhtBucket::RemoveFromList(DhtImpl* pDhtImpl, const DhtID &id, BucketListTyp
 	InsertOrUpdateNode() should be invoked on a bucket before FindReplacementCandidate()
 	is used on the bucket.
 */
-bool DhtBucket::InsertOrUpdateNode(DhtImpl* pDhtImpl, DhtPeer const& candidateNode, BucketListType bucketType, DhtPeer** pout)
+bool DhtBucket::InsertOrUpdateNode(DhtImpl* pDhtImpl, DhtPeer const& candidateNode
+	, BucketListType bucketType, DhtPeer** pout)
 {
 	DhtBucketList &bucketList = (bucketType == peer_list) ? peers : replacement_peers;
 
@@ -4639,7 +4643,7 @@ bool DhtBucket::InsertOrUpdateNode(DhtImpl* pDhtImpl, DhtPeer const& candidateNo
 	for (DhtPeer **peer = &bucketList.first(); *peer; peer=&(*peer)->next, ++n) {
 		DhtPeer *p = *peer;
 		bucketList.UpdateSubPrefixInfo(*p);
-		if(p->num_fail)
+		if (p->num_fail)
 			// This element is here for convienence Update() & InsertOrUpdateNode().
 			// It only has a valid meaning immediatly after the consumer has set it.
 			bucketList.listContainesAnErroredNode = true;
@@ -4652,8 +4656,7 @@ bool DhtBucket::InsertOrUpdateNode(DhtImpl* pDhtImpl, DhtPeer const& candidateNo
 		if (p->first_seen == 0) {
 			p->first_seen = candidateNode.first_seen;
 			p->rtt = candidateNode.rtt;
-		}
-		else {
+		} else {
 			// sliding average. blend in the new RTT by one quarter
 			if (candidateNode.rtt != INT_MAX)
 				p->rtt = (p->rtt * 3 + candidateNode.rtt) >> 2;
@@ -4715,9 +4718,9 @@ bool DhtBucket::FindReplacementCandidate(DhtImpl* pDhtImpl, DhtPeer const& candi
 	DhtPeer* replaceCandidate = NULL;
 
 	// if there is an errored node in the list, search list for an errored node to return
-	if(bucketList.listContainesAnErroredNode){
+	if (bucketList.listContainesAnErroredNode) {
 		for (DhtPeer **peer = &bucketList.first(); *peer; peer=&(*peer)->next) {
-			if((*peer)->num_fail){
+			if ((*peer)->num_fail) {
 				*pout = *peer;
 				return true;
 			}
@@ -4725,28 +4728,27 @@ bool DhtBucket::FindReplacementCandidate(DhtImpl* pDhtImpl, DhtPeer const& candi
 	}
 
 	// if a node with the candidates sub-prefix already exists in the bucket
-	if(bucketList.subPrefixMask & candidate.GetSubprefixPositionBit()){
+	if (bucketList.subPrefixMask & candidate.GetSubprefixPositionBit()) {
 		int row = candidate.GetSubprefixInt();
 		int numNodesWithSubPrefix = bucketList.subPrefixCounts[row];
 		assert(numNodesWithSubPrefix > 0);
 		// identify the node with the highest rtt
-		for(int x=0; x<numNodesWithSubPrefix; ++x){
+		for (int x=0; x<numNodesWithSubPrefix; ++x) {
 			DhtPeer* p = bucketList.peerMatrix[row][x];
 			if (replaceCandidate == NULL || p->rtt > replaceCandidate->rtt)
 				replaceCandidate = p;
 		}
 		// if the rtt of the candidate node is not shorter than 1/2 the rtt of the node
 		// identified for replacement, then it is not suitable to put in the list
-		if(candidate.rtt > (replaceCandidate->rtt >> 1))
+		if (candidate.rtt > (replaceCandidate->rtt >> 1))
 			return false;
-	}
-	else{
+	} else {
 		// the sub-prefix is not represented in the bucket, but another one (or more) is
 		// represented more than once (since the bucket is full).  Find the duplicate
 		// with the highest rtt as the suitable node for replacement.
-		for(int subPrefixIndex = 0; subPrefixIndex < KADEMLIA_BUCKET_SIZE; subPrefixIndex++){
-			if(bucketList.subPrefixCounts[subPrefixIndex] > 1){
-				for(int x=0; x<bucketList.subPrefixCounts[subPrefixIndex]; ++x){
+		for (int subPrefixIndex = 0; subPrefixIndex < KADEMLIA_BUCKET_SIZE; subPrefixIndex++) {
+			if (bucketList.subPrefixCounts[subPrefixIndex] > 1) {
+				for (int x=0; x<bucketList.subPrefixCounts[subPrefixIndex]; ++x) {
 					DhtPeer* p = bucketList.peerMatrix[subPrefixIndex][x];
 					if (replaceCandidate == NULL || p->rtt > replaceCandidate->rtt)
 						replaceCandidate = p;

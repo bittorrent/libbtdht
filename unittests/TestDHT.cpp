@@ -3069,8 +3069,9 @@ TEST(TestDhtImpl, TestDHTScrapeSeed0_ipv4)
 	socketData.b = (byte *)&(socket4.GetSentByteVector().front());
 
 	BencEntity bEntity;
-	BencEntity::Parse((const byte *)&(socket4.GetSentByteVector().front()), bEntity
-		, (const byte *)(&(socket4.GetSentByteVector().front()) + socket4.GetSentByteVector().size()));
+	BencEntity::Parse((const byte *)&(socket4.GetSentByteVector().front())
+		, bEntity, (const byte *)(&(socket4.GetSentByteVector().front())
+			+ socket4.GetSentByteVector().size()));
 
 	// get the whole response dictionary
 	BencodedDict *dict = BencodedDict::AsDict(&bEntity);

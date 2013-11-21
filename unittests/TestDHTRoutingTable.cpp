@@ -14,14 +14,9 @@ Test the routing table functionality of the DHT
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
 
-//#include "globals.h"
-//#include "TorrentSession.h"
-//#include "bt.h"
-//#include "templates.h"
 #include "dht.h"
 #include "DhtImpl.h"
 #include "bencoding.h"
-//#include "sha.h"
 #include "UnitTestUDPSocket.h"
 #include <vector>
 
@@ -278,26 +273,26 @@ void outputListValues(DhtBucketList &list)
 
 inline int GetBit(DhtID &id, int bitIndex)
 {
-	if(bitIndex >= 160 || bitIndex < 0)
+	if (bitIndex >= 160 || bitIndex < 0)
 		return 0;
-	register unsigned int wordIndex = 4-(bitIndex >> 5);  // divide by 32 and invert
-	return (id.id[wordIndex] >> (bitIndex - (wordIndex << 5))) & 0x00000001;
+	register unsigned int wordIndex = 4-(bitIndex / 32);
+	return (id.id[wordIndex] >> (bitIndex - (wordIndex * 32))) & 0x00000001;
 }
 
 inline void SetBit(DhtID &id, int bitIndex)
 {
-	if(bitIndex >= 160 || bitIndex < 0)
+	if (bitIndex >= 160 || bitIndex < 0)
 		return;
-	register unsigned int wordIndex = 4-(bitIndex >> 5);  // divide by 32 and invert
-	id.id[wordIndex] |= 0x00000001 << (bitIndex - (wordIndex << 5));
+	register unsigned int wordIndex = 4-(bitIndex / 32);
+	id.id[wordIndex] |= 0x00000001 << (bitIndex - (wordIndex * 32));
 }
 
 inline void ClearBit(DhtID &id, int bitIndex)
 {
-	if(bitIndex >= 160 || bitIndex < 0)
+	if (bitIndex >= 160 || bitIndex < 0)
 		return;
-	register unsigned int wordIndex = 4-(bitIndex >> 5);  // divide by 32 and invert
-	id.id[wordIndex] &= ~(0x00000001 << (bitIndex - (wordIndex << 5)));
+	register unsigned int wordIndex = 4-(bitIndex / 32);
+	id.id[wordIndex] &= ~(0x00000001 << (bitIndex - (wordIndex * 32)));
 }
 
 inline void ProgramBit(DhtID &id, int bitIndex, bool value)
