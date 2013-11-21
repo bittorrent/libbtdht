@@ -121,7 +121,6 @@ void CountNodesInBuckets(vector<DhtBucket*> &buckets, vector<int> &peerCountOut,
 	}
 }
 
-#if 0
 void OutputBuckets(vector<DhtBucket*> &buckets)
 {
 	vector<int> nodeCounts;
@@ -131,12 +130,16 @@ void OutputBuckets(vector<DhtBucket*> &buckets)
 	int nctr=0; int rctr=0;
 	printf("\nBucket\t#nodes\t#replace\tspan\n");
 	for(int x=0; x<buckets.size(); x++){
-		nctr+= nodeCounts[x]; rctr+=replacementCounts[x];
-		printf("%d\t%d\t%d\t\t%d\n", x, nodeCounts[x], replacementCounts[x], buckets[x]->span);
+		nctr+= nodeCounts[x]; rctr += replacementCounts[x];
+		printf("%d\t%d\t%d\t\t%d\t", x, nodeCounts[x], replacementCounts[x], buckets[x]->span);
+
+		for (DhtPeer* i = buckets[x]->peers.first(); i; i = i->next) {
+			printf("(%d) ", i->rtt);
+		}
+		printf("\n");
 	}
 	printf("Total nodes=%d \tTotal replacements=%d\n",nctr,rctr);
 }
-#endif
 
 /**
 	This will collect all of the pointers to DhtPeer objects in a single list
@@ -946,14 +949,20 @@ TEST(TestDhtRoutingTables, ReplaceSlowNodes)
 	dhtTestObj->Enable(true,0);
 	dhtTestObj->SetId(myId);
 
-	// fill the pre-allocated buckets
-	time_t rtt = 10000;  // note the very slow round trip time
-	FillPreallocatedBuckets(dhtTestObj, rtt);
-	//OutputBuckets(dhtTestObj->_buckets);
+	DhtPeerID peerId;
+	peerId.addr.set_port(128);
+	peerId.addr.set_addr4(0xf0f0f0f0);
+	for(int y=0; y<5; ++y)
+		peerId.id.id[y] = rand();
+	dhtTestObj->Update(peerId, 0, true, 10000);
 
-	rtt = 50; // this should force all of the nodes in the peers lists to be moved to the replacement lists
-	FillPreallocatedBuckets(dhtTestObj, rtt);
-	//OutputBuckets(dhtTestObj->_buckets);
+	// now, make sure we replace 
+	for (int i = 0; i < 32; ++i) {
+		peerId.id.id[4] = rand();
+		dhtTestObj->Update(peerId, 0, true, 50);
+	}
+
+	OutputBuckets(dhtTestObj->_buckets);
 
 	EXPECT_TRUE(VerifyBuckets(dhtTestObj->_buckets)) << "Buckets did not verify; see previous message";
 
@@ -963,12 +972,6 @@ TEST(TestDhtRoutingTables, ReplaceSlowNodes)
 		DhtPeer* p = dhtTestObj->_buckets[i]->peers.first();
 		while(p){
 			EXPECT_EQ(50, p->rtt) << "main nodes list in bucket " << i << " has a node with an rtt of: " << p->rtt;
-			p = p->next;
-		}
-
-		p = dhtTestObj->_buckets[i]->replacement_peers.first();
-		while(p){
-			EXPECT_EQ(10000, p->rtt) << "Replacement nodes list in bucket " << i << " has a node with an rtt of: " << p->rtt;
 			p = p->next;
 		}
 	}
