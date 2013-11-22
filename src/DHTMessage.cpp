@@ -90,6 +90,7 @@ void DHTMessage::DecodeMessageData(BencodedDict &bDict)
 			// specific query this is a reply to.
 			replyDict = bDict.GetDict("r");
 			if(replyDict){
+				id = (byte*)replyDict->GetString("id", DHT_ID_SIZE);
 				dhtMessageType = DHT_RESPONSE;
 				sequenceNum = replyDict->GetInt("seq", 1);
 				vBuf.len = region.second - region.first;
@@ -97,7 +98,7 @@ void DHTMessage::DecodeMessageData(BencodedDict &bDict)
 				signature.b = (byte*)replyDict->GetString("sig", &signature.len);
 				key.b = (byte*)replyDict->GetString("k", &key.len);
 			}
-			else{
+			else {
 				dhtMessageType = DHT_UNDEFINED_MESSAGE;
 			}
 
@@ -138,9 +139,7 @@ void DHTMessage::DecodeQuery(BencodedDict &bDict)
 		return; // bad/missing argument.
 	}
 	_argumentsAreValid = true;
-
-	// get arguments common to all commands
-	id = (byte*)args->GetString("id", 20);
+	id = (byte*)args->GetString("id", DHT_ID_SIZE);
 
 	// set the command enum and extract only arguments used by the command
 	if(strcmp(command,"find_node") == 0){

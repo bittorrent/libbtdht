@@ -278,7 +278,7 @@ inline int GetBit(DhtID &id, int bitIndex)
 {
 	if (bitIndex >= 160 || bitIndex < 0)
 		return 0;
-	register unsigned int wordIndex = 4-(bitIndex / 32);
+	unsigned int wordIndex = 4-(bitIndex / 32);
 	return (id.id[wordIndex] >> (bitIndex - (wordIndex * 32))) & 0x00000001;
 }
 
@@ -286,7 +286,7 @@ inline void SetBit(DhtID &id, int bitIndex)
 {
 	if (bitIndex >= 160 || bitIndex < 0)
 		return;
-	register unsigned int wordIndex = 4-(bitIndex / 32);
+	unsigned int wordIndex = 4-(bitIndex / 32);
 	id.id[wordIndex] |= 0x00000001 << (bitIndex - (wordIndex * 32));
 }
 
@@ -294,7 +294,7 @@ inline void ClearBit(DhtID &id, int bitIndex)
 {
 	if (bitIndex >= 160 || bitIndex < 0)
 		return;
-	register unsigned int wordIndex = 4-(bitIndex / 32);
+	unsigned int wordIndex = 4-(bitIndex / 32);
 	id.id[wordIndex] &= ~(0x00000001 << (bitIndex - (wordIndex * 32)));
 }
 

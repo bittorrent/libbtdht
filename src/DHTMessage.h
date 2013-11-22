@@ -6,6 +6,8 @@
 #include <cstdint> // for int64_t
 #include "sha1_hash.h"
 
+enum { DHT_ID_SIZE = 20, DHT_ID_WORDCOUNT = DHT_ID_SIZE / sizeof(uint32) };
+
 enum DHTMessageTypes
 {
 	DHT_UNDEFINED_MESSAGE = 0,

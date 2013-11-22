@@ -43,12 +43,12 @@ class DhtID
 {
 public:
 	DhtID(){ memset(id, 0, sizeof(id));}
-	uint32 id[5];
+	uint32 id[DHT_ID_WORDCOUNT];
 
 	unsigned int GetBit(unsigned int index);
 
 	bool operator <(const DhtID &n) const {
-		for(uint i=0; i<5; i++) {
+		for(uint i=0; i<DHT_ID_WORDCOUNT; i++) {
 			if (id[i] > n.id[i]) return false;
 			if (id[i] < n.id[i]) return true;
 		}
@@ -56,11 +56,11 @@ public:
 	}
 
 	bool operator ==(const DhtID &n) const {
-		return memcmp(id, n.id, 20) == 0;
+		return memcmp(id, n.id, DHT_ID_SIZE) == 0;
 	}
 
 	bool operator !=(const DhtID &n) const {
-		return memcmp(id, n.id, 20) != 0;
+		return memcmp(id, n.id, DHT_ID_SIZE) != 0;
 	}
 };
 
@@ -73,11 +73,12 @@ const char *format_dht_id(const DhtID &id);
 inline unsigned int DhtID::GetBit(unsigned int bitIndex)
 {
 	assert(bitIndex < 160);
-	unsigned int wordIndex = 4-(bitIndex >> 5);  // divide by 32 and invert
+	// divide by 32 and invert
+	unsigned int wordIndex = (DHT_ID_WORDCOUNT-1) - (bitIndex >> DHT_ID_WORDCOUNT);
 	return (id[wordIndex] >> (bitIndex & 0x1f)) & 0x00000001;
 }
 
-bool CopyBytesToDhtID(DhtID &id, const byte *b);
+void CopyBytesToDhtID(DhtID &id, const byte *b);
 int CompareDhtIDToTarget(const DhtID &a, const DhtID &b, const DhtID &target);
 int CompareDhtID(const DhtID &a, const DhtID &b);
 int CompareDhtIDBytes(const DhtID &a, const DhtID &b, int num);
@@ -1212,7 +1213,7 @@ class DhtBroadcastScheduler : public DhtProcessBase
 class FindNodeDhtProcess : public DhtLookupScheduler //public DhtProcessBase
 {
 	protected:
-		byte target_bytes[20]; // used to store the bytes of the target DhtID
+		byte target_bytes[DHT_ID_SIZE]; // used to store the bytes of the target DhtID
 
 		virtual void DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID);
 		virtual void CompleteThisProcess();
@@ -1497,7 +1498,7 @@ class GetDhtProcess : public DhtLookupScheduler
 
 	public:
 
-		byte _id[20];
+		byte _id[DHT_ID_SIZE];
 
 		GetDhtProcess(DhtImpl *pDhtImpl, DhtProcessManager &dpm, const DhtID& target2
 			, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks
@@ -1535,7 +1536,7 @@ class PutDhtProcess : public DhtBroadcastScheduler
 
 	public:
 
-		byte _id[20];
+		byte _id[DHT_ID_SIZE];
 		byte _pkey[32];
 		byte _skey[64];
 
@@ -1688,7 +1689,7 @@ public:
 
 	void Vote(void *ctx, const sha1_hash* info_hash, int vote, DhtVoteCallback* callb);
 
-	void SetId(byte new_id_bytes[20]);
+	void SetId(byte new_id_bytes[DHT_ID_SIZE]);
 
 	void Put( const byte * pkey, const byte * skey, DhtPutCallback * put_callback,
 		void *ctx, int flags = 0, int64_t seq = 0);
@@ -1747,7 +1748,7 @@ public:
 
 
 	DhtID _my_id;
-	byte _my_id_bytes[20];
+	byte _my_id_bytes[DHT_ID_SIZE];
 	byte _dht_utversion[4];
 	DhtAddNodeResponseCallback* _add_node_callback;
 	DhtSaveCallback* _save_callback;
@@ -1943,7 +1944,7 @@ public:
 	std::vector<VoteContainer>::iterator GetVoteStorageForID(DhtID const& key);
 
 	// Get the storage container associated with a info_hash
-	std::vector<StoredContainer>::iterator GetStorageForID(const DhtID &info_hash, int len=20);
+	std::vector<StoredContainer>::iterator GetStorageForID(const DhtID &info_hash, int len=DHT_ID_SIZE);
 
 	// Retrieve N random peers.
 	std::vector<StoredPeer> *GetPeersFromStore(const DhtID &info_hash, int info_hash_len, /*output param*/DhtID *correct_info_hash, str* file_name, uint n);
@@ -1995,25 +1996,30 @@ public:
 	void put_transaction_id(SimpleBencoder& sb, Buffer tid, char const* end);
 	void put_version(SimpleBencoder& sb, char const* end);
 private:
-	void send_put_response(SimpleBencoder& sb, char const* end, Buffer& transaction_id, int packetSize, DhtPeerID &peerID);
 	void send_put_response(SimpleBencoder& sb, char const* end,
-			Buffer& transaction_id, int packetSize, DhtPeerID &peerID, unsigned int error_code,
-			char const* error_message);
+			Buffer& transaction_id, int packetSize, const DhtPeerID &peerID);
+	void send_put_response(SimpleBencoder& sb, char const* end,
+			Buffer& transaction_id, int packetSize, const DhtPeerID &peerID,
+			unsigned int error_code, char const* error_message);
 
 public:
-	bool ProcessQueryPing(const SockAddr &addr, DHTMessage &message, DhtPeerID &peerID, int packetSize);
-	bool ProcessQueryFindNode(const SockAddr &addr, DHTMessage &message, DhtPeerID &peerID, int packetSize);
-	bool ProcessQueryGetPeers(const SockAddr &addr, DHTMessage &message, DhtPeerID &peerID, int packetSize);
-	bool ProcessQueryAnnouncePeer(const SockAddr &addr, DHTMessage &message, DhtPeerID &peerID, int packetSize);
-	bool ProcessQueryVote(const SockAddr &addr, DHTMessage &message, DhtPeerID &peerID, int packetSize);
-	bool ProcessQueryPut(const SockAddr &addr, DHTMessage &message, DhtPeerID &peerID, int packetSize);
-	bool ProcessQueryGet(const SockAddr &addr, DHTMessage &message, DhtPeerID &peerID, int packetSize);
+	bool ProcessQueryPing(DHTMessage &message, DhtPeerID &peerID, int packetSize);
+	bool ProcessQueryFindNode(DHTMessage &message, DhtPeerID &peerID,
+			int packetSize);
+	bool ProcessQueryGetPeers(DHTMessage &message, DhtPeerID &peerID,
+			int packetSize);
+	bool ProcessQueryAnnouncePeer(DHTMessage &message, DhtPeerID &peerID,
+			int packetSize);
+	bool ProcessQueryVote(DHTMessage &message, DhtPeerID &peerID, int packetSize);
+	bool ProcessQueryPut(DHTMessage &message, DhtPeerID &peerID, int packetSize);
+	bool ProcessQueryGet(DHTMessage &message, DhtPeerID &peerID, int packetSize);
 
-	bool ProcessQuery(const SockAddr& addr, DHTMessage &message, int packetSize);
+	bool ProcessQuery(DhtPeerID& peerID, DHTMessage &message, int packetSize);
+	bool ProcessResponse(DhtPeerID& peerID, DHTMessage &message, int pkt_size,
+			DhtRequest *req);
+	bool ProcessError(DhtPeerID& peerID, DHTMessage &message, int pkt_size,
+			DhtRequest *req);
 
-	bool ProcessResponse(const SockAddr& addr, DHTMessage &message, int pkt_size);
-
-	bool ProcessError(cstr e);
 
 	bool InterpretMessage(DHTMessage &message, const SockAddr& addr, int pkt_size);
 
@@ -2067,7 +2073,7 @@ public:
 	// Don't save announced stuff.
 
 	struct PackedDhtPeer {
-		byte id[20];
+		byte id[DHT_ID_SIZE];
 		byte ip[4];
 		byte port[2];
 	};
