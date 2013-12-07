@@ -34,9 +34,5 @@ project
 #	<warnings-as-errors>on
 	;
 
-test-suite dht-tests :
-	[ run TestDHT.cpp ]
-	[ run TestDHTMessageObject.cpp ]
-	[ run TestDHTRoutingTable.cpp ]
-	;
-
+unit-test unittests : TestDhtID.cpp TestSecureDhtID.cpp TestDataStore.cpp
+	TestDhtImpl.cpp TestDHTMessageObject.cpp TestDHTRoutingTable.cpp ;
