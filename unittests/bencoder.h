@@ -11,6 +11,7 @@
 // a stupid, write-once bencoder, and for when no C++11 is available
 class bencoder {
 	unsigned char* buffer;
+	unsigned char* start;
 	int64_t len;
 	std::stack<char> checker; // state machine for bencoded result validation
 
@@ -26,7 +27,8 @@ class bencoder {
 	}
 
 	public:
-		bencoder(unsigned char* buffer, int64_t len) : buffer(buffer), len(len) {}
+		bencoder(unsigned char* buffer, int64_t len) : buffer(buffer),
+				start(buffer), len(len) {}
 		bencoder& operator() (int64_t value) {
 			update_checker();
 			long written = snprintf(reinterpret_cast<char*>(buffer), len,
@@ -36,6 +38,7 @@ class bencoder {
 			len -= written;
 			return *this;
 		}
+		// use only with values -- would be silly to use with keys anyway
 		inline bencoder& raw(char const *value) {
 			assert(strlen(value) <= len);
 			update_checker();
@@ -111,8 +114,8 @@ class bencoder {
 			return (*this)('e');
 		}
 
-		inline unsigned char* operator() () {
+		inline int64_t operator() () {
 			assert(checker.empty());
-			return buffer;
+			return buffer - start;
 		}
 };
