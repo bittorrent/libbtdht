@@ -35,4 +35,5 @@ project
 	;
 
 unit-test unittests : TestDhtID.cpp TestSecureDhtID.cpp TestDataStore.cpp
-	TestDhtImpl.cpp TestDHTMessageObject.cpp TestDHTRoutingTable.cpp ;
+	TestDhtImpl.cpp TestDhtImplSpeed.cpp TestDHTMessageObject.cpp
+	TestDHTRoutingTable.cpp ;
