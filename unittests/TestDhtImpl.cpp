@@ -66,7 +66,8 @@ class dht_impl_test : public dht_test {
 		DhtImpl* impl;
 		DhtPeerID peerID;
 
-		unsigned char message_bytes[1024];
+		unsigned char message[1024];
+		BencEntity output;
 
 		virtual void SetUp() override {
 			sAddr.set_addr4('zzzz');
@@ -96,39 +97,42 @@ class dht_impl_test : public dht_test {
 			impl->SetId((unsigned char*)DHTID_BYTES.c_str());
 		}
 
-		void fetch_dict(BencodedDict& result) {
+		void fetch_dict(BencodedDict** result) {
 			std::string bencMessage = socket4.GetSentDataAsString();
-			BencEntity::Parse((const unsigned char *)bencMessage.c_str(), result,
+			BencEntity::Parse((const unsigned char *)bencMessage.c_str(), output,
 					(const unsigned char *)(bencMessage.c_str() + bencMessage.length()));
-			ASSERT_TRUE(result.bencType == BENC_DICT);
+			ASSERT_EQ(BENC_DICT, output.bencType);
+			*result = BencEntity::AsDict(&output);
+			ASSERT_TRUE(*result);
+			ASSERT_EQ(BENC_DICT, (*result)->bencType);
 		}
 
-		static void expect_response_type(BencodedDict& result) {
-			cstr type = result.GetString("y", 1);
+		static void expect_response_type(BencodedDict* result) {
+			cstr type = result->GetString("y", 1);
 			ASSERT_TRUE(type);
 			ASSERT_EQ('r', *type);
 		}
 
-		static void expect_query_type(BencodedDict& result) {
-			cstr type = result.GetString("y", 1);
+		static void expect_query_type(BencodedDict* result) {
+			cstr type = result->GetString("y", 1);
 			ASSERT_TRUE(type);
 			ASSERT_EQ('q', *type);
 		}
 
-		static void expect_command(BencodedDict& result, const char* command) {
-			cstr c = result.GetString("q", strlen(command));
+		static void expect_command(BencodedDict* result, const char* command) {
+			cstr c = result->GetString("q", strlen(command));
 			ASSERT_TRUE(c);
 			ASSERT_STREQ(command, c);
 		}
 
-		void fetch_response_to_message(BencodedDict& result,
+		void fetch_response_to_message(BencodedDict** result,
 				unsigned char* message, int64_t message_len) {
 			impl->ProcessIncoming(message, message_len, sAddr);
 			fetch_dict(result);
-			expect_response_type(result);
+			expect_response_type(*result);
 
 			Buffer ip;
-			ip.b = (unsigned char*)result.GetString("ip", &ip.len);
+			ip.b = (unsigned char*)(*result)->GetString("ip", &ip.len);
 			ASSERT_EQ(6, ip.len);
 			EXPECT_FALSE(memcmp((const void*)ip.b,
 						(const void *)sAddr_AddressAsString.c_str(), 4));
@@ -136,10 +140,10 @@ class dht_impl_test : public dht_test {
 						(const void *)sAddr_PortAsString.c_str(), 2));
 		}
 
-		static void expect_transaction_id(BencodedDict& dict, const char* id,
+		static void expect_transaction_id(BencodedDict* dict, const char* id,
 				int id_len) {
 			Buffer tid;
-			tid.b = (unsigned char*)dict.GetString("t", &tid.len);
+			tid.b = (unsigned char*)dict->GetString("t", &tid.len);
 			ASSERT_EQ(id_len, tid.len);
 			if (id != NULL) {
 				EXPECT_FALSE(memcmp((const void*)tid.b, (const void *)id, id_len));
@@ -205,9 +209,9 @@ class dht_impl_test : public dht_test {
 			socket4.Reset();
 			impl->ProcessIncoming((byte*)get_peers.c_str(),
 					get_peers.size(), sAddr);
-			BencodedDict dict;
-			fetch_dict(dict);
-			BencodedDict *reply = dict.GetDict("r");
+			BencodedDict* dict = NULL;
+			fetch_dict(&dict);
+			BencodedDict *reply = dict->GetDict("r");
 			ASSERT_TRUE(reply);
 			token.b = (byte*)reply->GetString("token", &token.len);
 			ASSERT_TRUE(token.len);
@@ -217,10 +221,10 @@ class dht_impl_test : public dht_test {
 		}
 
 		void announce_and_verify(unsigned char* message, int64_t message_len) {
-			BencodedDict dict;
+			BencodedDict* dict = NULL;
 			BencodedDict* reply;
-			fetch_response_to_message(dict, message, message_len);
-			reply = dict.GetDict("r");
+			fetch_response_to_message(&dict, message, message_len);
+			reply = dict->GetDict("r");
 			ASSERT_TRUE(reply);
 			expect_reply_id(reply);
 			impl->Tick();
@@ -232,7 +236,7 @@ class dht_impl_test : public dht_test {
 			std::vector<unsigned char> token;
 			socket4.Reset();
 			fetch_token(id, token);
-			int64_t len = bencoder(message_bytes, 1024)
+			int64_t len = bencoder(message, 1024)
 				.d()
 					("a").d()
 						("id")(id)
@@ -241,13 +245,13 @@ class dht_impl_test : public dht_test {
 					("q")("put")
 					("t")("aa")
 					("y")("q")
-				.e() () - message_bytes;
+				.e() () - message;
 			socket4.Reset();
-			BencodedDict dict;
-			impl->ProcessIncoming(message_bytes, len, sAddr);
-			fetch_dict(dict);
+			BencodedDict* dict = NULL;
+			impl->ProcessIncoming(message, len, sAddr);
+			fetch_dict(&dict);
 			expect_response_type(dict);
-			BencodedDict *reply = dict.GetDict("r");
+			BencodedDict *reply = dict->GetDict("r");
 			ASSERT_TRUE(reply);
 			impl->Tick();
 			socket4.Reset();
@@ -332,13 +336,13 @@ TEST_F(dht_impl_test, TestPingRPC_ipv4) {
 	// specify, parse, and send the message
 	std::string testData("d1:ad2:id20:abcdefghij0123456789e1:q4:ping1:t2:aa1:y"
 			"1:qe");
-	BencodedDict dict;
-	fetch_response_to_message(dict, (unsigned char*)testData.c_str(),
+	BencodedDict* dict = NULL;
+	fetch_response_to_message(&dict, (unsigned char*)testData.c_str(),
 			testData.size());
 	expect_transaction_id(dict, "aa", 2);
 
 	// now look into the response data
-	BencodedDict *reply = dict.GetDict("r");
+	BencodedDict *reply = dict->GetDict("r");
 	ASSERT_TRUE(reply);
 	expect_reply_id(reply);
 }
@@ -357,13 +361,13 @@ TEST_F(dht_impl_test, TestPingRPC_ipv4_ParseKnownPackets) {
 	// specify, parse, and send the message
 	std::string testData("d1:ad2:id20:abcdefghij0123456789e1:q4:ping1:t4:wxyz"
 			"1:v4:UTUT1:y1:qe");
-	BencodedDict dict;
-	fetch_response_to_message(dict, (unsigned char*)testData.c_str(),
+	BencodedDict* dict = NULL;
+	fetch_response_to_message(&dict, (unsigned char*)testData.c_str(),
 			testData.size());
 	expect_transaction_id(dict, "wxyz", 4);
 
 	// now look into the response data
-	BencodedDict *reply = dict.GetDict("r");
+	BencodedDict *reply = dict->GetDict("r");
 	ASSERT_TRUE(reply);
 	expect_reply_id(reply);
 }
@@ -376,11 +380,11 @@ TEST_F(dht_impl_test, TestGetPeersRPC_ipv4) {
 	// specify, parse, and send the message
 	std::string testData("d1:ad2:id20:abcdefghij01010101019:info_hash"
 			"20:mnopqrstuvwxyz123456e1:q9:get_peers1:t2:aa1:y1:qe");
-	BencodedDict dict;
-	fetch_response_to_message(dict, (unsigned char*)testData.c_str(),
+	BencodedDict* dict = NULL;
+	fetch_response_to_message(&dict, (unsigned char*)testData.c_str(),
 			testData.size());
 	expect_transaction_id(dict, "aa", 2);
-	BencodedDict *reply = dict.GetDict("r");
+	BencodedDict *reply = dict->GetDict("r");
 	ASSERT_TRUE(reply);
 	expect_reply_id(reply);
 
@@ -407,11 +411,11 @@ TEST_F(dht_impl_test, TestFindNodeRPC_ipv4) {
 	// specify, parse, and send the message
 	std::string testData("d1:ad2:id20:abcdefghij01234567896:target"
 			"20:mnopqrstuvwxyz123456e1:q9:find_node1:t2:aa1:y1:qe");
-	BencodedDict dict;
-	fetch_response_to_message(dict, (unsigned char*)testData.c_str(),
+	BencodedDict* dict = NULL;
+	fetch_response_to_message(&dict, (unsigned char*)testData.c_str(),
 			testData.size());
 	expect_transaction_id(dict, "aa", 2);
-	BencodedDict *reply = dict.GetDict("r");
+	BencodedDict *reply = dict->GetDict("r");
 	ASSERT_TRUE(reply);
 	expect_reply_id(reply);
 	
@@ -453,18 +457,18 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4) {
 	// the transaction ID and verify the remainder of the
 	// message
 	// *****************************************************
-	BencodedDict dictForGet;
-	fetch_dict(dictForGet);
+	BencodedDict* dictForGet = NULL;
+	fetch_dict(&dictForGet);
 	expect_query_type(dictForGet);
 	expect_command(dictForGet, "get");
 
 	// get the transaction ID to use later
 	Buffer tid;
-	tid.b = (unsigned char*)dictForGet.GetString("t" , &tid.len);
+	tid.b = (unsigned char*)dictForGet->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len);
 
 	// now look into the query data
-	BencodedDict *getQuery = dictForGet.GetDict("a");
+	BencodedDict *getQuery = dictForGet->GetDict("a");
 	ASSERT_TRUE(getQuery);
 	expect_reply_id(getQuery);
 	expect_target(getQuery);
@@ -472,31 +476,30 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4) {
 	int64_t seq = 0;
 	const char* responseToken = "20_byte_reply_token.";
 	const char* v = "sample";
-	unsigned char message_bytes[1024];
-	int64_t len = bencoder(message_bytes, 1024)
+	int64_t len = bencoder(message, 1024)
 		.d()
 			("ip")("abcdxy") ("r").d()
 				("id")((unsigned char*)&peerID.id.id[0], 20) ("nodes")("")
 				("token")(responseToken) ("seq")(seq) ("v")(v).e()
 			("t")(tid.b, tid.len) ("y")("r")
-		.e() () - message_bytes;
+		.e() () - message;
 	
 	// clear the socket and "send" the reply
 	socket4.Reset();
-	impl->ProcessIncoming(message_bytes, len, peerID.addr);
+	impl->ProcessIncoming(message, len, peerID.addr);
 
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should still be busy";
 
 	//Checking the put messages
 
-	BencodedDict dictForPut;
-	fetch_dict(dictForPut);
+	BencodedDict* dictForPut = NULL;
+	fetch_dict(&dictForPut);
 	expect_query_type(dictForPut);
 	expect_command(dictForPut, "put");
 	expect_transaction_id(dictForPut, NULL, 4);
 
 	// now look into the query data
-	BencodedDict *putQuery = dictForPut.GetDict("a");
+	BencodedDict *putQuery = dictForPut->GetDict("a");
 	ASSERT_TRUE(putQuery);
 	expect_reply_id(putQuery);
 	EXPECT_EQ(seq + 1, putQuery->GetInt("seq"));
@@ -524,17 +527,17 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_cas) {
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	int64_t seq = 2;
 	impl->Put(pkey, skey, &put_callback, NULL, IDht::with_cas, seq);
-	BencodedDict dictForGet;
-	fetch_dict(dictForGet);
+	BencodedDict* dictForGet = NULL;
+	fetch_dict(&dictForGet);
 	expect_query_type(dictForGet);
 	expect_command(dictForGet, "get");
 	expect_transaction_id(dictForGet, NULL, 4);
 	Buffer tid;
-	tid.b = (unsigned char*)dictForGet.GetString("t" , &tid.len);
+	tid.b = (unsigned char*)dictForGet->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len);
 
 	// now look into the query data
-	BencodedDict *getQuery = dictForGet.GetDict("a");
+	BencodedDict *getQuery = dictForGet->GetDict("a");
 	ASSERT_TRUE(getQuery);
 	expect_reply_id(getQuery);
 	expect_target(getQuery);
@@ -549,31 +552,30 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_cas) {
 	sha1_hash cas = sha1_callback(to_hash, written + strlen(v));
 	Buffer cas_buf(cas.value, 20);
 
-	unsigned char message_bytes[1024];
-	int64_t len = bencoder(message_bytes, 1024)
+	int64_t len = bencoder(message, 1024)
 		.d()
 			("ip")("abcdxy") ("r").d()
 				("cas")(cas_buf.b, cas_buf.len)
 				("id")((unsigned char*)&peerID.id.id[0], 20) ("nodes")("")
 				("token")(responseToken) ("seq")(seq) ("v")(v).e()
 			("t")(tid.b, tid.len) ("y")("r")
-		.e() () - message_bytes;
+		.e() () - message;
 
 	// clear the socket and "send" the reply
 	socket4.Reset();
-	impl->ProcessIncoming(message_bytes, len, peerID.addr);
+	impl->ProcessIncoming(message, len, peerID.addr);
 
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should still be busy";
 
 	//Checking the put messages
-	BencodedDict dictForPut;
-	fetch_dict(dictForPut);
+	BencodedDict* dictForPut = NULL;
+	fetch_dict(&dictForPut);
 	expect_query_type(dictForPut);
 	expect_command(dictForPut, "put");
 	expect_transaction_id(dictForPut, NULL, 4);
 
 	// now look into the query data
-	BencodedDict *putQuery = dictForPut.GetDict("a");
+	BencodedDict *putQuery = dictForPut->GetDict("a");
 	ASSERT_TRUE(putQuery);
 	expect_cas(putQuery, cas.value);
 	expect_reply_id(putQuery);
@@ -601,17 +603,17 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_seq_fail) {
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	int64_t seq = 2;
 	impl->Put(pkey, skey, &put_callback, NULL, IDht::with_cas, seq);
-	BencodedDict dictForGet;
-	fetch_dict(dictForGet);
+	BencodedDict* dictForGet = NULL;
+	fetch_dict(&dictForGet);
 	expect_query_type(dictForGet);
 	expect_command(dictForGet, "get");
 	expect_transaction_id(dictForGet, NULL, 4);
 	Buffer tid;
-	tid.b = (unsigned char*)dictForGet.GetString("t" , &tid.len);
+	tid.b = (unsigned char*)dictForGet->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len);
 
 	// now look into the query data
-	BencodedDict *getQuery = dictForGet.GetDict("a");
+	BencodedDict *getQuery = dictForGet->GetDict("a");
 	ASSERT_TRUE(getQuery);
 	expect_reply_id(getQuery);
 	expect_target(getQuery);
@@ -626,32 +628,31 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_seq_fail) {
 	sha1_hash cas = sha1_callback(to_hash, written + strlen(v));
 	Buffer cas_buf(cas.value, 20);
 
-	unsigned char message_bytes[1024];
-	int64_t len = bencoder(message_bytes, 1024)
+	int64_t len = bencoder(message, 1024)
 		.d()
 			("ip")("abcdxy") ("r").d()
 				("cas")(cas_buf.b, cas_buf.len)
 				("id")((unsigned char*)&peerID.id.id[0], 20) ("nodes")("")
 				("token")(responseToken) ("seq")(seq) ("v")(v).e()
 			("t")(tid.b, tid.len) ("y")("r")
-		.e() () - message_bytes;
+		.e() () - message;
 
 	// clear the socket and "send" the reply
 	socket4.Reset();
-	impl->ProcessIncoming(message_bytes, len, peerID.addr);
+	impl->ProcessIncoming(message, len, peerID.addr);
 
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should still be busy";
 
 	//Checking the put messages
-	BencodedDict dictForPut;
-	fetch_dict(dictForPut);
+	BencodedDict* dictForPut = NULL;
+	fetch_dict(&dictForPut);
 	expect_query_type(dictForPut);
 	expect_command(dictForPut, "put");
-	tid.b = (unsigned char*)dictForPut.GetString("t" , &tid.len);
+	tid.b = (unsigned char*)dictForPut->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 
 	// now look into the query data
-	BencodedDict *putQuery = dictForPut.GetDict("a");
+	BencodedDict *putQuery = dictForPut->GetDict("a");
 	ASSERT_TRUE(putQuery);
 	expect_cas(putQuery, cas.value);
 	expect_reply_id(putQuery);
@@ -661,22 +662,22 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_seq_fail) {
 	expect_value(putQuery, v, strlen(v));
 
 	// oh no we have a higher sequence number now and thus we shall complain
-	len = bencoder(message_bytes, 1024)
+	len = bencoder(message, 1024)
 		.d()
 			("e").l()(static_cast<int64_t>(302))("error message!").e()
 			("ip")("abcdxy") ("r").d()
 				("id")((unsigned char*)&peerID.id.id[0], 20).e()
 			("t")(tid.b, tid.len) ("y")("e")
-		.e() () - message_bytes;
+		.e() () - message;
 
 	socket4.Reset();
-	EXPECT_TRUE(impl->ProcessIncoming(message_bytes, len, peerID.addr));
+	EXPECT_TRUE(impl->ProcessIncoming(message, len, peerID.addr));
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should still be busy";
-	fetch_dict(dictForGet);
+	fetch_dict(&dictForGet);
 	expect_query_type(dictForGet);
 	expect_command(dictForGet, "get");
 	expect_transaction_id(dictForGet, NULL, 4);
-	getQuery = dictForGet.GetDict("a");
+	getQuery = dictForGet->GetDict("a");
 	ASSERT_TRUE(getQuery);
 	expect_reply_id(getQuery);
 	expect_target(getQuery);
@@ -701,11 +702,11 @@ TEST_F(dht_impl_test, TestAnnouncePeerRPC_ipv4) {
 	init_dht_id();
 
 	// first do the GetPeers to obtain a token
-	BencodedDict dictForPeer;
-	fetch_response_to_message(dictForPeer,
+	BencodedDict* dictForPeer = NULL;
+	fetch_response_to_message(&dictForPeer,
 			(unsigned char*)bEncodedGetPeers.c_str(), bEncodedGetPeers.size());
 	// now look into the response data
-	BencodedDict *replyGetPeer = dictForPeer.GetDict("r");
+	BencodedDict *replyGetPeer = dictForPeer->GetDict("r");
 	ASSERT_TRUE(replyGetPeer);
 	Buffer token;
 	token.b = (unsigned char*)replyGetPeer->GetString("token", &token.len);
@@ -719,13 +720,13 @@ TEST_F(dht_impl_test, TestAnnouncePeerRPC_ipv4) {
 
 	// now we can start testing the response to announce_peer
 	// Send the announce_peer query
-	BencodedDict dict;
-	fetch_response_to_message(dict, (unsigned char*)&testDataBytes.front(),
+	BencodedDict* dict = NULL;
+	fetch_response_to_message(&dict, (unsigned char*)&testDataBytes.front(),
 			testDataBytes.size());
 	expect_transaction_id(dict, "aa", 2);
 
 	// now look into the response data
-	BencodedDict *reply = dict.GetDict("r");
+	BencodedDict *reply = dict->GetDict("r");
 	ASSERT_TRUE(reply);
 	expect_reply_id(reply);
 }
@@ -752,11 +753,11 @@ TEST_F(dht_impl_test, TestAnnouncePeerWithImpliedport) {
 	init_dht_id();
 
 	// first do the GetPeers to obtain a token
-	BencodedDict dictForPeer;
-	fetch_response_to_message(dictForPeer,
+	BencodedDict* dictForPeer = NULL;
+	fetch_response_to_message(&dictForPeer,
 			(unsigned char*)bEncodedGetPeers.c_str(), bEncodedGetPeers.size());
 	// now look into the response data
-	BencodedDict *replyGetPeer = dictForPeer.GetDict("r");
+	BencodedDict *replyGetPeer = dictForPeer->GetDict("r");
 	ASSERT_TRUE(replyGetPeer);
 	Buffer token;
 	token.b = (unsigned char*)replyGetPeer->GetString("token", &token.len);
@@ -801,11 +802,11 @@ TEST_F(dht_impl_test, TestAnnouncePeerWithOutImpliedport) {
 	init_dht_id();
 
 	// first do the GetPeers to obtain a token
-	BencodedDict dictForPeer;
-	fetch_response_to_message(dictForPeer,
+	BencodedDict* dictForPeer = NULL;
+	fetch_response_to_message(&dictForPeer,
 			(unsigned char*)bEncodedGetPeers.c_str(), bEncodedGetPeers.size());
 	// now look into the response data
-	BencodedDict *replyGetPeer = dictForPeer.GetDict("r");
+	BencodedDict *replyGetPeer = dictForPeer->GetDict("r");
 	ASSERT_TRUE(replyGetPeer);
 	Buffer token;
 	token.b = (unsigned char*)replyGetPeer->GetString("token", &token.len);
@@ -834,7 +835,6 @@ TEST_F(dht_impl_test, TestAnnouncePeerWithOutImpliedport) {
 }
 
 TEST_F(dht_impl_test, TestVoteRPC_ipv4) {
-	unsigned char message_bytes[1024];
 	impl->Enable(true, 0);
 	init_dht_id();
 
@@ -842,7 +842,7 @@ TEST_F(dht_impl_test, TestVoteRPC_ipv4) {
 	std::vector<unsigned char> token;
 	fetch_token(token);
 
-	int64_t len = bencoder(message_bytes, 1024)
+	int64_t len = bencoder(message, 1024)
 		.d()
 			("a").d()
 				("id")("abcdefghij0123456789")
@@ -852,14 +852,14 @@ TEST_F(dht_impl_test, TestVoteRPC_ipv4) {
 			("q")("vote")
 			("t")("aa")
 			("y")("q")
-		.e() () - message_bytes;
+		.e() () - message;
 
-	BencodedDict dict;
-	fetch_response_to_message(dict, message_bytes, len);
+	BencodedDict* dict = NULL;
+	fetch_response_to_message(&dict, message, len);
 	expect_transaction_id(dict, "aa", 2);
 
 	// now look into the response data
-	BencodedDict *reply = dict.GetDict("r");
+	BencodedDict *reply = dict->GetDict("r");
 	ASSERT_TRUE(reply);
 	expect_reply_id(reply);
 	// get the votes out of the dictionary
@@ -883,7 +883,7 @@ TEST_F(dht_impl_test, TestVoteRPC_ipv4) {
 
 // verify that multiple votes to the same target are recorded
 TEST_F(dht_impl_test, TestVoteRPC_ipv4_MultipleVotes) {
-	unsigned char	message_bytes[1024];
+	unsigned char	message[1024];
 	impl->Enable(true, 0);
 	init_dht_id();
 
@@ -894,7 +894,7 @@ TEST_F(dht_impl_test, TestVoteRPC_ipv4_MultipleVotes) {
 	std::vector<unsigned char> target = MakeRandomKey20();
 
 	// vote 5
-	int64_t len = bencoder(message_bytes, 1024)
+	int64_t len = bencoder(message, 1024)
 		.d()
 			("a").d()
 				("id")("abcdefghij0123456789")
@@ -904,17 +904,17 @@ TEST_F(dht_impl_test, TestVoteRPC_ipv4_MultipleVotes) {
 			("q")("vote")
 			("t")("aa")
 			("y")("q")
-		.e() () - message_bytes;
+		.e() () - message;
 
 	// parse and send the first vote message
-	impl->ProcessIncoming(message_bytes, len, sAddr);
+	impl->ProcessIncoming(message, len, sAddr);
 
 	// prepare to send the second vote message
 	impl->Tick();
 	socket4.Reset();
 
 	// make the second vote message with a vote of 2
-	len = bencoder(message_bytes, 1024)
+	len = bencoder(message, 1024)
 		.d()
 			("a").d()
 				("id")("abcdefghij0123456789")
@@ -924,13 +924,13 @@ TEST_F(dht_impl_test, TestVoteRPC_ipv4_MultipleVotes) {
 			("q")("vote")
 			("t")("aa")
 			("y")("q")
-		.e() () - message_bytes;
+		.e() () - message;
 
 	// parse and send the second vote message
-	BencodedDict dict;
-	fetch_response_to_message(dict, message_bytes, len);
+	BencodedDict* dict = NULL;
+	fetch_response_to_message(&dict, message, len);
 	expect_transaction_id(dict, "aa", 2);
-	BencodedDict *reply = dict.GetDict("r");
+	BencodedDict *reply = dict->GetDict("r");
 	ASSERT_TRUE(reply);
 	expect_reply_id(reply);
 
@@ -954,7 +954,6 @@ TEST_F(dht_impl_test, TestVoteRPC_ipv4_MultipleVotes) {
 }
 
 TEST_F(dht_impl_test, TestDHTScrapeSeed0_ipv4) {
-	unsigned char message_bytes[1024];
 	init_dht_id();
 	impl->Enable(true, 0);
 
@@ -966,7 +965,7 @@ TEST_F(dht_impl_test, TestDHTScrapeSeed0_ipv4) {
 	std::vector<unsigned char> infoHashKey = MakeRandomKey20();
 
 	// prepare the first anounce_peer with seed = 0
-	int64_t len = bencoder(message_bytes, 1024)
+	int64_t len = bencoder(message, 1024)
 		.d()
 			("a").d()
 				("id")("abcdefghij0101010101")
@@ -978,11 +977,11 @@ TEST_F(dht_impl_test, TestDHTScrapeSeed0_ipv4) {
 			("q")("announce_peer")
 			("t")("aa")
 			("y")("q")
-		.e() () - message_bytes;
+		.e() () - message;
 
-	announce_and_verify(message_bytes, len);
+	announce_and_verify(message, len);
 
-	len = bencoder(message_bytes, 1024)
+	len = bencoder(message, 1024)
 		.d()
 			("a").d()
 				("id")("abcdefghij0101010101")
@@ -992,11 +991,11 @@ TEST_F(dht_impl_test, TestDHTScrapeSeed0_ipv4) {
 			("q")("get_peers")
 			("t")("aa")
 			("y")("q")
-		.e() () - message_bytes;
+		.e() () - message;
 
-	BencodedDict dict;
-	fetch_response_to_message(dict, message_bytes, len);
-	BencodedDict* reply = dict.GetDict("r");
+	BencodedDict* dict = NULL;
+	fetch_response_to_message(&dict, message, len);
+	BencodedDict* reply = dict->GetDict("r");
 	ASSERT_TRUE(reply);
 	expect_reply_id(reply);
 
@@ -1015,7 +1014,6 @@ TEST_F(dht_impl_test, TestDHTScrapeSeed0_ipv4) {
 }
 
 TEST_F(dht_impl_test, TestDHTScrapeSeed1_ipv4) {
-	unsigned char message_bytes[1024];
 	init_dht_id();
 	impl->Enable(true, 0);
 
@@ -1027,7 +1025,7 @@ TEST_F(dht_impl_test, TestDHTScrapeSeed1_ipv4) {
 	std::vector<unsigned char> infoHashKey = MakeRandomKey20();
 
 	// prepare the first anounce_peer with seed = 0
-	int64_t len = bencoder(message_bytes, 1024)
+	int64_t len = bencoder(message, 1024)
 		.d()
 			("a").d()
 				("id")("abcdefghij0123456789")
@@ -1039,11 +1037,11 @@ TEST_F(dht_impl_test, TestDHTScrapeSeed1_ipv4) {
 			("q")("announce_peer")
 			("t")("aa")
 			("y")("q")
-		.e() () - message_bytes;
+		.e() () - message;
 
-	announce_and_verify(message_bytes, len);
+	announce_and_verify(message, len);
 
-	len = bencoder(message_bytes, 1024)
+	len = bencoder(message, 1024)
 		.d()
 			("a").d()
 				("id")("abcdefghij0123456789")
@@ -1053,12 +1051,12 @@ TEST_F(dht_impl_test, TestDHTScrapeSeed1_ipv4) {
 			("q")("get_peers")
 			("t")("aa")
 			("y")("q")
-		.e() () - message_bytes;
+		.e() () - message;
 
-	BencodedDict dict;
-	fetch_response_to_message(dict, message_bytes, len);
+	BencodedDict* dict = NULL;
+	fetch_response_to_message(&dict, message, len);
 	// now extract the reply data dictionary
-	BencodedDict *reply = dict.GetDict("r");
+	BencodedDict *reply = dict->GetDict("r");
 	ASSERT_TRUE(reply);
 	expect_reply_id(reply);
 
@@ -1077,7 +1075,6 @@ TEST_F(dht_impl_test, TestDHTScrapeSeed1_ipv4) {
 }
 
 TEST_F(dht_impl_test, TestDHTForNonexistantPeers_ipv4) {
-	unsigned char message_bytes[1024];
 	impl->Enable(true, 0);
 	std::vector<unsigned char> token;
 	int port = 6881;
@@ -1085,12 +1082,12 @@ TEST_F(dht_impl_test, TestDHTForNonexistantPeers_ipv4) {
 
 	char itoa_buf[3];
 	int64_t len;
-	BencodedDict dict;
+	BencodedDict* dict = NULL;
 	BencodedDict* reply;
 	for(int i = 1; i <= 13; i++) {
 		sprintf(itoa_buf, "%02d", i);
 		fetch_token(token);
-		len = bencoder(message_bytes, 1024)
+		len = bencoder(message, 1024)
 			.d()
 				("a").d()
 					("id")(id)
@@ -1101,17 +1098,17 @@ TEST_F(dht_impl_test, TestDHTForNonexistantPeers_ipv4) {
 				("q")("announce_peer")
 				("t")("zz")
 				("y")("q")
-			.e() () - message_bytes;
-		fetch_response_to_message(dict, message_bytes, len);
+			.e() () - message;
+		fetch_response_to_message(&dict, message, len);
 		expect_transaction_id(dict, "zz", 2);
-		reply = dict.GetDict("r");
+		reply = dict->GetDict("r");
 		ASSERT_TRUE(reply);
 		EXPECT_TRUE(reply->GetString("id", 20));
 		impl->Tick();
 		socket4.Reset();
 	}
 	// now make a get_peers message with a nonexistant hash
-	len = bencoder(message_bytes, 1024)
+	len = bencoder(message, 1024)
 		.d()
 			("a").d()
 				("id")("abcdefghij0123456789")
@@ -1120,9 +1117,9 @@ TEST_F(dht_impl_test, TestDHTForNonexistantPeers_ipv4) {
 			("q")("get_peers")
 			("t")("aa")
 			("y")("q")
-		.e() () - message_bytes;
-	fetch_response_to_message(dict, message_bytes, len);
-	reply = dict.GetDict("r");
+		.e() () - message;
+	fetch_response_to_message(&dict, message, len);
+	reply = dict->GetDict("r");
 	cstr values = reply->GetString("values", 6);
 	EXPECT_FALSE(values) << "ERROR:  There is a 'values' key in the reply"
 		" dictionary for a non-existent hash";
@@ -1141,11 +1138,11 @@ TEST_F(dht_impl_test, TestFutureCmdAsFindNode01_ipv4) {
 	// it sould be treated as a find_node command
 	std::string testData("d1:ad2:id20:abcdefghij01234567896:target"
 			"20:mnopqrstuvwxyz123456e1:q10:future_cmd1:t2:aa1:y1:qe");
-	BencodedDict dict;
-	fetch_response_to_message(dict, (unsigned char*)testData.c_str(),
+	BencodedDict* dict = NULL;
+	fetch_response_to_message(&dict, (unsigned char*)testData.c_str(),
 			testData.size());
 	expect_transaction_id(dict, "aa", 2);
-	BencodedDict *reply = dict.GetDict("r");
+	BencodedDict *reply = dict->GetDict("r");
 	ASSERT_TRUE(reply);
 	expect_reply_id(reply);
 
@@ -1171,11 +1168,11 @@ TEST_F(dht_impl_test, TestFutureCmdAsFindNode02_ipv4) {
 	// it sould be treated as a find_node command
 	std::string testData("d1:ad2:id20:abcdefghij01234567899:info_hash"
 			"20:mnopqrstuvwxyz123456e1:q10:future_cmd1:t2:aa1:y1:qe");
-	BencodedDict dict;
-	fetch_response_to_message(dict, (unsigned char*)testData.c_str(),
+	BencodedDict* dict = NULL;
+	fetch_response_to_message(&dict, (unsigned char*)testData.c_str(),
 			testData.size());
 	expect_transaction_id(dict, "aa", 2);
-	BencodedDict *reply = dict.GetDict("r");
+	BencodedDict *reply = dict->GetDict("r");
 	ASSERT_TRUE(reply);
 	expect_reply_id(reply);
 
@@ -1211,14 +1208,13 @@ TEST_F(dht_impl_test, TestUnknownCmdNotProcessed_ipv4) {
 }
 
 TEST_F(dht_impl_test, TestImmutablePutRPC_ipv4) {
-	unsigned char message_bytes[1024];
 	impl->Enable(true, 0);
 	init_dht_id();
 
 	std::vector<unsigned char> token;
 	fetch_token(token);
 	
-	int64_t len = bencoder(message_bytes, 1024)
+	int64_t len = bencoder(message, 1024)
 		.d()
 			("a").d()
 				("id")("abcdefghij0123456789")
@@ -1227,14 +1223,14 @@ TEST_F(dht_impl_test, TestImmutablePutRPC_ipv4) {
 			("q")("put")
 			("t")("aa")
 			("y")("q")
-		.e() () - message_bytes;
+		.e() () - message;
 
-	BencodedDict dict;
-	impl->ProcessIncoming(message_bytes, len, sAddr);
-	fetch_dict(dict);
+	BencodedDict* dict = NULL;
+	impl->ProcessIncoming(message, len, sAddr);
+	fetch_dict(&dict);
 	expect_response_type(dict);
 	expect_transaction_id(dict, "aa", 2);
-	BencodedDict *reply = dict.GetDict("r");
+	BencodedDict *reply = dict->GetDict("r");
 	ASSERT_TRUE(reply);
 	expect_reply_id(reply);
 }
@@ -1245,7 +1241,7 @@ TEST_F(dht_impl_test, TestImmutableGetRPC_ipv4) {
 
 	std::vector<unsigned char> token;
 	fetch_token(token);
-	int64_t len = bencoder(message_bytes, 1024)
+	int64_t len = bencoder(message, 1024)
 		.d()
 			("a").d()
 				("id")("abcdefghij0123456789")
@@ -1254,11 +1250,11 @@ TEST_F(dht_impl_test, TestImmutableGetRPC_ipv4) {
 			("q")("put")
 			("t")("aa")
 			("y")("q")
-		.e() () - message_bytes;
+		.e() () - message;
 
-	BencodedDict dict;
-	impl->ProcessIncoming(message_bytes, len, sAddr);
-	fetch_dict(dict);
+	BencodedDict* dict = NULL;
+	impl->ProcessIncoming(message, len, sAddr);
+	fetch_dict(&dict);
 	expect_response_type(dict);
 	expect_transaction_id(dict, "aa", 2);
 
@@ -1269,7 +1265,7 @@ TEST_F(dht_impl_test, TestImmutableGetRPC_ipv4) {
 	hashInfo.b = (unsigned char*)target.value;
 	hashInfo.len = 20;
 
-	len = bencoder(message_bytes, 1024)
+	len = bencoder(message, 1024)
 		.d()
 			("a").d()
 				("id")("abcdefghij0123456789")
@@ -1277,14 +1273,14 @@ TEST_F(dht_impl_test, TestImmutableGetRPC_ipv4) {
 			("q")("get")
 			("t")("aa")
 			("y")("q")
-		.e() () - message_bytes;
+		.e() () - message;
 	// parse and send the message constructed above
 	socket4.Reset();
-	impl->ProcessIncoming(message_bytes, len, sAddr);
-	fetch_dict(dict);
+	impl->ProcessIncoming(message, len, sAddr);
+	fetch_dict(&dict);
 	expect_response_type(dict);
 	expect_transaction_id(dict, "aa", 2);
-	BencodedDict *reply = dict.GetDict("r");
+	BencodedDict *reply = dict->GetDict("r");
 	ASSERT_TRUE(reply);
 	expect_reply_id(reply);
 	// check that there is a token
@@ -1361,12 +1357,12 @@ TEST_F(dht_impl_test, TestMultipleImmutablePutAndGetRPC_ipv4) {
 
 	// get the data out and see that it matches what was put
 	int64_t len;
-	BencodedDict dict;
+	BencodedDict* dict = NULL;
 	BencodedDict* reply;
 	BencEntity* entity;
 	Buffer serialized_entity;
 	for(int x = 0; x < 5; ++x) {
-		len = bencoder(message_bytes, 1024)
+		len = bencoder(message, 1024)
 			.d()
 				("a").d()
 					("id")("abcdefghij0123456789")
@@ -1374,13 +1370,13 @@ TEST_F(dht_impl_test, TestMultipleImmutablePutAndGetRPC_ipv4) {
 				("q")("get")
 				("t")("aa")
 				("y")("q")
-			.e() () - message_bytes;
+			.e() () - message;
 		socket4.Reset();
 		impl->Tick();
-		impl->ProcessIncoming(message_bytes, len, sAddr);
-		fetch_dict(dict);
+		impl->ProcessIncoming(message, len, sAddr);
+		fetch_dict(&dict);
 		expect_response_type(dict);
-		reply = dict.GetDict("r");
+		reply = dict->GetDict("r");
 		ASSERT_TRUE(reply);
 		entity = reply->Get("v");
 		ASSERT_TRUE(entity);
