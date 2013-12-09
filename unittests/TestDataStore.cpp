@@ -26,10 +26,11 @@ class data_store_test : public dht_test {
 TEST_F(data_store_test, AddPairToList) {
 	// look for a key when no keys have been added
 	it = ds.FindInList(key1, cur_time, hash);
-	ASSERT_TRUE(it == ds.end()) <<
-		"A end iterator should have been returned from an attempt to find something in an empty list.";
+	ASSERT_TRUE(it == ds.end()) << "A end iterator should have been returned"
+		" from an attempt to find something in an empty list.";
 
-	// add keys in reverse order and check that they are inserted in ascending order
+	// add keys in reverse order and check that they are inserted in ascending
+	// order
 	ds.AddPairToList(hash, key3, 33, &containerPtr);
 	ds.AddPairToList(hash, key2, 22, &containerPtr);
 	ds.AddPairToList(hash, key1, 11, &containerPtr);
@@ -66,7 +67,8 @@ TEST_F(data_store_test, AddKeyToList) {
 	it = ds.FindInList(key1, cur_time, hash);
 	ASSERT_TRUE(it == ds.end());
 
-	// add keys in reverse order and check that they are inserted in ascending order
+	// add keys in reverse order and check that they are inserted in ascending
+	// order
 	ds.AddKeyToList(hash, key3, &containerPtr);
 	containerPtr->value = 33;
 	ds.AddKeyToList(hash, key2, &containerPtr);
@@ -105,18 +107,19 @@ TEST_F(data_store_test, AddKeyToList) {
 TEST_F(data_store_test, FindInList) {
 	// look for a key when no keys have been added
 	it = ds.FindInList(key1, cur_time, hash);
-	ASSERT_TRUE(it == ds.end()) <<
-		"An end iterator should have been returned from an attempt to find something in an empty list.";
+	ASSERT_TRUE(it == ds.end()) << "An end iterator should have been returned"
+		" from an attempt to find something in an empty list.";
 
-	// add keys in reverse order and check that they are inserted in ascending order
+	// add keys in reverse order and check that they are inserted in ascending
+	// order
 	ds.AddPairToList(hash, key4, 44, &containerPtr);
 	ds.AddPairToList(hash, key2, 22, &containerPtr);
 	ds.AddPairToList(hash, key1, 11, &containerPtr);
 
 	// look for a key that is not in the list
 	it = ds.FindInList(key3, cur_time, hash);
-	ASSERT_TRUE(it == ds.end()) <<
-		"An end iterator should have been returned from an attempt to find something not in the list.";
+	ASSERT_TRUE(it == ds.end()) << "An end iterator should have been returned"
+		" from an attempt to find something not in the list.";
 }
 
 
@@ -144,7 +147,8 @@ TEST_F(data_store_test, EliminateTimeouts) {
 		// use a time greater than the max time provided to the constructor
 		numEliminated = ds.EliminateTimeouts(8000);
 	} catch(...) {
-		FAIL() << "An exception was thrown when eliminating everything in the list.";
+		FAIL() <<
+			"An exception was thrown when eliminating everything in the list.";
 	}
 	EXPECT_EQ(4, numEliminated) <<
 		"4 items should have been eliminated from the list";
@@ -173,7 +177,8 @@ TEST_F(data_store_test, EliminateTimeouts) {
 		// use a time greater than the max time provided to the constructor
 		numEliminated = ds.EliminateTimeouts(8000);
 	} catch(...) {
-		FAIL() << "An exception was thrown when eliminating from the beginning of the list.";
+		FAIL() << "An exception was thrown when eliminating from the beginning"
+			" of the list.";
 	}
 	EXPECT_EQ(1, numEliminated) <<
 		"only 1 item should have been eliminated from the list";
@@ -187,7 +192,8 @@ TEST_F(data_store_test, EliminateTimeouts) {
 		// use a time greater than the max time provided to the constructor
 		numEliminated = ds.EliminateTimeouts(8000);
 	} catch(...) {
-		FAIL() << "An exception was thrown when eliminating from the end of the list.";
+		FAIL() <<
+			"An exception was thrown when eliminating from the end of the list.";
 	}
 	EXPECT_EQ(1, numEliminated) <<
 		"only 1 item should have been eliminated from the list";
@@ -201,7 +207,8 @@ TEST_F(data_store_test, EliminateTimeouts) {
 		// use a time greater than the max time provided to the constructor
 		numEliminated = ds.EliminateTimeouts(8000);
 	} catch(...) {
-		FAIL() << "An exception was thrown when eliminating from the middle of the list.";
+		FAIL() << "An exception was thrown when eliminating from the middle of"
+			" the list.";
 	}
 	EXPECT_EQ(2, numEliminated) <<
 		"only 2 items should have been eliminated from the list";
@@ -232,8 +239,8 @@ TEST_F(data_store_test, RemoveItem) {
 	} catch(...) {
 		FAIL() << "An exception was thrown when eliminating from an empty list.";
 	}
-	EXPECT_EQ(0, numEliminated) <<
-		"The item to be removed was not in the list, nothing should have been removed";
+	EXPECT_EQ(0, numEliminated) << "The item to be removed was not in the list,"
+		" nothing should have been removed";
 	EXPECT_EQ(4, ds.pair_list.size());
 
 	// remove from the beginning of the list
@@ -266,15 +273,16 @@ TEST_F(data_store_test, EvictLeastUsed) {
 	addr3.set_addr4(0x0000ff00);
 	addr4.set_addr4(0x000000ff);
 
-	// make a hash of the address for the DataStores to use to record usage of an item
+	// make a hash of the address for the DataStores to use to record usage of
+	// an item
 	sha1_hash hash1 = sha1_callback(reinterpret_cast<const byte*>
-																	(addr1.get_hash_key()), addr1.get_hash_key_len());
+			(addr1.get_hash_key()), addr1.get_hash_key_len());
 	sha1_hash hash2 = sha1_callback(reinterpret_cast<const byte*>
-																	(addr2.get_hash_key()), addr2.get_hash_key_len());
+			(addr2.get_hash_key()), addr2.get_hash_key_len());
 	sha1_hash hash3 = sha1_callback(reinterpret_cast<const byte*>
-																	(addr3.get_hash_key()), addr3.get_hash_key_len());
+			(addr3.get_hash_key()), addr3.get_hash_key_len());
 	sha1_hash hash4 = sha1_callback(reinterpret_cast<const byte*>
-																	(addr4.get_hash_key()), addr4.get_hash_key_len());
+			(addr4.get_hash_key()), addr4.get_hash_key_len());
 
 	// put the initial items into the list using hash1
 	ds.AddPairToList(hash1, key1, 11, &containerPtr, 0);
@@ -292,10 +300,11 @@ TEST_F(data_store_test, EvictLeastUsed) {
 	try {
 		numEliminated = ds.EvictLeastUsed();
 	} catch(...) {
-		FAIL() << "An exception was thrown when Evicting an unused item from the list";
+		FAIL() <<
+			"An exception was thrown when Evicting an unused item from the list";
 	}
-	EXPECT_EQ(1, numEliminated) <<
-		"The item to be removed was not in the list, nothing should have been removed";
+	EXPECT_EQ(1, numEliminated) << "The item to be removed was not in the list,"
+		" nothing should have been removed";
 	EXPECT_EQ(3, ds.pair_list.size());
 
 	// look for key 3 - it should have been evicted
@@ -303,9 +312,12 @@ TEST_F(data_store_test, EvictLeastUsed) {
 	ASSERT_FALSE(it != ds.end()) <<
 		"The item that should have been removed is still in the list.";
 
-	// make an update happen, then add all items back so everything is in the current bloom filter.
-	// Items 1, 2, and 4 should now have a history in the previous bloom filter estimated count.
-	// use a time greater than half of the max age (500) specified in the constructor
+	// make an update happen, then add all items back so everything is in the
+	// current bloom filter.
+	// Items 1, 2, and 4 should now have a history in the previous
+	// bloom filter estimated count.
+	// use a time greater than half of the max age (500) specified in the
+	// constructor
 	ds.UpdateUsage(400);
 	ds.AddPairToList(hash1, key1, 11, &containerPtr, 450);
 	ds.AddPairToList(hash1, key2, 22, &containerPtr, 450);
@@ -315,10 +327,11 @@ TEST_F(data_store_test, EvictLeastUsed) {
 	try {
 		numEliminated = ds.EvictLeastUsed();
 	} catch(...) {
-		FAIL() << "An exception was thrown when Evicting an unused item from the list";
+		FAIL() << "An exception was thrown when Evicting an unused item from"
+			" the list";
 	}
-	EXPECT_EQ(1, numEliminated) <<
-		"The item to be removed was not in the list, nothing should have been removed";
+	EXPECT_EQ(1, numEliminated) << "The item to be removed was not in the list,"
+		" nothing should have been removed";
 	EXPECT_EQ(3, ds.pair_list.size());
 
 	// look for key 3 - it should have been evicted
@@ -326,15 +339,17 @@ TEST_F(data_store_test, EvictLeastUsed) {
 	ASSERT_TRUE(it == ds.end()) <<
 		"The item that should have been removed is still in the list.";
 
-	// add a new item to the end of the list and see that it is evicted without error
+	// add a new item to the end of the list and see that it is evicted
+	// without error
 	ds.AddPairToList(hash1, key5, 55, &containerPtr, 455);
 	try {
 		numEliminated = ds.EvictLeastUsed();
 	} catch(...) {
-		FAIL() << "An exception was thrown when Evicting an unused item from the list";
+		FAIL() <<
+			"An exception was thrown when Evicting an unused item from the list";
 	}
-	EXPECT_EQ(1, numEliminated) <<
-		"The item to be removed was not in the list, nothing should have been removed";
+	EXPECT_EQ(1, numEliminated) << "The item to be removed was not in the list,"
+		" nothing should have been removed";
 	EXPECT_EQ(3, ds.pair_list.size());
 
 	// look for key 5 - it should have been evicted
