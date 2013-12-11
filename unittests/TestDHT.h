@@ -2,6 +2,7 @@
 #undef _M_CEE_PURE
 #undef new
 
+// TODO: SCOPED_TRACE, ASSERT_NO_FATAL_FAILURE
 #if __cplusplus < 201103L
 #define override
 #endif

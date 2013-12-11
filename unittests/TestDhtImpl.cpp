@@ -202,13 +202,12 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4) {
 	expect_target();
 
 	int64_t seq = 0;
-	const char* responseToken = "20_byte_reply_token.";
 	const char* v = "sample";
 	len = bencoder(message, 1024)
 		.d()
 			("ip")("abcdxy") ("r").d()
 				("id")((unsigned char*)&peer_id.id.id[0], 20) ("nodes")("")
-				("token")(responseToken) ("seq")(seq) ("v")(v).e()
+				("token")(response_token) ("seq")(seq) ("v")(v).e()
 			("t")(tid.b, tid.len) ("y")("r")
 		.e() ();
 	
@@ -227,7 +226,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4) {
 	expect_reply_id();
 	EXPECT_EQ(seq + 1, reply->GetInt("seq"));
 	expect_signature();
-	expect_token(responseToken);
+	expect_token(response_token);
 	expect_value(v, strlen(v));
 	EXPECT_EQ(int64_t(1), seq_result);
 }
@@ -262,7 +261,6 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_cas) {
 	expect_reply_id();
 	expect_target();
 
-	const char* responseToken = "20_byte_reply_token.";
 	const char* v = "sample";
 
 	unsigned char to_hash[800];
@@ -277,7 +275,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_cas) {
 			("ip")("abcdxy") ("r").d()
 				("cas")(cas_buf.b, cas_buf.len)
 				("id")((unsigned char*)&peer_id.id.id[0], 20) ("nodes")("")
-				("token")(responseToken) ("seq")(seq) ("v")(v).e()
+				("token")(response_token) ("seq")(seq) ("v")(v).e()
 			("t")(tid.b, tid.len) ("y")("r")
 		.e() ();
 
@@ -294,7 +292,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_cas) {
 	expect_reply_id();
 	EXPECT_EQ(seq + 1, reply->GetInt("seq"));
 	expect_signature();
-	expect_token(responseToken);
+	expect_token(response_token);
 	expect_value(v, strlen(v));
 }
 
@@ -327,8 +325,6 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_seq_fail) {
 	expect_reply_id();
 	expect_target();
 
-	const char* responseToken = "20_byte_reply_token.";
-	const char* v = "sample";
 
 	unsigned char to_hash[800];
 	int written = snprintf(reinterpret_cast<char*>(to_hash), 800,
@@ -342,7 +338,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_seq_fail) {
 			("ip")("abcdxy") ("r").d()
 				("cas")(cas_buf.b, cas_buf.len)
 				("id")((unsigned char*)&peer_id.id.id[0], 20) ("nodes")("")
-				("token")(responseToken) ("seq")(seq) ("v")(v).e()
+				("token")(response_token) ("seq")(seq) ("v")(v).e()
 			("t")(tid.b, tid.len) ("y")("r")
 		.e() ();
 
@@ -360,7 +356,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_seq_fail) {
 	expect_reply_id();
 	EXPECT_EQ(seq + 1, reply->GetInt("seq"));
 	expect_signature();
-	expect_token(responseToken);
+	expect_token(response_token);
 	expect_value(v, strlen(v));
 
 	// oh no we have a higher sequence number now and thus we shall complain

@@ -48,7 +48,7 @@ class dht_impl_test : public dht_test {
 
 		UnitTestUDPSocket socket4;
 		UnitTestUDPSocket socket6;
-		DhtImpl* impl;
+		smart_ptr<DhtImpl> impl;
 		DhtPeerID peer_id;
 
 		// used by fetch_*, set by using bencoder
@@ -61,9 +61,13 @@ class dht_impl_test : public dht_test {
 		// get_reply
 		BencodedDict* reply;
 
+		const char* response_token;
+		const char* v;
+
 		virtual void SetUp() override {
 			set_addr('zzzz');
 			set_port(('x' << 8) + 'x');
+			socket4.SetBindAddr(s_addr);
 
 			impl = new DhtImpl(&socket4, &socket6);
 			impl->SetSHACallback(&sha1_callback);
@@ -79,10 +83,12 @@ class dht_impl_test : public dht_test {
 
 			dict = NULL;
 			reply = NULL;
+
+			response_token = "20_byte_reply_token.";
+			v = "sample";
 		}
 
 		virtual void TearDown() override {
-			delete impl;
 		}
 
 		void set_addr(int32_t v) {
@@ -115,12 +121,13 @@ class dht_impl_test : public dht_test {
 		}
 
 		void fetch_dict() {
-			std::string bencMessage = socket4.GetSentDataAsString();
+			std::string benc_message = socket4.GetSentDataAsString();
 			// should not store expected dict in a BencodedDict because if the output
 			// is somehow not a dict that will trigger a non-unittest assert, and we
 			// wish to handle that case ourselves
-			BencEntity::Parse((const unsigned char *)bencMessage.c_str(), output,
-					(const unsigned char *)(bencMessage.c_str() + bencMessage.length()));
+			BencEntity::Parse((const unsigned char *)benc_message.c_str(), output,
+					(const unsigned char *)
+						(benc_message.c_str() + benc_message.length()));
 			ASSERT_EQ(BENC_DICT, output.bencType);
 			dict = BencEntity::AsDict(&output);
 			ASSERT_TRUE(dict);
@@ -193,12 +200,16 @@ class dht_impl_test : public dht_test {
 			}
 		}
 
-		void expect_reply_id() {
+		void expect_reply_id(const char* expected = NULL) {
 			get_reply();
 			unsigned char *id = (unsigned char*)reply->GetString("id", 20);
 			ASSERT_TRUE(id);
-			EXPECT_FALSE(memcmp((const void*)id, (const void *)DHTID_BYTES.c_str(),
-						20));
+			if (expected == NULL) {
+				EXPECT_FALSE(memcmp((const void*)id, (const void *)DHTID_BYTES.c_str(),
+							20));
+			} else {
+				EXPECT_FALSE(memcmp((const void*)id, (const void *)expected, 20));
+			}
 		}
 
 		void expect_token(const char* response_token) {
@@ -206,8 +217,10 @@ class dht_impl_test : public dht_test {
 			Buffer token;
 			token.b = (unsigned char*)reply->GetString("token" , &token.len);
 			EXPECT_EQ(20, token.len);
-			EXPECT_FALSE(memcmp(response_token, token.b, 20)) <<
-				"ERROR: announced token is wrong";
+			if (response_token != NULL) {
+				EXPECT_FALSE(memcmp(response_token, token.b, 20)) <<
+					"ERROR: announced token is wrong";
+			}
 		}
 
 		void expect_signature() {
@@ -297,3 +310,55 @@ class dht_impl_test : public dht_test {
 			socket4.Reset();
 		}
 };
+
+class AddNodesCallBackDataItem {
+	public:
+		byte infoHash[20];
+		unsigned int numPeers;
+		std::vector<byte> compactPeerAddressBytes;
+
+		bool operator==(AddNodesCallBackDataItem &right);
+};
+
+inline bool AddNodesCallBackDataItem::operator==(
+		AddNodesCallBackDataItem &right) {
+	if(memcmp(infoHash, right.infoHash, 20) == 0
+		 && numPeers == right.numPeers
+		 && compactPeerAddressBytes == right.compactPeerAddressBytes) {
+		return true;
+	}
+	return false;
+}
+
+class AddNodesCallbackDummy {
+	public:
+		static std::vector<AddNodesCallBackDataItem> callbackData;
+
+		AddNodesCallbackDummy() {}
+		~AddNodesCallbackDummy() {}
+		static void Callback(void *ctx, const byte *info_hash, const byte *peers,
+				uint num_peers);
+		static void Reset();
+};
+
+inline void AddNodesCallbackDummy::Callback(void *ctx, const byte *info_hash,
+		const byte *peers, uint num_peers) {
+	AddNodesCallBackDataItem data;
+	unsigned int x;
+
+	for(x = 0; x < 20; ++x) {
+		data.infoHash[x] = info_hash[x];
+	}
+
+	data.numPeers = num_peers;
+	// 6 bytes of compact address per peer
+	for(x = 0; x < 6 * data.numPeers; ++x) {
+		data.compactPeerAddressBytes.push_back(peers[x]);
+	}
+
+	callbackData.push_back(data);
+}
+
+inline void AddNodesCallbackDummy::Reset() {
+	callbackData.clear();
+}

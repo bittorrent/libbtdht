@@ -28,6 +28,7 @@ project
 	<include>../src
 	<include>/opt/local/include
 
+	<toolset>clang:<cxxflags>-Wall
 	<toolset>clang:<cxxflags>-Wno-invalid-source-encoding
 	<toolset>clang:<cxxflags>-Wno-multichar
 	<toolset>clang:<cxxflags>-Wno-unused-private-field
@@ -35,5 +36,5 @@ project
 	;
 
 unit-test unittests : TestDhtID.cpp TestSecureDhtID.cpp TestDataStore.cpp
-	TestDhtImpl.cpp TestDhtImplSpeed.cpp TestDHTMessageObject.cpp
-	TestDHTRoutingTable.cpp ;
+	TestDhtImpl.cpp TestDhtImplSpeed.cpp TestRoutingTable.cpp
+	TestDhtImplResponse.cpp TestDHTMessageObject.cpp TestDHTRoutingTable.cpp ;

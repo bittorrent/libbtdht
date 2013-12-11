@@ -147,3 +147,66 @@ TEST_F(dht_impl_speed_test, VoteSpeedTest) {
 		}
 	}
 }
+
+TEST_F(dht_impl_speed_test, Announce_ReplyWithNodes_Speed) {
+	DhtID target;
+	target.id[0] = 'FFFF'; // FFFF
+	target.id[1] = 'GGGG'; // GGGG
+	target.id[2] = 'HHHH'; // HHHH
+	target.id[3] = 'IIII'; // IIII
+	target.id[4] = 'JJJJ'; // JJJJ
+
+	const char* compact_ip = "aaaa88";
+
+	// put a peer into the dht for it to work with
+	peer_id.addr.set_port(('8' << 8) + '8'); // 88
+	peer_id.addr.set_addr4('aaaa'); // aaaa
+	impl->Update(peer_id, 0, false);
+	Buffer peer_id_buffer;
+	peer_id_buffer.len = 20;
+	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
+
+	std::string filenameTxt("filaname.txt");
+
+	for(unsigned int x = 0; x < 20 * speedTestFactor; ++x) {
+		// make sure the callback dummy is clear
+		AddNodesCallbackDummy::Reset();
+
+		// *****************************************************
+		// make the dht emit an announce message (the get_peers rpc)
+		// *****************************************************
+		impl->DoAnnounce(target, 20, NULL, &AddNodesCallbackDummy::Callback, NULL,
+				filenameTxt.c_str(), NULL, 0);
+		fetch_dict();
+		expect_query_type();
+		expect_command("get_peers");
+		Buffer tid;
+		tid.b = (byte*)dict->GetString("t" , &tid.len);
+		len = bencoder(message, 1024)
+			.d()
+				("r").d()
+					("id")(peer_id_buffer.b, peer_id_buffer.len)
+					("token")(response_token)
+					("values").l()
+						(compact_ip).e().e()
+				("t")(tid.b, tid.len)
+				("y")("r")
+			.e() ();
+		socket4.Reset();
+		impl->ProcessIncoming(message, len, peer_id.addr);
+		fetch_dict();
+		expect_query_type();
+		expect_command("announce_peer");
+		tid.b = (byte*)dict->GetString("t" , &tid.len);
+
+		len = bencoder(message, 1024)
+			.d()
+				("r").d()
+					("id")(peer_id_buffer.b, peer_id_buffer.len).e()
+				("t")(tid.b, tid.len)
+				("y")("r")
+			.e() ();
+		socket4.Reset();
+		impl->ProcessIncoming(message, len, peer_id.addr);
+	}
+}
