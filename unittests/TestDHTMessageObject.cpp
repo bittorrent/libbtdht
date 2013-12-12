@@ -6,16 +6,15 @@ Test the DHTMessage class
 #undef new
 
 #include "gtest/gtest.h"
-#include "gmock/gmock.h"
 
 #include "DHTMessage.h"
 
 // ***************************************************************************************
 // DHTMessage class tests
 // ***************************************************************************************
-TEST(DHTMessageClassTest, DecodePingQueryTest)
-{
-	char bMessage[] = {"d1:ad2:id20:abcdefghij0123456789e1:q4:ping1:t2:aa1:y1:qe"}; // a ping query
+TEST(DHTMessageClassTest, DecodePingQueryTest) {
+	char bMessage[] = {"d1:ad2:id20:abcdefghij0123456789e1:q4:ping1:t2:aa"
+		"1:y1:qe"}; // a ping query
 	DHTMessage message((unsigned char*)bMessage, sizeof(bMessage));
 
 	EXPECT_EQ(DHT_QUERY, message.dhtMessageType);
@@ -27,9 +26,9 @@ TEST(DHTMessageClassTest, DecodePingQueryTest)
 	EXPECT_FALSE(memcmp((byte*)"aa", message.transactionID.b, 2));
 }
 
-TEST(DHTMessageClassTest, DecodeFindNodeQueryTest)
-{
-	char bMessage[] = {"d1:ad2:id20:abcdefghij01234567896:target20:mnopqrstuvwxyz123456e1:q9:find_node1:t2:aa1:y1:qe"}; // a find_node query
+TEST(DHTMessageClassTest, DecodeFindNodeQueryTest) {
+	char bMessage[] = {"d1:ad2:id20:abcdefghij01234567896:target"
+		"20:mnopqrstuvwxyz123456e1:q9:find_node1:t2:aa1:y1:qe"}; // a find_node query
 	DHTMessage message((unsigned char*)bMessage, sizeof(bMessage));
 
 	EXPECT_EQ(DHT_QUERY, message.dhtMessageType);
@@ -43,9 +42,9 @@ TEST(DHTMessageClassTest, DecodeFindNodeQueryTest)
 	EXPECT_FALSE(memcmp((byte*)"mnopqrstuvwxyz123456", message.target.b, 20));
 }
 
-TEST(DHTMessageClassTest, DecodeGetPeersQueryTest)
-{
-	char bMessage[] = {"d1:ad2:id20:abcdefghij01234567899:info_hash20:mnopqrstuvwxyz123456e1:q9:get_peers1:t2:aa1:y1:qe"}; // a get_peer query
+TEST(DHTMessageClassTest, DecodeGetPeersQueryTest) {
+	char bMessage[] = {"d1:ad2:id20:abcdefghij01234567899:info_hash"
+		"20:mnopqrstuvwxyz123456e1:q9:get_peers1:t2:aa1:y1:qe"}; // a get_peer query
 	DHTMessage message((unsigned char*)bMessage, sizeof(bMessage));
 
 	EXPECT_EQ(DHT_QUERY, message.dhtMessageType);
@@ -59,9 +58,10 @@ TEST(DHTMessageClassTest, DecodeGetPeersQueryTest)
 	EXPECT_FALSE(memcmp((byte*)"mnopqrstuvwxyz123456", message.infoHash.b, 20));
 }
 
-TEST(DHTMessageClassTest, DecodeAnnouncePeerQueryTest)
-{
-	char bMessage[] = {"d1:ad2:id20:abcdefghij01234567899:info_hash20:mnopqrstuvwxyz1234564:porti6881e5:token20:12345678901234567890e1:q13:announce_peer1:t2:aa1:y1:qe"}; // a announce_peer query
+TEST(DHTMessageClassTest, DecodeAnnouncePeerQueryTest) {
+	char bMessage[] = {"d1:ad2:id20:abcdefghij01234567899:info_hash"
+		"20:mnopqrstuvwxyz1234564:porti6881e5:token20:12345678901234567890e"
+			"1:q13:announce_peer1:t2:aa1:y1:qe"}; // a announce_peer query
 	DHTMessage message((unsigned char*)bMessage, sizeof(bMessage));
 
 	EXPECT_EQ(DHT_QUERY, message.dhtMessageType);
@@ -77,9 +77,9 @@ TEST(DHTMessageClassTest, DecodeAnnouncePeerQueryTest)
 	EXPECT_FALSE(memcmp((byte*)"12345678901234567890", message.token.b, 20));
 }
 
-TEST(DHTMessageClassTest, DecodeImmutableGetQueryTest)
-{
-	char bMessage[] = {"d1:y1:q1:ad2:id20:abcdefghij01234567896:target20:11112222333344445555e1:q3:get1:t2:aae"}; // a immutable put query
+TEST(DHTMessageClassTest, DecodeImmutableGetQueryTest) {
+	char bMessage[] = {"d1:y1:q1:ad2:id20:abcdefghij01234567896:target"
+		"20:11112222333344445555e1:q3:get1:t2:aae"}; // a immutable put query
 	DHTMessage message((unsigned char*)bMessage, sizeof(bMessage));
 
 	EXPECT_EQ(DHT_QUERY, message.dhtMessageType);
@@ -93,9 +93,9 @@ TEST(DHTMessageClassTest, DecodeImmutableGetQueryTest)
 	EXPECT_EQ(0, message.key.len);
 }
 
-TEST(DHTMessageClassTest, DecodeImmutablePutQueryTest)
-{
-	char bMessage[] = {"d1:y1:q1:ad2:id20:abcdefghij01234567891:v28:bencoded data in 'v' elemente1:q3:put1:t2:aae"}; // a immutable put query
+TEST(DHTMessageClassTest, DecodeImmutablePutQueryTest) {
+	char bMessage[] = {"d1:y1:q1:ad2:id20:abcdefghij01234567891:v"
+		"28:bencoded data in 'v' elemente1:q3:put1:t2:aae"}; // a immutable put query
 
 	DHTMessage message((unsigned char*)bMessage, sizeof(bMessage));
 
@@ -112,8 +112,7 @@ TEST(DHTMessageClassTest, DecodeImmutablePutQueryTest)
 	EXPECT_EQ('b', message.vBuf.b[3]); // of 28:*b*enco...... of the v element
 }
 
-TEST(DHTMessageClassTest, DecodeMutableGetQueryTest)
-{
+TEST(DHTMessageClassTest, DecodeMutableGetQueryTest) {
 	const char* frontText = "d1:y1:q1:ad2:id20:abcdefghij01234567891:k248:";
 	const char* backText = "6:target20:11112222333344445555e1:q3:get1:t2:aae";
 
@@ -138,11 +137,11 @@ TEST(DHTMessageClassTest, DecodeMutableGetQueryTest)
 	EXPECT_EQ('k', message.key.b[247]); // last character should be 'k'
 }
 
-TEST(DHTMessageClassTest, DecodeMutablePutQueryTest)
-{
+TEST(DHTMessageClassTest, DecodeMutablePutQueryTest) {
 	const char* frontText = "d1:y1:q1:ad2:id20:abcdefghij01234567891:k268:";
 	const char* seqSigText = "3:seqi787e3:sig256:";
-	const char* backText = "5:token20:azaztokenzaztokenzaz1:v28:bencoded data in 'v' elemente1:q3:put1:t2:aae"; // a immutable put query
+	const char* backText = "5:token20:azaztokenzaztokenzaz1:v"
+		"28:bencoded data in 'v' elemente1:q3:put1:t2:aae"; // a immutable put query
 
 	std::string bMessage;
 	bMessage += frontText; // start the bencoded message string
@@ -164,7 +163,8 @@ TEST(DHTMessageClassTest, DecodeMutablePutQueryTest)
 
 	// test the 'v' element data
 	EXPECT_EQ(31, message.vBuf.len);
-	EXPECT_FALSE(memcmp(message.vBuf.b, "28:bencoded data in 'v' element", message.vBuf.len));
+	EXPECT_FALSE(memcmp(message.vBuf.b, "28:bencoded data in 'v' element",
+				message.vBuf.len));
 
 	// test the key info
 	EXPECT_EQ(268, message.key.len);
@@ -184,11 +184,11 @@ TEST(DHTMessageClassTest, DecodeMutablePutQueryTest)
 	EXPECT_EQ('z', message.token[1]);
 }
 
-TEST(DHTMessageClassTest, DecodeMutablePutQueryTestWithRegion)
-{
+TEST(DHTMessageClassTest, DecodeMutablePutQueryTestWithRegion) {
 	const char* frontText = "d1:y1:q1:ad2:id20:abcdefghij01234567891:k268:";
 	const char* seqSigText = "3:seqi787e3:sig256:";
-	const char* backText = "5:token20:azaztokenzaztokenzaz1:v28:bencoded data in 'v' elemente1:q3:put1:t2:aae"; // a immutable put query
+	const char* backText = "5:token20:azaztokenzaztokenzaz1:v"
+		"28:bencoded data in 'v' elemente1:q3:put1:t2:aae"; // a immutable put query
 
 	std::string bMessage;
 	bMessage += frontText; // start the bencoded message string
@@ -209,7 +209,8 @@ TEST(DHTMessageClassTest, DecodeMutablePutQueryTestWithRegion)
 
 	// test the 'v' element region data
 	EXPECT_EQ(31, message.vBuf.len);
-	EXPECT_FALSE(memcmp(message.vBuf.b, "28:bencoded data in 'v' element", message.vBuf.len));
+	EXPECT_FALSE(memcmp(message.vBuf.b, "28:bencoded data in 'v' element",
+				message.vBuf.len));
 
 	// test the key info
 	EXPECT_EQ(268, message.key.len);
@@ -229,9 +230,8 @@ TEST(DHTMessageClassTest, DecodeMutablePutQueryTestWithRegion)
 	EXPECT_EQ('z', message.token[1]);
 }
 
-TEST(DHTMessageClassTest, DecodeReply)
-{
-	char bMessage[] = {"d1:rd2:id20:1111BBBBCCCCDDDD00005:nodes26:26_byte_nearist_node_addr.5:token20:20_byte_reply_token.e1:t4:Ù¤g©1:y1:re"}; // a response message
+TEST(DHTMessageClassTest, DecodeReply) {
+	char bMessage[] = {"d1:rd2:id20:1111BBBBCCCCDDDD00005:nodes26:26_byte_nearest_node_addr.5:token20:20_byte_reply_token.e1:t4:Ù¤g©1:y1:re"}; // a response message
 	DHTMessage message((unsigned char*)bMessage, sizeof(bMessage));
 
 	EXPECT_EQ(DHT_RESPONSE, message.dhtMessageType);
@@ -240,4 +240,3 @@ TEST(DHTMessageClassTest, DecodeReply)
 	ASSERT_EQ(4, message.transactionID.len);
 	EXPECT_FALSE(memcmp((byte*)"Ù¤g©", message.transactionID.b, 4));
 }
-
