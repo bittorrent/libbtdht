@@ -186,9 +186,9 @@ class dht_impl_test : public dht_test {
 			}
 			socket4.Reset();
 			impl->ProcessIncoming(message, len, s_addr);
-			fetch_dict();
-			expect_response_type();
-			expect_ip();
+			ASSERT_NO_FATAL_FAILURE(fetch_dict());
+			ASSERT_NO_FATAL_FAILURE(expect_response_type());
+			ASSERT_NO_FATAL_FAILURE(expect_ip());
 		}
 
 		void expect_transaction_id(const char* id, int id_len) {
@@ -201,7 +201,7 @@ class dht_impl_test : public dht_test {
 		}
 
 		void expect_reply_id(const char* expected = NULL) {
-			get_reply();
+			ASSERT_NO_FATAL_FAILURE(get_reply());
 			unsigned char *id = (unsigned char*)reply->GetString("id", 20);
 			ASSERT_TRUE(id);
 			if (expected == NULL) {
@@ -213,7 +213,7 @@ class dht_impl_test : public dht_test {
 		}
 
 		void expect_token(const char* response_token) {
-			get_reply();
+			ASSERT_NO_FATAL_FAILURE(get_reply());
 			Buffer token;
 			token.b = (unsigned char*)reply->GetString("token" , &token.len);
 			EXPECT_EQ(20, token.len);
@@ -224,14 +224,14 @@ class dht_impl_test : public dht_test {
 		}
 
 		void expect_signature() {
-			get_reply();
+			ASSERT_NO_FATAL_FAILURE(get_reply());
 			Buffer sig;
 			sig.b = (unsigned char*)reply->GetString("sig" , &sig.len);
 			EXPECT_EQ(64, sig.len);
 		}
 
 		void expect_value(const char* value, int value_len) {
-			get_reply();
+			ASSERT_NO_FATAL_FAILURE(get_reply());
 			Buffer v_out;
 			v_out.b = (unsigned char*)reply->GetString("v" , &v_out.len);
 			EXPECT_EQ(value_len, v_out.len);
@@ -239,7 +239,7 @@ class dht_impl_test : public dht_test {
 		}
 
 		void expect_cas(const unsigned char* cas) {
-			get_reply();
+			ASSERT_NO_FATAL_FAILURE(get_reply());
 			Buffer cas_buf;
 			cas_buf.b = (unsigned char*)reply->GetString("cas", &cas_buf.len);
 			ASSERT_NE(nullptr, cas_buf.b);
@@ -248,7 +248,7 @@ class dht_impl_test : public dht_test {
 		}
 
 		void expect_target() {
-			get_reply();
+			ASSERT_NO_FATAL_FAILURE(get_reply());
 			Buffer pkey_buf;
 			pkey_buf.b = (unsigned char*)reply->GetString("target" , &pkey_buf.len);
 			EXPECT_EQ(20, pkey_buf.len);
@@ -270,8 +270,8 @@ class dht_impl_test : public dht_test {
 			impl->ProcessIncoming(reinterpret_cast<unsigned char*>
 					(const_cast<char*>(get_peers.c_str())),
 					get_peers.size(), s_addr);
-			fetch_dict();
-			get_reply();
+			ASSERT_NO_FATAL_FAILURE(fetch_dict());
+			ASSERT_NO_FATAL_FAILURE(get_reply());
 			token.b = (byte*)reply->GetString("token", &token.len);
 			ASSERT_TRUE(token.len);
 			token_bytes.assign(token.b, token.b + token.len);
@@ -280,7 +280,7 @@ class dht_impl_test : public dht_test {
 		}
 
 		void announce_and_verify() {
-			fetch_response_to_message();
+			ASSERT_NO_FATAL_FAILURE(fetch_response_to_message());
 			expect_reply_id();
 			impl->Tick();
 			socket4.Reset();
@@ -303,9 +303,9 @@ class dht_impl_test : public dht_test {
 				.e() ();
 			socket4.Reset();
 			impl->ProcessIncoming(message, len, s_addr);
-			fetch_dict();
-			expect_response_type();
-			get_reply();
+			ASSERT_NO_FATAL_FAILURE(fetch_dict());
+			ASSERT_NO_FATAL_FAILURE(expect_response_type());
+			ASSERT_NO_FATAL_FAILURE(get_reply());
 			impl->Tick();
 			socket4.Reset();
 		}

@@ -35,8 +35,8 @@ TEST_F(dht_impl_speed_test, PingKnownPacketSpeedTest) {
 			"4:wxyz1:v4:UTUT1:y1:qe");
 
 	for(unsigned long x = 0; x < maxIterations; ++x) {
-		process_message(&known_ping_string);
-		process_message(&known_ping_string);
+		ASSERT_NO_FATAL_FAILURE(process_message(&known_ping_string));
+		ASSERT_NO_FATAL_FAILURE(process_message(&known_ping_string));
 	}
 }
 
@@ -45,8 +45,8 @@ TEST_F(dht_impl_speed_test, PingArbitraryPacketSpeedTest) {
 			"1:y1:qe");
 
 	for(unsigned long x = 0; x < maxIterations; ++x) {
-		process_message(&ping_string);
-		process_message(&ping_string);
+		ASSERT_NO_FATAL_FAILURE(process_message(&ping_string));
+		ASSERT_NO_FATAL_FAILURE(process_message(&ping_string));
 	}
 }
 
@@ -57,8 +57,8 @@ TEST_F(dht_impl_speed_test, PingQueriesSpeedTest) {
 			"4:wxyz1:v4:UTUT1:y1:qe");
 
 	for(unsigned long x = 0; x < maxIterations; ++x) {
-		process_message(&ping_string);
-		process_message(&known_ping_string);
+		ASSERT_NO_FATAL_FAILURE(process_message(&ping_string));
+		ASSERT_NO_FATAL_FAILURE(process_message(&known_ping_string));
 	}
 }
 
@@ -67,8 +67,8 @@ TEST_F(dht_impl_speed_test, FindNodeSpeedTest) {
 			"20:mnopqrstuvwxyz123456e1:q9:find_node1:t2:aa1:y1:qe");
 
 	for(unsigned long x = 0; x < maxIterations; ++x) {
-		process_message(&find_node_string);
-		process_message(&find_node_string);
+		ASSERT_NO_FATAL_FAILURE(process_message(&find_node_string));
+		ASSERT_NO_FATAL_FAILURE(process_message(&find_node_string));
 	}
 }
 
@@ -77,8 +77,8 @@ TEST_F(dht_impl_speed_test, GetPeersSpeedTest) {
 			"20:mnopqrstuvwxyz123456e1:q9:get_peers1:t2:aa1:y1:qe");
 
 	for(unsigned long x = 0; x < maxIterations; ++x) {
-		process_message(&get_peers_string);
-		process_message(&get_peers_string);
+		ASSERT_NO_FATAL_FAILURE(process_message(&get_peers_string));
+		ASSERT_NO_FATAL_FAILURE(process_message(&get_peers_string));
 	}
 }
 
@@ -102,8 +102,8 @@ TEST_F(dht_impl_speed_test, AnnouncePeerSpeedTest) {
 					test_data_2);
 		}
 		buffer = test_data;
-		process_message(&buffer);
-		process_message(&buffer);
+		ASSERT_NO_FATAL_FAILURE(process_message(&buffer));
+		ASSERT_NO_FATAL_FAILURE(process_message(&buffer));
 	}
 }
 
@@ -129,7 +129,7 @@ TEST_F(dht_impl_speed_test, VoteSpeedTest) {
 				("t")("aa")
 				("y")("q")
 				.e() ();
-			process_message();
+			ASSERT_NO_FATAL_FAILURE(process_message());
 
 			// make the second vote message with a vote of 2
 			len = bencoder(message, 1024)
@@ -143,7 +143,7 @@ TEST_F(dht_impl_speed_test, VoteSpeedTest) {
 				("t")("aa")
 				("y")("q")
 				.e() ();
-			process_message();
+			ASSERT_NO_FATAL_FAILURE(process_message());
 		}
 	}
 }
@@ -177,9 +177,9 @@ TEST_F(dht_impl_speed_test, Announce_ReplyWithNodes_Speed) {
 		// *****************************************************
 		impl->DoAnnounce(target, 20, NULL, &AddNodesCallbackDummy::Callback, NULL,
 				filenameTxt.c_str(), NULL, 0);
-		fetch_dict();
-		expect_query_type();
-		expect_command("get_peers");
+		ASSERT_NO_FATAL_FAILURE(fetch_dict());
+		ASSERT_NO_FATAL_FAILURE(expect_query_type());
+		ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 		Buffer tid;
 		tid.b = (byte*)dict->GetString("t" , &tid.len);
 		len = bencoder(message, 1024)
@@ -194,9 +194,9 @@ TEST_F(dht_impl_speed_test, Announce_ReplyWithNodes_Speed) {
 			.e() ();
 		socket4.Reset();
 		impl->ProcessIncoming(message, len, peer_id.addr);
-		fetch_dict();
-		expect_query_type();
-		expect_command("announce_peer");
+		ASSERT_NO_FATAL_FAILURE(fetch_dict());
+		ASSERT_NO_FATAL_FAILURE(expect_query_type());
+		ASSERT_NO_FATAL_FAILURE(expect_command("announce_peer"));
 		tid.b = (byte*)dict->GetString("t" , &tid.len);
 
 		len = bencoder(message, 1024)

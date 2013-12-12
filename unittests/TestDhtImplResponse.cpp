@@ -21,7 +21,7 @@ class dht_impl_response_test : public dht_impl_test {
 		}
 
 		void expect_info_hash(const unsigned char* expected = NULL) {
-			get_reply();
+			ASSERT_NO_FATAL_FAILURE(get_reply());
 			Buffer infoHash;
 			infoHash.b = (byte*)reply->GetString("info_hash" , &infoHash.len);
 			EXPECT_EQ(20, infoHash.len);
@@ -35,7 +35,7 @@ class dht_impl_response_test : public dht_impl_test {
 		}
 
 		void expect_target(const char* target) {
-			get_reply();
+			ASSERT_NO_FATAL_FAILURE(get_reply());
 			Buffer buf;
 			buf.b = (unsigned char*)reply->GetString("target" , &buf.len);
 			EXPECT_EQ(strlen(target), buf.len);
@@ -44,7 +44,7 @@ class dht_impl_response_test : public dht_impl_test {
 		}
 
 		void expect_name(const std::string &expected) {
-			get_reply();
+			ASSERT_NO_FATAL_FAILURE(get_reply());
 			Buffer name;
 			name.b = (byte*)reply->GetString("name" , &name.len);
 			EXPECT_EQ(expected.size(), name.len);
@@ -52,19 +52,19 @@ class dht_impl_response_test : public dht_impl_test {
 		}
 
 		void expect_port(int16_t expected) {
-			get_reply();
+			ASSERT_NO_FATAL_FAILURE(get_reply());
 			int16_t port;
 			port = reply->GetInt("port");
 			EXPECT_EQ(expected, port);
 		}
 
 		void expect_seed(int seed) {
-			get_reply();
+			ASSERT_NO_FATAL_FAILURE(get_reply());
 			EXPECT_EQ(seed, reply->GetInt("seed"));
 		}
 
 		void expect_implied_port(int16_t port) {
-			get_reply();
+			ASSERT_NO_FATAL_FAILURE(get_reply());
 			EXPECT_EQ(port, reply->GetInt("implied_port"));
 		}
 
@@ -82,7 +82,7 @@ class dht_impl_response_test : public dht_impl_test {
 				std::vector<byte> &tid_out) {
 			impl->DoAnnounce(target, 20, NULL, &AddNodesCallbackDummy::Callback, NULL,
 					filename.c_str(), NULL, 0);
-			fetch_dict();
+			ASSERT_NO_FATAL_FAILURE(fetch_dict());
 			Buffer tid;
 			tid.b = (byte*)dict->GetString("t" , &tid.len);
 			EXPECT_EQ(4, tid.len);
@@ -153,7 +153,7 @@ class dht_impl_response_test : public dht_impl_test {
 			impl->ProcessIncoming(message, len, peer_id.addr);
 			if (!expect_response)
 				return;
-			fetch_dict();
+			ASSERT_NO_FATAL_FAILURE(fetch_dict());
 			Buffer tid;
 			tid.b = (byte*)dict->GetString("t" , &tid.len);
 			EXPECT_EQ(4, tid.len);
@@ -341,7 +341,7 @@ TEST_F(dht_impl_response_test, TestSendPings) {
 	// Send a NICE (non-bootstrap) ping to our fake node
 	int bucketNo = impl->GetBucket(peer_id.id);
 	impl->PingStalestInBucket(bucketNo);
-	fetch_dict();
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	// check the transaction ID:  length=2
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t", &tid.len);
@@ -428,9 +428,9 @@ TEST_F(dht_impl_response_test, Announce_ReplyWithNodes) {
 	// the transaction ID and verify the remainder of the
 	// message
 	// *****************************************************
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	// get the transaction ID to use later
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
@@ -439,7 +439,7 @@ TEST_F(dht_impl_response_test, Announce_ReplyWithNodes) {
 	tid.b = temp;
 	EXPECT_EQ(4, tid.len);
 	expect_reply_id();
-	expect_info_hash();
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
 
 	// *****************************************************
 	// now fabricate a nodes response message using the
@@ -465,11 +465,11 @@ TEST_F(dht_impl_response_test, Announce_ReplyWithNodes) {
 	// get the bencoded string out of the socket and verify
 	// it.
 	// *****************************************************
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	expect_reply_id();
-	expect_info_hash();
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
 
 	// *****************************************************
 	// look in the addnodes call back dummy to see what was
@@ -479,7 +479,7 @@ TEST_F(dht_impl_response_test, Announce_ReplyWithNodes) {
 			"no callback events should have been made";
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should still be busy";
 
-	expect_request_removed(tid);
+	ASSERT_NO_FATAL_FAILURE(expect_request_removed(tid));
 	free(tid.b);
 }
 
@@ -531,15 +531,15 @@ TEST_F(dht_impl_response_test, Announce_ReplyWithPeers) {
 	// the transaction ID and verify the remainder of the
 	// message
 	// *****************************************************
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	// get the transaction ID to use later
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 	expect_reply_id();
-	expect_info_hash();
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
 	int noseed = reply->GetInt("noseed");
 	EXPECT_EQ(0, noseed) << "'noseed' is set when it should not be.";
 
@@ -565,19 +565,19 @@ TEST_F(dht_impl_response_test, Announce_ReplyWithPeers) {
 		.e() ();
 	socket4.Reset();
 	impl->ProcessIncoming(message, len, peer_id.addr);
-	fetch_dict();
-	expect_query_type();
-	expect_command("announce_peer");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("announce_peer"));
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 	expect_reply_id();
-	expect_info_hash();
-	expect_name(filenameTxt);
-	expect_port(0x7878);
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
+	ASSERT_NO_FATAL_FAILURE(expect_name(filenameTxt));
+	ASSERT_NO_FATAL_FAILURE(expect_port(0x7878));
 	expect_token(response_token);
-	expect_seed(0);
+	ASSERT_NO_FATAL_FAILURE(expect_seed(0));
 	// if no port callback is specified, default is to enable implied port
-	expect_implied_port(1);
+	ASSERT_NO_FATAL_FAILURE(expect_implied_port(1));
 
 	// *****************************************************
 	// create and send a response to the 'announce_peer
@@ -623,7 +623,7 @@ TEST_F(dht_impl_response_test, Announce_ReplyWithPeers) {
 	num = impl->FindNodes(target, ids, 8, 8, 0);
 	EXPECT_EQ(1, num) << "Num Nodes: " << num;
 
-	expect_request_removed(tid);
+	ASSERT_NO_FATAL_FAILURE(expect_request_removed(tid));
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should no longer be busy";
 }
 
@@ -674,14 +674,14 @@ TEST_F(dht_impl_response_test, Announce_ReplyWithoutPeersOrNodes) {
 	// the transaction ID and verify the remainder of the
 	// message
 	// *****************************************************
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 	expect_reply_id();
-	expect_info_hash();
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
 
 	// *****************************************************
 	// now fabricate a nodes response message using the
@@ -727,7 +727,7 @@ TEST_F(dht_impl_response_test, Announce_ReplyWithoutPeersOrNodes) {
 			0); // Find 8 good ones and 8 bad ones
 	EXPECT_EQ(1, num) << "Num Nodes: " << num;
 
-	expect_request_removed(tid);
+	ASSERT_NO_FATAL_FAILURE(expect_request_removed(tid));
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should no longer be busy";
 }
 
@@ -766,7 +766,7 @@ TEST_F(dht_impl_response_test, Announce_ReplyWith_ICMP) {
 	// into a bencentity.  Feed it back to the dht as an
 	// ICMP message
 	// *****************************************************
-	fetch_dict();
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 
@@ -779,7 +779,7 @@ TEST_F(dht_impl_response_test, Announce_ReplyWith_ICMP) {
 	EXPECT_EQ(1, AddNodesCallbackDummy::callbackData.size()) <<
 			"ONE callback event should have been made";
 
-	expect_request_removed(tid);
+	ASSERT_NO_FATAL_FAILURE(expect_request_removed(tid));
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should no longer be busy";
 }
 
@@ -806,14 +806,14 @@ TEST_F(dht_impl_response_test, Announce_ReplyWith_ICMP_AfterAnnounce) {
 	// the transaction ID and verify the remainder of the
 	// message
 	// *****************************************************
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 	expect_reply_id();
-	expect_info_hash();
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
 
 	// *****************************************************
 	// now fabricate a nodes response message using the
@@ -838,7 +838,7 @@ TEST_F(dht_impl_response_test, Announce_ReplyWith_ICMP_AfterAnnounce) {
 	socket4.Reset();
 	impl->ProcessIncoming(message, len, peer_id.addr);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should still be busy";
-	fetch_dict();
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_TRUE(impl->ParseIncomingICMP(output, peer_id.addr));
 
@@ -849,7 +849,7 @@ TEST_F(dht_impl_response_test, Announce_ReplyWith_ICMP_AfterAnnounce) {
 	EXPECT_EQ(2, AddNodesCallbackDummy::callbackData.size()) <<
 			"Two callback events should have been made";
 
-	expect_request_removed(tid);
+	ASSERT_NO_FATAL_FAILURE(expect_request_removed(tid));
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should no longer be busy";
 }
 
@@ -895,14 +895,14 @@ TEST_F(dht_impl_response_test, AnnounceSeed_ReplyWithPeers) {
 			filenameTxt.c_str(), NULL, IDht::announce_seed);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
 
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 	expect_reply_id();
-	expect_info_hash();
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
 	int noseed = reply->GetInt("noseed");
 	EXPECT_EQ(1, noseed) << "'noseed' is not set when it should be.";
 
@@ -928,16 +928,16 @@ TEST_F(dht_impl_response_test, AnnounceSeed_ReplyWithPeers) {
 		.e() ();
 	socket4.Reset();
 	impl->ProcessIncoming(message, len, peer_id.addr);
-	fetch_dict();
-	expect_query_type();
-	expect_command("announce_peer");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("announce_peer"));
 	// get the transaction ID to use later
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 	expect_reply_id();
-	expect_info_hash();
-	expect_name(filenameTxt);
-	expect_port(0x7878);
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
+	ASSERT_NO_FATAL_FAILURE(expect_name(filenameTxt));
+	ASSERT_NO_FATAL_FAILURE(expect_port(0x7878));
 	expect_token(response_token);
 	int seed = reply->GetInt("seed");
 	EXPECT_EQ(1, seed) << "'seed' is not set when it should be.";
@@ -988,7 +988,7 @@ TEST_F(dht_impl_response_test, AnnounceSeed_ReplyWithPeers) {
 			0); // Find 8 good ones and 8 bad ones
 	EXPECT_EQ(1, num) << "Num Nodes: " << num;
 
-	expect_request_removed(tid);
+	ASSERT_NO_FATAL_FAILURE(expect_request_removed(tid));
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should no longer be busy";
 }
 
@@ -1026,9 +1026,9 @@ TEST_F(dht_impl_response_test, AnnouncePartialInfoHash_ReplyWithNodes) {
 			&AddNodesCallbackDummy::Callback, NULL, "filename.txt", NULL,
 			IDht::announce_seed);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
@@ -1036,7 +1036,7 @@ TEST_F(dht_impl_response_test, AnnouncePartialInfoHash_ReplyWithNodes) {
 	int infoHashLength;
 	infoHashLength = reply->GetInt("ifhpfxl");
 	EXPECT_EQ(16, infoHashLength);
-	expect_info_hash();
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
 
 	// *****************************************************
 	// now fabricate a nodes response message using the
@@ -1056,11 +1056,11 @@ TEST_F(dht_impl_response_test, AnnouncePartialInfoHash_ReplyWithNodes) {
 	socket4.Reset();
 	impl->ProcessIncoming(message, len, peer_id.addr);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should still be busy";
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	expect_reply_id();
-	expect_info_hash();
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
 
 	// *****************************************************
 	// look in the addnodes call back dummy to see what was
@@ -1070,7 +1070,7 @@ TEST_F(dht_impl_response_test, AnnouncePartialInfoHash_ReplyWithNodes) {
 			"no callback events should have been made";
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should still be busy";
 
-	expect_request_removed(tid);
+	ASSERT_NO_FATAL_FAILURE(expect_request_removed(tid));
 }
 
 TEST_F(dht_impl_response_test, DoFindNodes_OnReplyCallback) {
@@ -1089,17 +1089,17 @@ TEST_F(dht_impl_response_test, DoFindNodes_OnReplyCallback) {
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	FindNodeCallbackDummy CallbackObj;
 	impl->DoFindNodes(target, 20, &CallbackObj);
-	fetch_dict();
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
-	expect_query_type();
-	expect_command("find_node");
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("find_node"));
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 	// see that the request has been queued
-	expect_request_queued(tid);
+	ASSERT_NO_FATAL_FAILURE(expect_request_queued(tid));
 	expect_reply_id();
-	expect_target("FFFFGGGGHHHHIIIIJJJJ");
+	ASSERT_NO_FATAL_FAILURE(expect_target("FFFFGGGGHHHHIIIIJJJJ"));
 
 	// now fabricate a nodes response message using the transaction ID extracted above
 
@@ -1121,15 +1121,15 @@ TEST_F(dht_impl_response_test, DoFindNodes_OnReplyCallback) {
 		.e() ();
 	socket4.Reset();
 	impl->ProcessIncoming(message, len, peer_id.addr);
-	fetch_dict();
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
-	expect_query_type();
-	expect_command("find_node");
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("find_node"));
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
-	expect_request_queued(tid);
+	ASSERT_NO_FATAL_FAILURE(expect_request_queued(tid));
 	expect_reply_id();
-	expect_target("FFFFGGGGHHHHIIIIJJJJ");
+	ASSERT_NO_FATAL_FAILURE(expect_target("FFFFGGGGHHHHIIIIJJJJ"));
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should still be busy";
 
 	// *****************************************************
@@ -1184,17 +1184,17 @@ TEST_F(dht_impl_response_test, DoFindNodes_NoNodesInReply) {
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	FindNodeCallbackDummy CallbackObj;
 	impl->DoFindNodes(target, 20, &CallbackObj);
-	fetch_dict();
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
-	expect_query_type();
-	expect_command("find_node");
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("find_node"));
 	// get the transaction ID to use later
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
-	expect_request_queued(tid);
+	ASSERT_NO_FATAL_FAILURE(expect_request_queued(tid));
 	expect_reply_id();
-	expect_target("FFFFGGGGHHHHIIIIJJJJ");
+	ASSERT_NO_FATAL_FAILURE(expect_target("FFFFGGGGHHHHIIIIJJJJ"));
 
 	// now fabricate a nodes response message using the transaction ID extracted above
 
@@ -1230,7 +1230,7 @@ TEST_F(dht_impl_response_test, DoFindNodes_NoNodesInReply) {
 	EXPECT_EQ(1, CallbackObj.callbackCount) <<
 			"Our callback object should have been invoked 1 time";
 
-	expect_request_removed(tid);
+	ASSERT_NO_FATAL_FAILURE(expect_request_removed(tid));
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should no longer be busy";
 }
 
@@ -1256,7 +1256,7 @@ TEST_F(dht_impl_response_test, DoFindNodes_ReplyWith_ICMP) {
 	// into a bencentity.  Feed it back to the dht as an
 	// ICMP message
 	// *****************************************************
-	fetch_dict();
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 
@@ -1272,7 +1272,7 @@ TEST_F(dht_impl_response_test, DoFindNodes_ReplyWith_ICMP) {
 	EXPECT_EQ(1, CallbackObj.callbackCount) <<
 			"Our callback object should have been invoked 1 time";
 
-	expect_request_removed(tid);
+	ASSERT_NO_FATAL_FAILURE(expect_request_removed(tid));
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should no longer be busy";
 }
 
@@ -1303,14 +1303,14 @@ TEST_F(dht_impl_response_test, DoVoteWithNodeReply) {
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	impl->DoVote(target, 1, &VoteCallbackDummy::VoteCallback, NULL);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 	expect_reply_id();
-	expect_info_hash();
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
 
 	// *****************************************************
 	// now fabricate a nodes response message using the
@@ -1335,11 +1335,11 @@ TEST_F(dht_impl_response_test, DoVoteWithNodeReply) {
 	// get the bencoded string out of the socket and verify
 	// it. (should be another 'get_peers')
 	// *****************************************************
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	expect_reply_id();
-	expect_info_hash();
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
 	EXPECT_EQ(0, VoteCallbackDummy::callbackCtr) <<
 			"no callback events should have been made";
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should still be busy";
@@ -1380,14 +1380,14 @@ TEST_F(dht_impl_response_test, DoVoteWithPeerReply) {
 	// the transaction ID and verify the remainder of the
 	// message
 	// *****************************************************
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 	expect_reply_id();
-	expect_info_hash();
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
 	len = bencoder(message, 1024)
 		.d()
 			("r").d()
@@ -1401,13 +1401,13 @@ TEST_F(dht_impl_response_test, DoVoteWithPeerReply) {
 	socket4.Reset();
 	impl->ProcessIncoming(message, len, peer_id.addr);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
-	fetch_dict();
-	expect_query_type();
-	expect_command("vote");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("vote"));
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 	expect_reply_id();
-	expect_target("FFFFGGGGHHHHIIIIJJJJ");
+	ASSERT_NO_FATAL_FAILURE(expect_target("FFFFGGGGHHHHIIIIJJJJ"));
 	expect_token(response_token);
 	EXPECT_EQ(3, reply->GetInt("vote"));
 
@@ -1462,7 +1462,7 @@ TEST_F(dht_impl_response_test, DoVote_ReplyWith_ICMP) {
 	// into a bencentity.  Feed it back to the dht as an
 	// ICMP message
 	// *****************************************************
-	fetch_dict();
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_TRUE(impl->ParseIncomingICMP(output, peer_id.addr));
@@ -1515,14 +1515,14 @@ TEST_F(dht_impl_response_test, DoVote_ReplyWith_ICMP_AfterVote) {
 	// the transaction ID and verify the remainder of the
 	// message
 	// *****************************************************
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 	expect_reply_id();
-	expect_info_hash();
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
 
 	len = bencoder(message, 1024)
 		.d()
@@ -1537,7 +1537,7 @@ TEST_F(dht_impl_response_test, DoVote_ReplyWith_ICMP_AfterVote) {
 	socket4.Reset();
 	impl->ProcessIncoming(message, len, peer_id.addr);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
-	fetch_dict();
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_TRUE(impl->ParseIncomingICMP(output, peer_id.addr));
 	EXPECT_EQ(0, VoteCallbackDummy::callbackCtr) <<
@@ -1564,9 +1564,9 @@ TEST_F(dht_impl_response_test, TestResponseToPing) {
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	impl->AddNode(peer_id.addr, NULL, 0);
 	// grab from the socket the emitted message and extract the transaction ID
-	fetch_dict();
-	expect_query_type();
-	expect_command("ping");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("ping"));
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
@@ -1582,9 +1582,9 @@ TEST_F(dht_impl_response_test, TestResponseToPing) {
 	socket4.Reset();
 	impl->ProcessIncoming(message, len, peer_id.addr);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
-	fetch_dict();
-	expect_query_type();
-	expect_command("find_node");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("find_node"));
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 	DhtRequest* req;
@@ -1593,7 +1593,7 @@ TEST_F(dht_impl_response_test, TestResponseToPing) {
 	expect_reply_id("vvvvvvvvvvvvvvvvvvvv");
 	// the dht xor's the last word of its id with 0x00000001,
 	// so the last letter changes from 'v' to 'w' for the target
-	expect_target("vvvvvvvvvvvvvvvvvvvw");
+	ASSERT_NO_FATAL_FAILURE(expect_target("vvvvvvvvvvvvvvvvvvvw"));
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should still be busy";
 }
 
@@ -1611,7 +1611,7 @@ TEST_F(dht_impl_response_test, TestResponseToPing_ReplyWith_ICMP) {
 	// invoke AddNode to emit a bootstrap ping message
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	impl->AddNode(peer_id.addr, NULL, 0);
-	fetch_dict();
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	socket4.Reset();
 	EXPECT_TRUE(impl->ParseIncomingICMP(output, peer_id.addr));
 	std::string emptyStr = socket4.GetSentDataAsString();
@@ -1643,14 +1643,14 @@ TEST_F(dht_impl_response_test, DoScrape_ReplyWithNodes) {
 	impl->DoScrape(target, &ScrapeCallbackDummy::Callback, NULL);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
 
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 	expect_reply_id();
-	expect_info_hash();
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
 	EXPECT_EQ(1, reply->GetInt("scrape"));
 
 	std::string nearest_node("26_byte_nearest_node_addr.");
@@ -1667,11 +1667,11 @@ TEST_F(dht_impl_response_test, DoScrape_ReplyWithNodes) {
 	socket4.Reset();
 	impl->ProcessIncoming(message, len, peer_id.addr);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	expect_reply_id();
-	expect_info_hash(reinterpret_cast<unsigned char*>(target.id));
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash(reinterpret_cast<unsigned char*>(target.id)));
 	EXPECT_EQ(1, reply->GetInt("scrape"));
 
 	// *****************************************************
@@ -1727,14 +1727,14 @@ TEST_F(dht_impl_response_test, Scrape_ReplyWithPeers) {
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	impl->DoScrape(target, &ScrapeCallbackDummy::Callback, NULL);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 	expect_reply_id();
-	expect_info_hash();
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
 	EXPECT_EQ(1, reply->GetInt("scrape"));
 
 	len = bencoder(message, 1024)
@@ -1806,7 +1806,7 @@ TEST_F(dht_impl_response_test, Scrape_ReplyWith_ICMP) {
 	// into a bencentity.  Feed it back to the dht as an
 	// ICMP message
 	// *****************************************************
-	fetch_dict();
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	socket4.Reset();
@@ -1866,14 +1866,14 @@ TEST_F(dht_impl_response_test, TestResolveName) {
 	impl->ResolveName(target, &ResolveNameCallbackDummy::Callback, NULL);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
 
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 	expect_reply_id();
-	expect_info_hash();
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
 
 	std::string filename("test_filename.txt");
 	len = bencoder(message, 1024)
@@ -1941,14 +1941,14 @@ TEST_F(dht_impl_response_test, TestResolveName_NoNameInReply) {
 	ResolveNameCallbackDummy::Clear();
 	impl->ResolveName(target, &ResolveNameCallbackDummy::Callback, NULL);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 	expect_reply_id();
-	expect_info_hash();
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
 
 	len = bencoder(message, 1024)
 		.d()
@@ -2018,7 +2018,7 @@ TEST_F(dht_impl_response_test, TestResolveName_ReplyWith_ICMP) {
 	ResolveNameCallbackDummy::Clear();
 	impl->ResolveName(target, &ResolveNameCallbackDummy::Callback, NULL);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
-	fetch_dict();
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	socket4.Reset();
@@ -2094,7 +2094,8 @@ TEST_F(dht_impl_response_test, MultipleAnnounce_ReplyWithSinglePeer) {
 
 	for(unsigned int x = 0; x < numTargets; ++x) {
 		socket4.Reset();
-		fetch_announce(targets[x], filenamesTxt[x], transactionIDs[x]);
+		ASSERT_NO_FATAL_FAILURE(fetch_announce(targets[x], filenamesTxt[x],
+					transactionIDs[x]));
 	}
 
 	std::string response_tokens[numTargets];
@@ -2111,21 +2112,21 @@ TEST_F(dht_impl_response_test, MultipleAnnounce_ReplyWithSinglePeer) {
 
 	Buffer tid;
 	for(unsigned int x = 0; x < numTargets; ++x) {
-		fetch_peers_reply(peer_id, response_tokens[x], values, transactionIDs[x],
-				transactionIDs[x]);
+		ASSERT_NO_FATAL_FAILURE(fetch_peers_reply(peer_id, response_tokens[x],
+					values, transactionIDs[x], transactionIDs[x]));
 
 		EXPECT_TRUE(impl->IsBusy()) << "The dht should still be busy";
 
-		fetch_dict();
-		expect_query_type();
-		expect_command("announce_peer");
+		ASSERT_NO_FATAL_FAILURE(fetch_dict());
+		ASSERT_NO_FATAL_FAILURE(expect_query_type());
+		ASSERT_NO_FATAL_FAILURE(expect_command("announce_peer"));
 		tid.b = (byte*)dict->GetString("t" , &tid.len);
 		EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 		expect_reply_id();
 		expect_info_hash(reinterpret_cast<const unsigned char*>
 				(&(targets[x].id[0])));
-		expect_name(filenamesTxt[x]);
-		expect_port(0x7878);
+		ASSERT_NO_FATAL_FAILURE(expect_name(filenamesTxt[x]));
+		ASSERT_NO_FATAL_FAILURE(expect_port(0x7878));
 		expect_token(response_tokens[x].c_str());
 	}
 
@@ -2223,7 +2224,8 @@ TEST_F(dht_impl_response_test, SingleAnnounce_ReplyWithMultiplePeers) {
 
 	for(unsigned int x = 0; x < numTargets; ++x) {
 		socket4.Reset();
-		fetch_announce(targets[x], filenamesTxt[x], transactionIDs[x]);
+		ASSERT_NO_FATAL_FAILURE(fetch_announce(targets[x], filenamesTxt[x],
+					transactionIDs[x]));
 	}
 
 	// *****************************************************
@@ -2253,19 +2255,19 @@ TEST_F(dht_impl_response_test, SingleAnnounce_ReplyWithMultiplePeers) {
 
 	Buffer tid;
 	for(unsigned int x = 0; x < numTargets; ++x) {
-		fetch_peers_reply(peer_id, response_tokens[x], values, transactionIDs[x],
-				transactionIDs[x]);
+		ASSERT_NO_FATAL_FAILURE(fetch_peers_reply(peer_id, response_tokens[x],
+					values, transactionIDs[x], transactionIDs[x]));
 		EXPECT_TRUE(impl->IsBusy()) << "The dht should still be busy";
-		fetch_dict();
-		expect_query_type();
-		expect_command("announce_peer");
+		ASSERT_NO_FATAL_FAILURE(fetch_dict());
+		ASSERT_NO_FATAL_FAILURE(expect_query_type());
+		ASSERT_NO_FATAL_FAILURE(expect_command("announce_peer"));
 		tid.b = (byte*)dict->GetString("t" , &tid.len);
 		EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 		expect_reply_id();
 		expect_info_hash(reinterpret_cast<const unsigned char*>
 				(&(targets[x].id[0])));
-		expect_name(filenamesTxt[x]);
-		expect_port(0x7878);
+		ASSERT_NO_FATAL_FAILURE(expect_name(filenamesTxt[x]));
+		ASSERT_NO_FATAL_FAILURE(expect_port(0x7878));
 		expect_token(response_tokens[x].c_str());
 	}
 
@@ -2381,7 +2383,8 @@ TEST_F(dht_impl_response_test, AnnounceWithMultiplePeers_ReplyWithSinglePeer) {
 
 	for(unsigned int x = 0; x < numTargets; ++x) {
 		socket4.Reset();
-		fetch_announce(targets[x], filenamesTxt[x], transactionIDs);
+		ASSERT_NO_FATAL_FAILURE(fetch_announce(targets[x], filenamesTxt[x],
+					transactionIDs));
 	}
 
 	// *****************************************************
@@ -2412,11 +2415,11 @@ TEST_F(dht_impl_response_test, AnnounceWithMultiplePeers_ReplyWithSinglePeer) {
 
 	std::vector<byte> tidout;
 	std::string announceString;
-	fetch_peers_reply(peer_id, response_tokens[0], values, transactionIDs[0],
-			tidout, false);
+	ASSERT_NO_FATAL_FAILURE(fetch_peers_reply(peer_id, response_tokens[0],
+				values, transactionIDs[0], tidout, false));
 	announceString += socket4.GetSentDataAsString();
-	fetch_peers_reply(peer_id_2, response_tokens[1], values, transactionIDs[1],
-			tidout);
+	ASSERT_NO_FATAL_FAILURE(fetch_peers_reply(peer_id_2, response_tokens[1],
+				values, transactionIDs[1], tidout));
 	announceString += socket4.GetSentDataAsString();
 
 	// look to see if the response tokens are in the sent data string
@@ -2627,9 +2630,9 @@ TEST_F(dht_impl_response_test, Announce_ReplyWithMultipleNodes) {
 	// the transaction ID and verify the remainder of the
 	// message
 	// *****************************************************
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
@@ -2839,14 +2842,14 @@ TEST_F(dht_impl_response_test, Announce_Slow_ReplyWithPeers) {
 	// the transaction ID and verify the remainder of the
 	// message
 	// *****************************************************
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 	expect_reply_id();
-	expect_info_hash();
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
 	EXPECT_EQ(0, reply->GetInt("noseed"));
 
 	// *********************************************************************************
@@ -2877,15 +2880,15 @@ TEST_F(dht_impl_response_test, Announce_Slow_ReplyWithPeers) {
 		.e() ();
 	socket4.Reset();
 	impl->ProcessIncoming(message, len, peer_id.addr);
-	fetch_dict();
-	expect_query_type();
-	expect_command("announce_peer");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("announce_peer"));
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 	expect_reply_id();
-	expect_info_hash();
-	expect_name(filenameTxt);
-	expect_port(0x7878);
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
+	ASSERT_NO_FATAL_FAILURE(expect_name(filenameTxt));
+	ASSERT_NO_FATAL_FAILURE(expect_port(0x7878));
 	expect_token(response_token);
 	EXPECT_EQ(0, reply->GetInt("seed"));
 
@@ -3007,14 +3010,14 @@ TEST_F(dht_impl_response_test, Announce_Slow_ReplyWithMultipleNodes) {
 	// the transaction ID and verify the remainder of the
 	// message
 	// *****************************************************
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 	expect_reply_id();
-	expect_info_hash();
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
 	// *****************************************************
 	// now fabricate a nodes response message using the
 	// transaction ID extracted above and include a token
@@ -3230,14 +3233,14 @@ TEST_F(dht_impl_response_test, Announce_TimeOut_ReplyWithMultipleNodes) {
 	// the transaction ID and verify the remainder of the
 	// message
 	// *****************************************************
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 	expect_reply_id();
-	expect_info_hash();
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
 	// *****************************************************
 	// now fabricate a nodes response message using the
 	// transaction ID extracted above and include a token
@@ -3446,14 +3449,14 @@ TEST_F(dht_impl_response_test, Announce_ICMPerror_ReplyWithMultipleNodes) {
 	// the transaction ID and verify the remainder of the
 	// message
 	// *****************************************************
-	fetch_dict();
-	expect_query_type();
-	expect_command("get_peers");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get_peers"));
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 	expect_reply_id();
-	expect_info_hash();
+	ASSERT_NO_FATAL_FAILURE(expect_info_hash());
 
 	// *****************************************************
 	// now fabricate a nodes response message using the

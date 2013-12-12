@@ -2,7 +2,7 @@
 #undef _M_CEE_PURE
 #undef new
 
-// TODO: SCOPED_TRACE, ASSERT_NO_FATAL_FAILURE
+// TODO: SCOPED_TRACE in all fixtured tests, for convenience
 #if __cplusplus < 201103L
 #define override
 #endif
@@ -26,18 +26,21 @@ using namespace ::testing;
 #include "UnitTestUDPSocket.h"
 
 // constant values to use in the dht under test
-const std::string DHTID_BYTES("AAAABBBBCCCCDDDDEEEE"); // the dht ID should be 20 bytes (characters) long.
+// the dht ID should be 20 bytes (characters) long.
+const std::string DHTID_BYTES("AAAABBBBCCCCDDDDEEEE");
 
 // defined in DhtImpl.cpp
-extern bool DhtVerifyHardenedID(const SockAddr& addr, byte const* node_id, DhtSHACallback* sha);
-extern void DhtCalculateHardenedID(const SockAddr& addr, byte *node_id, DhtSHACallback* sha);
+extern bool DhtVerifyHardenedID(const SockAddr& addr, byte const* node_id,
+		DhtSHACallback* sha);
+extern void DhtCalculateHardenedID(const SockAddr& addr, byte *node_id,
+		DhtSHACallback* sha);
 
 // defined in dht.cpp
-extern sha1_hash generate_node_id_prefix(const SockAddr& addr, int random, DhtSHACallback* sha);
+extern sha1_hash generate_node_id_prefix(const SockAddr& addr, int random,
+		DhtSHACallback* sha);
 
 // utility objects
-inline sha1_hash sha1_callback(const byte* buf, int len)
-{
+inline sha1_hash sha1_callback(const byte* buf, int len) {
 	sha1 hash;
 	unsigned int digest[5];
 	hash.process_bytes(buf, len);

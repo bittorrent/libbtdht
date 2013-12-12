@@ -95,7 +95,7 @@ TEST_F(dht_impl_test, TestPingRPC_ipv4) {
 	// specify, parse, and send the message
 	std::string testData("d1:ad2:id20:abcdefghij0123456789e1:q4:ping1:t2:aa1:y"
 			"1:qe");
-	fetch_response_to_message(&testData);
+	ASSERT_NO_FATAL_FAILURE(fetch_response_to_message(&testData));
 	expect_transaction_id("aa", 2);
 	expect_reply_id();
 }
@@ -112,7 +112,7 @@ TEST_F(dht_impl_test, TestPingRPC_ipv4_ParseKnownPackets) {
 
 	std::string testData("d1:ad2:id20:abcdefghij0123456789e1:q4:ping1:t4:wxyz"
 			"1:v4:UTUT1:y1:qe");
-	fetch_response_to_message(&testData);
+	ASSERT_NO_FATAL_FAILURE(fetch_response_to_message(&testData));
 	expect_transaction_id("wxyz", 4);
 	expect_reply_id();
 }
@@ -125,7 +125,7 @@ TEST_F(dht_impl_test, TestGetPeersRPC_ipv4) {
 	// specify, parse, and send the message
 	std::string testData("d1:ad2:id20:abcdefghij01010101019:info_hash"
 			"20:mnopqrstuvwxyz123456e1:q9:get_peers1:t2:aa1:y1:qe");
-	fetch_response_to_message(&testData);
+	ASSERT_NO_FATAL_FAILURE(fetch_response_to_message(&testData));
 	expect_transaction_id("aa", 2);
 	expect_reply_id();
 
@@ -152,7 +152,7 @@ TEST_F(dht_impl_test, TestFindNodeRPC_ipv4) {
 	// specify, parse, and send the message
 	std::string testData("d1:ad2:id20:abcdefghij01234567896:target"
 			"20:mnopqrstuvwxyz123456e1:q9:find_node1:t2:aa1:y1:qe");
-	fetch_response_to_message(&testData);
+	ASSERT_NO_FATAL_FAILURE(fetch_response_to_message(&testData));
 	expect_transaction_id("aa", 2);
 	expect_reply_id();
 	
@@ -188,9 +188,9 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4) {
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	int64_t seq_result = 0;
 	impl->Put(pkey, skey, &put_callback, &seq_result, 0);
-	fetch_dict();
-	expect_query_type();
-	expect_command("get");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get"));
 
 	// get the transaction ID to use later
 	Buffer tid;
@@ -217,9 +217,9 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4) {
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should still be busy";
 
 	//Checking the put messages
-	fetch_dict();
-	expect_query_type();
-	expect_command("put");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("put"));
 	expect_transaction_id(NULL, 4);
 
 	// now look into the query data
@@ -249,9 +249,9 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_cas) {
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	int64_t seq = 2;
 	impl->Put(pkey, skey, &put_callback, NULL, IDht::with_cas, seq);
-	fetch_dict();
-	expect_query_type();
-	expect_command("get");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get"));
 	expect_transaction_id(NULL, 4);
 	Buffer tid;
 	tid.b = (unsigned char*)dict->GetString("t" , &tid.len);
@@ -283,9 +283,9 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_cas) {
 	impl->ProcessIncoming(message, len, peer_id.addr);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should still be busy";
 
-	fetch_dict();
-	expect_query_type();
-	expect_command("put");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("put"));
 	expect_transaction_id(NULL, 4);
 
 	expect_cas(cas.value);
@@ -314,9 +314,9 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_seq_fail) {
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	int64_t seq = 2;
 	impl->Put(pkey, skey, &put_callback, NULL, IDht::with_cas, seq);
-	fetch_dict();
-	expect_query_type();
-	expect_command("get");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get"));
 	expect_transaction_id(NULL, 4);
 	Buffer tid;
 	tid.b = (unsigned char*)dict->GetString("t" , &tid.len);
@@ -346,9 +346,9 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_seq_fail) {
 	impl->ProcessIncoming(message, len, peer_id.addr);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should still be busy";
 
-	fetch_dict();
-	expect_query_type();
-	expect_command("put");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("put"));
 	tid.b = (unsigned char*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 
@@ -371,9 +371,9 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_seq_fail) {
 	socket4.Reset();
 	EXPECT_TRUE(impl->ProcessIncoming(message, len, peer_id.addr));
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should still be busy";
-	fetch_dict();
-	expect_query_type();
-	expect_command("get");
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_query_type());
+	ASSERT_NO_FATAL_FAILURE(expect_command("get"));
 	expect_transaction_id(NULL, 4);
 	expect_reply_id();
 	expect_target();
@@ -396,7 +396,7 @@ TEST_F(dht_impl_test, TestAnnouncePeerRPC_ipv4) {
 	init_dht_id();
 
 	// first do the GetPeers to obtain a token
-	fetch_response_to_message(&bEncodedGetPeers);
+	ASSERT_NO_FATAL_FAILURE(fetch_response_to_message(&bEncodedGetPeers));
 	get_reply();
 	Buffer token;
 	token.b = (unsigned char*)reply->GetString("token", &token.len);
@@ -410,7 +410,7 @@ TEST_F(dht_impl_test, TestAnnouncePeerRPC_ipv4) {
 
 	// now we can start testing the response to announce_peer
 	// Send the announce_peer query
-	fetch_response_to_message(&testData);
+	ASSERT_NO_FATAL_FAILURE(fetch_response_to_message(&testData));
 	expect_transaction_id("aa", 2);
 	expect_reply_id();
 }
@@ -434,7 +434,7 @@ TEST_F(dht_impl_test, TestAnnouncePeerWithImpliedport) {
 	init_dht_id();
 
 	// first do the GetPeers to obtain a token
-	fetch_response_to_message(&bEncodedGetPeers);
+	ASSERT_NO_FATAL_FAILURE(fetch_response_to_message(&bEncodedGetPeers));
 	get_reply();
 	Buffer token;
 	token.b = (unsigned char*)reply->GetString("token", &token.len);
@@ -476,7 +476,7 @@ TEST_F(dht_impl_test, TestAnnouncePeerWithOutImpliedport) {
 	init_dht_id();
 
 	// first do the GetPeers to obtain a token
-	fetch_response_to_message(&bEncodedGetPeers);
+	ASSERT_NO_FATAL_FAILURE(fetch_response_to_message(&bEncodedGetPeers));
 	get_reply();
 	Buffer token;
 	token.b = (unsigned char*)reply->GetString("token", &token.len);
@@ -524,7 +524,7 @@ TEST_F(dht_impl_test, TestVoteRPC_ipv4) {
 			("y")("q")
 		.e() ();
 
-	fetch_response_to_message();
+	ASSERT_NO_FATAL_FAILURE(fetch_response_to_message());
 	expect_transaction_id("aa", 2);
 
 	expect_reply_id();
@@ -590,7 +590,7 @@ TEST_F(dht_impl_test, TestVoteRPC_ipv4_MultipleVotes) {
 		.e() ();
 
 	// parse and send the second vote message
-	fetch_response_to_message();
+	ASSERT_NO_FATAL_FAILURE(fetch_response_to_message());
 	expect_transaction_id("aa", 2);
 	expect_reply_id();
 
@@ -651,7 +651,7 @@ TEST_F(dht_impl_test, TestDHTScrapeSeed0_ipv4) {
 			("y")("q")
 		.e() ();
 
-	fetch_response_to_message();
+	ASSERT_NO_FATAL_FAILURE(fetch_response_to_message());
 	expect_reply_id();
 
 	// verify that BFsd and BFpe are present
@@ -708,7 +708,7 @@ TEST_F(dht_impl_test, TestDHTScrapeSeed1_ipv4) {
 			("y")("q")
 		.e() ();
 
-	fetch_response_to_message();
+	ASSERT_NO_FATAL_FAILURE(fetch_response_to_message());
 	expect_reply_id();
 
 	// verify that BFsd and BFpe are present
@@ -747,7 +747,7 @@ TEST_F(dht_impl_test, TestDHTForNonexistantPeers_ipv4) {
 				("t")("zz")
 				("y")("q")
 			.e() ();
-		fetch_response_to_message();
+		ASSERT_NO_FATAL_FAILURE(fetch_response_to_message());
 		expect_transaction_id("zz", 2);
 		get_reply();
 		EXPECT_TRUE(reply->GetString("id", 20));
@@ -765,7 +765,7 @@ TEST_F(dht_impl_test, TestDHTForNonexistantPeers_ipv4) {
 			("t")("aa")
 			("y")("q")
 		.e() ();
-	fetch_response_to_message();
+	ASSERT_NO_FATAL_FAILURE(fetch_response_to_message());
 	get_reply();
 	cstr values = reply->GetString("values", 6);
 	EXPECT_FALSE(values) << "ERROR:  There is a 'values' key in the reply"
@@ -785,7 +785,7 @@ TEST_F(dht_impl_test, TestFutureCmdAsFindNode01_ipv4) {
 	// it sould be treated as a find_node command
 	std::string testData("d1:ad2:id20:abcdefghij01234567896:target"
 			"20:mnopqrstuvwxyz123456e1:q10:future_cmd1:t2:aa1:y1:qe");
-	fetch_response_to_message(&testData);
+	ASSERT_NO_FATAL_FAILURE(fetch_response_to_message(&testData));
 	expect_transaction_id("aa", 2);
 	expect_reply_id();
 
@@ -811,7 +811,7 @@ TEST_F(dht_impl_test, TestFutureCmdAsFindNode02_ipv4) {
 	// it sould be treated as a find_node command
 	std::string testData("d1:ad2:id20:abcdefghij01234567899:info_hash"
 			"20:mnopqrstuvwxyz123456e1:q10:future_cmd1:t2:aa1:y1:qe");
-	fetch_response_to_message(&testData);
+	ASSERT_NO_FATAL_FAILURE(fetch_response_to_message(&testData));
 	expect_transaction_id("aa", 2);
 	expect_reply_id();
 
@@ -865,8 +865,8 @@ TEST_F(dht_impl_test, TestImmutablePutRPC_ipv4) {
 		.e() ();
 
 	impl->ProcessIncoming(message, len, s_addr);
-	fetch_dict();
-	expect_response_type();
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_response_type());
 	expect_transaction_id("aa", 2);
 	expect_reply_id();
 }
@@ -889,8 +889,8 @@ TEST_F(dht_impl_test, TestImmutableGetRPC_ipv4) {
 		.e() ();
 
 	impl->ProcessIncoming(message, len, s_addr);
-	fetch_dict();
-	expect_response_type();
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_response_type());
 	expect_transaction_id("aa", 2);
 
 	// *** SECOND: get something out ***
@@ -912,8 +912,8 @@ TEST_F(dht_impl_test, TestImmutableGetRPC_ipv4) {
 	// parse and send the message constructed above
 	socket4.Reset();
 	impl->ProcessIncoming(message, len, s_addr);
-	fetch_dict();
-	expect_response_type();
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_response_type());
 	expect_transaction_id("aa", 2);
 	expect_reply_id();
 	// check that there is a token
@@ -942,20 +942,30 @@ TEST_F(dht_impl_test, TestMultipleImmutablePutRPC_ipv4) {
 	// if the same thing gets put multiple times there should only be one
 	// copy of it stored 
 	//                                                 20_byte_dhtid_val_
-	immutable_put(std::string("20_byte_dhtid_val_00"), "i-1e");
-	immutable_put(std::string("20_byte_dhtid_val_01"), "i-1e");
-	immutable_put(std::string("20_byte_dhtid_val_02"), "i-1e");
-	immutable_put(std::string("20_byte_dhtid_val_03"), "i-1e");
-	immutable_put(std::string("20_byte_dhtid_val_04"), "i-1e");
+	ASSERT_NO_FATAL_FAILURE(immutable_put(std::string("20_byte_dhtid_val_00"),
+				"i-1e"));
+	ASSERT_NO_FATAL_FAILURE(immutable_put(std::string("20_byte_dhtid_val_01"),
+				"i-1e"));
+	ASSERT_NO_FATAL_FAILURE(immutable_put(std::string("20_byte_dhtid_val_02"),
+				"i-1e"));
+	ASSERT_NO_FATAL_FAILURE(immutable_put(std::string("20_byte_dhtid_val_03"),
+				"i-1e"));
+	ASSERT_NO_FATAL_FAILURE(immutable_put(std::string("20_byte_dhtid_val_04"),
+				"i-1e"));
 	EXPECT_EQ(1, impl->GetNumPutItems()) <<
 			"ERROR:  multiple instances of the same thing stored";
 
 	// now add different things and see the count increase
-	immutable_put(std::string("20_byte_dhtid_val_00"), "i2e");
-	immutable_put(std::string("20_byte_dhtid_val_01"), "i3e");
-	immutable_put(std::string("20_byte_dhtid_val_02"), "i4e");
-	immutable_put(std::string("20_byte_dhtid_val_03"), "i5e");
-	immutable_put(std::string("20_byte_dhtid_val_04"), "i6e");
+	ASSERT_NO_FATAL_FAILURE(immutable_put(std::string("20_byte_dhtid_val_00"),
+				"i2e"));
+	ASSERT_NO_FATAL_FAILURE(immutable_put(std::string("20_byte_dhtid_val_01"),
+				"i3e"));
+	ASSERT_NO_FATAL_FAILURE(immutable_put(std::string("20_byte_dhtid_val_02"),
+				"i4e"));
+	ASSERT_NO_FATAL_FAILURE(immutable_put(std::string("20_byte_dhtid_val_03"),
+				"i5e"));
+	ASSERT_NO_FATAL_FAILURE(immutable_put(std::string("20_byte_dhtid_val_04"),
+				"i6e"));
 	EXPECT_EQ(6, impl->GetNumPutItems()) <<
 			"ERROR:  several different thinigs did not get stored";
 }
@@ -980,11 +990,16 @@ TEST_F(dht_impl_test, TestMultipleImmutablePutAndGetRPC_ipv4) {
 		hashes[x].insert(hashes[x].end(), hash.value, hash.value + 20);
 	}
 
-	immutable_put(std::string("20_byte_dhtid_val_00"), putValues[0].c_str());
-	immutable_put(std::string("20_byte_dhtid_val_01"), putValues[1].c_str());
-	immutable_put(std::string("20_byte_dhtid_val_02"), putValues[2].c_str());
-	immutable_put(std::string("20_byte_dhtid_val_03"), putValues[3].c_str());
-	immutable_put(std::string("20_byte_dhtid_val_04"), putValues[4].c_str());
+	ASSERT_NO_FATAL_FAILURE(immutable_put(std::string("20_byte_dhtid_val_00"),
+				putValues[0].c_str()));
+	ASSERT_NO_FATAL_FAILURE(immutable_put(std::string("20_byte_dhtid_val_01"),
+				putValues[1].c_str()));
+	ASSERT_NO_FATAL_FAILURE(immutable_put(std::string("20_byte_dhtid_val_02"),
+				putValues[2].c_str()));
+	ASSERT_NO_FATAL_FAILURE(immutable_put(std::string("20_byte_dhtid_val_03"),
+				putValues[3].c_str()));
+	ASSERT_NO_FATAL_FAILURE(immutable_put(std::string("20_byte_dhtid_val_04"),
+				putValues[4].c_str()));
 	EXPECT_EQ(5, impl->GetNumPutItems()) <<
 			"ERROR:  several different thinigs did not get stored";
 
@@ -1004,8 +1019,8 @@ TEST_F(dht_impl_test, TestMultipleImmutablePutAndGetRPC_ipv4) {
 		socket4.Reset();
 		impl->Tick();
 		impl->ProcessIncoming(message, len, s_addr);
-		fetch_dict();
-		expect_response_type();
+		ASSERT_NO_FATAL_FAILURE(fetch_dict());
+		ASSERT_NO_FATAL_FAILURE(expect_response_type());
 		get_reply();
 		entity = reply->Get("v");
 		ASSERT_TRUE(entity);
