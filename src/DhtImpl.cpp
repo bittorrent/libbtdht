@@ -2227,7 +2227,7 @@ bool DhtImpl::ProcessError(DhtPeerID& peerID, DHTMessage &message, int pkt_size,
 		DhtRequest *req) {
 	// Handle an error for one of our requests.
 #if defined(_DEBUG_DHT)
-	debug_log("**** GOT ERROR '%s'", message.GetbencodedDictionary().GetString("e"));
+	debug_log("**** GOT ERROR '%s'", message.GetBencodedDictionary().GetString("e"));
 #endif
 	if (req != NULL) { // this may be a response to an existing request
 		return ProcessResponse(peerID, message, pkt_size, req);
