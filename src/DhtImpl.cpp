@@ -1973,7 +1973,7 @@ bool DhtImpl::ProcessQueryGet(DHTMessage &message, DhtPeerID &peerID,
 	sb.put_buf(_my_id_bytes, DHT_ID_SIZE);
 
 	if (keyToReturn.len){	// add a "key" field to the response, if there is one
-		sb.p += snprintf(sb.p, (end-sb.p), "3:key%d:", int(keyToReturn.len));
+		sb.p += snprintf(sb.p, (end-sb.p), "1:k%d:", int(keyToReturn.len));
 		sb.put_buf((byte*)keyToReturn.b, keyToReturn.len);
 	}
 
