@@ -145,11 +145,12 @@ void DHTMessage::DecodeQuery(BencodedDict &bDict)
 	if(strcmp(command,"find_node") == 0){
 		dhtCommand = DHT_QUERY_FIND_NODE;
 		target.b = (byte*)args->GetString("target", &target.len);
+		if (target.len != 20) _argumentsAreValid = false;
 	}
 	else if(strcmp(command,"get_peers") == 0){
 		dhtCommand = DHT_QUERY_GET_PEERS;
 		infoHash.b = (byte*)args->GetString("info_hash", &infoHash.len);
-		if(infoHash.len < 4) infoHash.len = 4;
+		if (infoHash.len != 20) _argumentsAreValid = false;
 		filename.b = (byte*)args->GetString("name", &filename.len);
 		scrape = args->GetInt("scrape", 0);
 		noseed = args->GetInt("noseed", 0);
@@ -157,6 +158,7 @@ void DHTMessage::DecodeQuery(BencodedDict &bDict)
 	else if(strcmp(command,"announce_peer") == 0){
 		dhtCommand = DHT_QUERY_ANNOUNCE_PEER;
 		infoHash.b = (byte*)args->GetString("info_hash", &infoHash.len);
+		if (infoHash.len != 20) _argumentsAreValid = false;
 		portNum = args->GetInt("port", -1);
 		token.b = (byte*)args->GetString("token", &token.len);
 		filename.b = (byte*)args->GetString("name", &filename.len);

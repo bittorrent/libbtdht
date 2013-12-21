@@ -242,7 +242,7 @@ class dht_impl_test : public dht_test {
 			ASSERT_NO_FATAL_FAILURE(get_reply());
 			Buffer cas_buf;
 			cas_buf.b = (unsigned char*)reply->GetString("cas", &cas_buf.len);
-			ASSERT_NE(nullptr, cas_buf.b);
+			ASSERT_TRUE(cas_buf.b);
 			EXPECT_EQ(20, cas_buf.len);
 			EXPECT_FALSE(memcmp(cas, cas_buf.b, 20)) << "ERROR: wrong cas";
 		}

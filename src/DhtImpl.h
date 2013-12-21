@@ -1381,7 +1381,6 @@ class GetPeersDhtProcess : public DhtLookupScheduler
 		enum GetPeersRPC_Arguments
 		{
 			a_id = 0,
-			a_ifhpfxl, // info hash prefix length (for info hashes less than 20 bytes)
 			a_info_hash,
 			a_name,
 			a_noseed,
@@ -1936,18 +1935,14 @@ public:
 
 	int BuildFindNodesPacket(SimpleBencoder &sb, DhtID &target_id, int size);
 
-
-	//ONLY FOR USE WITH InfoHashLessThan and GetStorageForID
-	static int InfoHashCmp(const DhtID &id1, const DhtID &id2, int len);
-
 	// Get the storage container associated with a info_hash
 	std::vector<VoteContainer>::iterator GetVoteStorageForID(DhtID const& key);
 
 	// Get the storage container associated with a info_hash
-	std::vector<StoredContainer>::iterator GetStorageForID(const DhtID &info_hash, int len=DHT_ID_SIZE);
+	std::vector<StoredContainer>::iterator GetStorageForID(const DhtID &info_hash);
 
 	// Retrieve N random peers.
-	std::vector<StoredPeer> *GetPeersFromStore(const DhtID &info_hash, int info_hash_len, /*output param*/DhtID *correct_info_hash, str* file_name, uint n);
+	std::vector<StoredPeer> *GetPeersFromStore(const DhtID &info_hash, str* file_name, uint n);
 
 	void hash_ip(SockAddr const& ip, sha1_hash& h);
 

@@ -1,6 +1,4 @@
 #pragma once
-#include <cinttypes>
-#include <cstdint>
 #include <cassert>
 #include <cstdio>
 #include <vector>
@@ -32,7 +30,7 @@ class bencoder {
 		bencoder& operator() (int64_t value) {
 			update_checker();
 			long written = snprintf(reinterpret_cast<char*>(buffer), len,
-					"i%" PRId64 "e", value);
+					"i%de", int(value));
 			assert(written <= len);
 			buffer += written;
 			len -= written;

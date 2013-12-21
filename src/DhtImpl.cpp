@@ -20,7 +20,6 @@
 #include <algorithm> // for std::min
 #include <math.h>
 #include <stdarg.h>
-#include <cstdint>
 
 #define lenof(x) (sizeof(x)/sizeof(x[0]))
 #define MUTABLE_PAYLOAD_FORMAT "3:seqi%" PRId64 "e1:v"
@@ -975,16 +974,6 @@ int DhtImpl::BuildFindNodesPacket(SimpleBencoder &sb, DhtID &target_id, int size
 	return n;
 }
 
-//ONLY FOR USE WITH InfoHashLessThan and GetStorageForID
-//_info_hash_compare_length is ONLY FOR USE WHEN HOLDING THE NETWORK LOCK
-int DhtImpl::InfoHashCmp(const DhtID &id1, const DhtID &id2, int len) {
-	byte scabytes[DHT_ID_SIZE];
-	byte scbbytes[DHT_ID_SIZE];
-	DhtIDToBytes(scabytes, id1);
-	DhtIDToBytes(scbbytes, id2);
-	return memcmp(scabytes, scbbytes, len);
-}
-
 // Get the storage container associated with a info_hash
 std::vector<VoteContainer>::iterator DhtImpl::GetVoteStorageForID(DhtID const& key) {
 	VoteContainer vc;
@@ -992,52 +981,30 @@ std::vector<VoteContainer>::iterator DhtImpl::GetVoteStorageForID(DhtID const& k
 	return lower_bound(_vote_store.begin(), _vote_store.end(), vc);
 }
 
-class DhtSearchFunctor {
-public:
-	DhtSearchFunctor(int len) : _info_hash_compare_length(len) {};
-
-	bool operator() (const StoredContainer& a, const StoredContainer& b) {
-		return DhtImpl::InfoHashCmp(a.info_hash, b.info_hash, _info_hash_compare_length) < 0;
-	}
-
-	int _info_hash_compare_length;
-};
-
 // Get the storage container associated with a info_hash
-std::vector<StoredContainer>::iterator DhtImpl::GetStorageForID(const DhtID &info_hash, int len)
+std::vector<StoredContainer>::iterator DhtImpl::GetStorageForID(const DhtID &info_hash)
 {
 	StoredContainer sc;
 	sc.info_hash = info_hash;
-	if (len == DHT_ID_SIZE) {
-		return lower_bound(_peer_store.begin(), _peer_store.end(), sc);
-	} else {
-		return lower_bound(_peer_store.begin(), _peer_store.end(), sc, DhtSearchFunctor(len));
-	}
+	return lower_bound(_peer_store.begin(), _peer_store.end(), sc);
 }
 
 // Retrieve N random peers.
-std::vector<StoredPeer> *DhtImpl::GetPeersFromStore(const DhtID &info_hash, int info_hash_len, /*output param*/DhtID *correct_info_hash, str* file_name, uint n)
+std::vector<StoredPeer> *DhtImpl::GetPeersFromStore(const DhtID &info_hash, str* file_name, uint n)
 {
-	std::vector<StoredContainer>::iterator it = GetStorageForID(info_hash, info_hash_len);
+	std::vector<StoredContainer>::iterator it = GetStorageForID(info_hash);
 	if (it == _peer_store.end())
+		return NULL;
+
+	if (it->info_hash != info_hash)
 		return NULL;
 
 	StoredContainer *sc = &(*it);
 
-	if (InfoHashCmp(sc->info_hash, info_hash, info_hash_len) != 0)
-		return NULL;
-
-	//if we have an exact match we should return the hash (if a partial)
-	//and also return the file name we have stored for it
-	if(info_hash_len < DHT_ID_SIZE) {
-		memcpy(correct_info_hash->id, sc->info_hash.id, sizeof(correct_info_hash->id));
-	}
-	if(sc->file_name && sc->file_name[0] != '\0') {
+	if (sc->file_name && sc->file_name[0] != '\0') {
 		*file_name = sc->file_name;
 	}
 
-	//the compare here will ensure that the first info_hash_len bytes of the info hashes match
-	//this allows both partials and full matches through
 	if (sc->peers.size() == 0)
 		return NULL;
 
@@ -1548,12 +1515,8 @@ bool DhtImpl::ProcessQueryGetPeers(DHTMessage &message, DhtPeerID &peerID,
 #endif
 
 	// Make sure the num_peers first peers are shuffled.
-	// correct_info_hash_id will be filled in if this is a partial search and
-	// the masked version of info_hash_id is a match.
-	DhtID correct_info_hash_id;
 	DhtID null_id;
 	memset(null_id.id, 0, sizeof(null_id.id));
-	memset(correct_info_hash_id.id, 0, sizeof(correct_info_hash_id.id));
 	str file_name = NULL;
 
 	// start the output info
@@ -1564,7 +1527,7 @@ bool DhtImpl::ProcessQueryGetPeers(DHTMessage &message, DhtPeerID &peerID,
 	sb.Out("1:rd");
 
 	const std::vector<StoredPeer> *sc = GetPeersFromStore(info_hash_id
-			, message.infoHash.len, &correct_info_hash_id, &file_name, num_peers);
+			, &file_name, num_peers);
 
 	if (sc != NULL && message.scrape) {
 		// scrape instead of return peers
@@ -1589,13 +1552,6 @@ bool DhtImpl::ProcessQueryGetPeers(DHTMessage &message, DhtPeerID &peerID,
 	GenerateWriteToken(&ttoken, peerID);
 	sb.p += snprintf(sb.p, 35, "2:id20:");
 	sb.put_buf(_my_id_bytes, DHT_ID_SIZE);
-
-	if (correct_info_hash_id != null_id) {
-		byte correct_info_hash_id_bytes[DHT_ID_SIZE];
-		DhtIDToBytes(correct_info_hash_id_bytes, correct_info_hash_id);
-		sb.p += snprintf(sb.p, (end - sb.p), "9:info_hash20:");
-		sb.put_buf(correct_info_hash_id_bytes, DHT_ID_SIZE);
-	}
 
 	if (message.filename.len) {
 		int len = (message.filename.len>50) ? 50 : message.filename.len;
@@ -3840,7 +3796,6 @@ void FindNodeDhtProcess::CompleteThisProcess()
 const char* const GetPeersDhtProcess::ArgsNamesStr[] =
 {
 	"2:id",
-	"7:ifhpfxl",
 	"9:info_hash",
 	"4:name",
 	"6:noseedi1e", // no need to set the corresponding value, it is encodede here
@@ -3884,11 +3839,6 @@ GetPeersDhtProcess::GetPeersDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 	argBuf2.SetNumBytesUsed(DHT_ID_SIZE + 3);
 	gpArgumenterPtr->enabled[a_info_hash] = true;
 
-	if(target_len != DHT_ID_SIZE){
-		ArgumenterValueInfo& argBuf = gpArgumenterPtr->GetArgumenterValueInfo(a_ifhpfxl);
-		gpArgumenterPtr->enabled[a_ifhpfxl] = true;
-		argBuf.SetNumBytesUsed(snprintf((char*)argBuf.GetBufferPtr(), argBuf.GetArrayLength(), "i%de", target_len));
-	}
 #if g_log_dht
 	dht_log("GetPeersDhtProcess,instantiated,id,%d,time,%d\n", target.id[0], get_milliseconds());
 #endif

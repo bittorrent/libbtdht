@@ -6,7 +6,8 @@ void put_callback(void* ctx, std::vector<char>& buffer, int64_t seq) {
 	if (ctx != NULL) {
 		*(reinterpret_cast<int64_t*>(ctx)) = seq;
 	}
-	buffer = { '6', ':', 's', 'a', 'm', 'p', 'l', 'e' };
+	char b[] = { '6', ':', 's', 'a', 'm', 'p', 'l', 'e' };
+	buffer.assign(b, b + sizeof(b));
 }
 
 unsigned int count_set_bits(Buffer &data) {
@@ -43,12 +44,9 @@ TEST_F(dht_impl_test, PeersTest) {
 	impl->AddPeerToStore(id, DHTTestStoreFilename,
 			SockAddr::parse_addr("10.0.1.0"), true);
 
-	DhtID correct_info_hash_id;
-	memset(correct_info_hash_id.id, 0, 5);
-	int info_hash_len = SHA1_DIGESTSIZE;
 	str file_name = NULL;
-	std::vector<StoredPeer> *peers = impl->GetPeersFromStore(id, info_hash_len,
-			&correct_info_hash_id, &file_name, 200);
+	std::vector<StoredPeer> *peers = impl->GetPeersFromStore(id
+		, &file_name, 200);
 	EXPECT_TRUE(peers);
 	if (peers) {
 		ASSERT_EQ(5, peers->size());
@@ -265,7 +263,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_cas) {
 
 	unsigned char to_hash[800];
 	int written = snprintf(reinterpret_cast<char*>(to_hash), 800,
-			"3:seqi%" PRId64 "e1:v%lu:", seq, strlen(v));
+			"3:seqi%de1:v%lu:", int(seq), strlen(v));
 	memcpy(to_hash + written, v, strlen(v));
 	sha1_hash cas = sha1_callback(to_hash, written + strlen(v));
 	Buffer cas_buf(cas.value, 20);
@@ -328,7 +326,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_seq_fail) {
 
 	unsigned char to_hash[800];
 	int written = snprintf(reinterpret_cast<char*>(to_hash), 800,
-			"3:seqi%" PRId64 "e1:v%lu:", seq, strlen(v));
+			"3:seqi%de1:v%lu:", int(seq), strlen(v));
 	memcpy(to_hash + written, v, strlen(v));
 	sha1_hash cas = sha1_callback(to_hash, written + strlen(v));
 	Buffer cas_buf(cas.value, 20);
@@ -444,7 +442,7 @@ TEST_F(dht_impl_test, TestAnnouncePeerWithImpliedport) {
 	fill_test_data(testData, token, testDataPart1, testDataPart2);
 	socket4.Reset();
 	impl->Tick();
-	impl->ProcessIncoming((unsigned char*)&testData.front(),
+	impl->ProcessIncoming((unsigned char*)&testData[0],
 			testData.size(), s_addr);
 
 	DhtID id;
@@ -486,7 +484,7 @@ TEST_F(dht_impl_test, TestAnnouncePeerWithOutImpliedport) {
 	fill_test_data(testData, token, testDataPart1, testDataPart2);
 	socket4.Reset();
 	impl->Tick();
-	impl->ProcessIncoming((unsigned char*)&testData.front(),
+	impl->ProcessIncoming((unsigned char*)&testData[0],
 			testData.size(), s_addr);
 
 	DhtID id;
