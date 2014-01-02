@@ -111,7 +111,7 @@ public:
 	int seed;
 	int noseed;
 	int scrape;
-	int64_t sequenceNum;  // 'seq' for mutable put
+	int64 sequenceNum;  // 'seq' for mutable put
 	int impliedPort;
 	sha1_hash cas; // hash of expected previous value for compare-and-swap operations
 	Buffer filename;
