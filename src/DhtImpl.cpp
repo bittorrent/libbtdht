@@ -839,6 +839,18 @@ int DhtImpl::AssembleNodeList(const DhtID &target, DhtPeerID** ids, int numwant)
 	// And 8 definitely good ones.
 	num += FindNodes(target, ids + num, numwant - num, 0, 0);
 	assert(num <= numwant);
+	if (num == 0) {
+		for (std::vector<SockAddr>::iterator i = _bootstrap_routers.begin()
+			, end(_bootstrap_routers.end()); i != end; ++i)
+		{
+			AddNode(*i, NULL, IDht::DHT_ORIGIN_INITIAL);
+		}
+		// try again
+		num = FindNodes(target, ids, (std::min)(8, numwant), (std::min)(8, numwant), 0);
+		assert(num <= numwant);
+		// And 8 definitely good ones.
+		num += FindNodes(target, ids + num, numwant - num, 0, 0);
+	}
 	return num;
 }
 
