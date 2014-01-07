@@ -1871,7 +1871,7 @@ bool DhtImpl::ProcessQueryGet(DHTMessage &message, DhtPeerID &peerID,
 	Buffer signatureToReturn;
 	Buffer keyToReturn;
 	DataStore<DhtID, MutableData>::pair_iterator mutableStoreIterator;
-	int64_t sequenceNum;
+	int64 sequenceNum;
 	// if there is no target, there is nothing to do
 	if (message.target.len == 0){
 		Account(DHT_INVALID_PQ_BAD_GET_TARGET, packetSize);
@@ -2638,7 +2638,7 @@ void DhtImpl::Vote(void *ctx_ptr, const sha1_hash* info_hash, int vote, DhtVoteC
 }
 
 void DhtImpl::Put(const byte * pkey, const byte * skey,
-		DhtPutCallback * put_callback, void *ctx, int flags, int64_t seq)
+		DhtPutCallback * put_callback, void *ctx, int flags, int64 seq)
 {
 	int maxOutstanding = (flags & announce_non_aggressive)
 		? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA
@@ -4145,7 +4145,7 @@ DhtProcessBase* PutDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
 	return process;
 }
 
-void PutDhtProcess::Sign(std::vector<char> &signature, std::vector<char> v, byte * skey, int64_t seq) {
+void PutDhtProcess::Sign(std::vector<char> &signature, std::vector<char> v, byte * skey, int64 seq) {
 	unsigned char sig[64];
 	char buf[1024];
 	unsigned int index = 0;
@@ -4159,7 +4159,7 @@ void PutDhtProcess::Sign(std::vector<char> &signature, std::vector<char> v, byte
 	signature.assign(sig, sig+64);
 }
 
-bool DhtImpl::Verify(byte const * signature, byte const * message, int message_length, byte *pkey, int64_t seq) {
+bool DhtImpl::Verify(byte const * signature, byte const * message, int message_length, byte *pkey, int64 seq) {
 	unsigned char buf[1024];
 	int index = sprintf(reinterpret_cast<char*>(buf), MUTABLE_PAYLOAD_FORMAT, seq);
 	memcpy(buf + index, message, message_length);
@@ -4169,7 +4169,7 @@ bool DhtImpl::Verify(byte const * signature, byte const * message, int message_l
 void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
 {
 
-	int64_t seq = processManager.seq() + 1;
+	int64 seq = processManager.seq() + 1;
 	if(signature.size() == 0){
 		callbackPointers.putCallback(callbackPointers.callbackContext
 			, processManager.get_data_blk(), seq);

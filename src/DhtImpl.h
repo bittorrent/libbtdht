@@ -538,7 +538,7 @@ This simple struct collects the information from a mutable put rpc.
 // *****************************************************************************
 struct MutableData
 {
-	int64_t sequenceNum;
+	int64 sequenceNum;
 	byte rsaSignature[256];  // rsa signatures are either 128 or 256 bytes
 	unsigned int rsaSignatureLen;
 	sha1_hash cas; // hash of sequence number and value
@@ -883,8 +883,8 @@ class DhtLookupNodeList
 		void SetAllQueriedStatus(QueriedStatus status);
 		void SetNodeIds(DhtPeerID** ids, unsigned int numId, const DhtID &target);
 		void CompactList();
-		int64_t seq(){return seq_max;}
-		void set_seq(int64_t sq){seq_max = sq;}
+		int64 seq(){return seq_max;}
+		void set_seq(int64 sq){seq_max = sq;}
 		void set_data_blk(byte * v, int v_len);
 		std::vector<char> &get_data_blk(){return data_blk;}
 		char * get_data_blk(size_t & len){len = data_blk.size(); return &data_blk[0];}	
@@ -1543,7 +1543,7 @@ class PutDhtProcess : public DhtBroadcastScheduler
 		~PutDhtProcess();
 		virtual void Start();
 
-		void Sign(std::vector<char> & signature, std::vector<char> v, byte * skey, int64_t seq);
+		void Sign(std::vector<char> & signature, std::vector<char> v, byte * skey, int64 seq);
 		
 		static DhtProcessBase* Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
 			const byte * pkey,
@@ -1691,7 +1691,7 @@ public:
 	void SetId(byte new_id_bytes[DHT_ID_SIZE]);
 
 	void Put( const byte * pkey, const byte * skey, DhtPutCallback * put_callback,
-		void *ctx, int flags = 0, int64_t seq = 0);
+		void *ctx, int flags = 0, int64 seq = 0);
 
 	void AnnounceInfoHash(const byte *info_hash, int info_hash_len,
 		DhtPartialHashCompletedCallback *partial_callback,
@@ -1893,7 +1893,7 @@ public:
 	void Account(int slot, int size);
 
 	void DumpAccountingInfo();
-	bool Verify(byte const * signature, byte const * message, int message_length, byte *pkey, int64_t seq);
+	bool Verify(byte const * signature, byte const * message, int message_length, byte *pkey, int64 seq);
 
 	//--------------------------------------------------------------------------------
 

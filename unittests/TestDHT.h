@@ -3,7 +3,7 @@
 #undef new
 
 // TODO: SCOPED_TRACE in all fixtured tests, for convenience
-#if __cplusplus < 201103L
+#if __cplusplus < 201103L && !defined _MSC_VER
 #define override
 #endif
 
