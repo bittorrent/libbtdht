@@ -256,7 +256,7 @@ void DhtImpl::Shutdown()
 void DhtImpl::Enable(bool enabled, int rate)
 {
 	// rate too low?
-	if (rate < 1024)
+	if (rate < 1024 && rate != 0)	// rate of 0 means no rate limiting
 		rate = 1024;
 
 	_dht_rate = rate;
@@ -2080,7 +2080,7 @@ bool DhtImpl::ProcessQuery(DhtPeerID& peerID, DHTMessage &message, int packetSiz
 	}
 
 	// Out of DHT quota.. No space to send a reply.
-	if (_dht_quota < 0) {
+	if (_dht_quota < 0 && _dht_rate) {
 		// we don't really know it was valid, but otherwise it's marked as invalid
 		Account(DHT_BW_IN_REQ, packetSize);
 		Account(DHT_BW_IN_NO_QUOTA, packetSize);
