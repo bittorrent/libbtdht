@@ -5,10 +5,13 @@ use-project /ut_utils : ut_utils ;
 SOURCES = DHTMessage DhtImpl ExternalIPCounter blockallocator dht ;
 
 lib ut_dht : src/$(SOURCES).cpp
-	: <include>src
+	: # requirements
+	  <include>src
 	  <library>/ut_utils//ut_utils/<link>static
 	  <target-os>windows:<define>WIN32
-	: <link>static
-	: <include>src
+	: # default build
+	  <link>static
+	: # usage-requirements
+	  <include>src
 	;
 
