@@ -1,10 +1,10 @@
 #include <bitset>
-
+#include "utypes.h"
 #include "TestDhtImpl.h"
 
-void put_callback(void* ctx, std::vector<char>& buffer, int64_t seq) {
+void put_callback(void* ctx, std::vector<char>& buffer, int64 seq) {
 	if (ctx != NULL) {
-		*(reinterpret_cast<int64_t*>(ctx)) = seq;
+		*(reinterpret_cast<int64*>(ctx)) = seq;
 	}
 	char b[] = { '6', ':', 's', 'a', 'm', 'p', 'l', 'e' };
 	buffer.assign(b, b + sizeof(b));
@@ -184,7 +184,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4) {
 	// Just tell it that the target is only 16 bytes long (instead of 20)
 	// *****************************************************
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
-	int64_t seq_result = 0;
+	int64 seq_result = 0;
 	impl->Put(pkey, skey, &put_callback, &seq_result, 0);
 	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	ASSERT_NO_FATAL_FAILURE(expect_query_type());
@@ -226,7 +226,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4) {
 	expect_signature();
 	expect_token(response_token);
 	expect_value(v, strlen(v));
-	EXPECT_EQ(int64_t(1), seq_result);
+	EXPECT_EQ(int64(1), seq_result);
 }
 
 TEST_F(dht_impl_test, TestPutRPC_ipv4_cas) {

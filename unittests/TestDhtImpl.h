@@ -2,6 +2,7 @@
 
 #include "TestDHT.h"
 #include "bencoder.h"
+#include "utypes.h"
 
 static const unsigned char * pkey = reinterpret_cast<const unsigned char *>
 			("dhuieheuu383y8yr7yy3hd3hdh3gfhg3");
