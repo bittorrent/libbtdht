@@ -8,7 +8,12 @@
 #endif
 
 #include <fstream>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#else
 #include <arpa/inet.h>
+#endif
 
 #include <boost/uuid/sha1.hpp>
 using namespace boost::uuids::detail;

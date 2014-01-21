@@ -2,6 +2,8 @@
 
 #include "TestDHT.h"
 #include "bencoder.h"
+#include "snprintf.h"
+#include "sockaddr.h"
 
 static const unsigned char * pkey = reinterpret_cast<const unsigned char *>
 			("dhuieheuu383y8yr7yy3hd3hdh3gfhg3");
@@ -42,7 +44,7 @@ inline void ed25519_callback(unsigned char * sig, const unsigned char * v,
 
 class dht_impl_test : public dht_test {
 	protected:
-		SockAddr s_addr;
+		SockAddr bind_addr;
 		std::string addr_string;
 		std::string port_string;
 
@@ -53,7 +55,7 @@ class dht_impl_test : public dht_test {
 
 		// used by fetch_*, set by using bencoder
 		unsigned char message[1024];
-		int64_t len;
+		int64 len;
 		BencEntity output;
 		// retrieved by fetch_*
 		BencodedDict* dict;
@@ -67,7 +69,7 @@ class dht_impl_test : public dht_test {
 		virtual void SetUp() override {
 			set_addr('zzzz');
 			set_port(('x' << 8) + 'x');
-			socket4.SetBindAddr(s_addr);
+			socket4.SetBindAddr(bind_addr);
 
 			impl = new DhtImpl(&socket4, &socket6);
 			impl->SetSHACallback(&sha1_callback);
@@ -91,8 +93,8 @@ class dht_impl_test : public dht_test {
 		virtual void TearDown() override {
 		}
 
-		void set_addr(int32_t v) {
-			s_addr.set_addr4(v);
+		void set_addr(int32 v) {
+			bind_addr.set_addr4(v);
 			addr_string.clear();
 #if BT_LITTLE_ENDIAN
 			for(int i = 3; i >= 0; i--)
@@ -104,8 +106,8 @@ class dht_impl_test : public dht_test {
 			}
 		}
 
-		void set_port(int16_t v) {
-			s_addr.set_port(v);
+		void set_port(int16 v) {
+			bind_addr.set_port(v);
 			port_string.clear();
 #if BT_LITTLE_ENDIAN
 			port_string.push_back(reinterpret_cast<const char*>(&v)[1]);
@@ -185,7 +187,7 @@ class dht_impl_test : public dht_test {
 				memcpy(message, data->c_str(), len);
 			}
 			socket4.Reset();
-			impl->ProcessIncoming(message, len, s_addr);
+			impl->ProcessIncoming(message, len, bind_addr);
 			ASSERT_NO_FATAL_FAILURE(fetch_dict());
 			ASSERT_NO_FATAL_FAILURE(expect_response_type());
 			ASSERT_NO_FATAL_FAILURE(expect_ip());
@@ -269,7 +271,7 @@ class dht_impl_test : public dht_test {
 			socket4.Reset();
 			impl->ProcessIncoming(reinterpret_cast<unsigned char*>
 					(const_cast<char*>(get_peers.c_str())),
-					get_peers.size(), s_addr);
+					get_peers.size(), bind_addr);
 			ASSERT_NO_FATAL_FAILURE(fetch_dict());
 			ASSERT_NO_FATAL_FAILURE(get_reply());
 			token.b = (byte*)reply->GetString("token", &token.len);
@@ -302,7 +304,7 @@ class dht_impl_test : public dht_test {
 					("y")("q")
 				.e() ();
 			socket4.Reset();
-			impl->ProcessIncoming(message, len, s_addr);
+			impl->ProcessIncoming(message, len, bind_addr);
 			ASSERT_NO_FATAL_FAILURE(fetch_dict());
 			ASSERT_NO_FATAL_FAILURE(expect_response_type());
 			ASSERT_NO_FATAL_FAILURE(get_reply());

@@ -23,7 +23,7 @@ class dht_impl_speed_test : public dht_impl_test {
 				len = message_string->size();
 				memcpy(message, message_string->c_str(), len);
 			}
-			impl->ProcessIncoming(message, len, s_addr);
+			impl->ProcessIncoming(message, len, bind_addr);
 			impl->Tick();
 			ASSERT_TRUE(socket4.GetSentByteVector().size());
 			socket4.Reset();
@@ -124,7 +124,7 @@ TEST_F(dht_impl_speed_test, VoteSpeedTest) {
 				("id")("abcdefghij0123456789")
 				("target")(target)
 				("token")(token)
-				("vote")(int64_t(5)).e()
+				("vote")(int64(5)).e()
 				("q")("vote")
 				("t")("aa")
 				("y")("q")
@@ -138,7 +138,7 @@ TEST_F(dht_impl_speed_test, VoteSpeedTest) {
 				("id")("abcdefghij0123456789")
 				("target")(target)
 				("token")(token)
-				("vote")(int64_t(2)).e()
+				("vote")(int64(2)).e()
 				("q")("vote")
 				("t")("aa")
 				("y")("q")

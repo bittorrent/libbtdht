@@ -2,9 +2,9 @@
 
 #include "TestDhtImpl.h"
 
-void put_callback(void* ctx, std::vector<char>& buffer, int64_t seq) {
+void put_callback(void* ctx, std::vector<char>& buffer, int64 seq) {
 	if (ctx != NULL) {
-		*(reinterpret_cast<int64_t*>(ctx)) = seq;
+		*(reinterpret_cast<int64*>(ctx)) = seq;
 	}
 	char b[] = { '6', ':', 's', 'a', 'm', 'p', 'l', 'e' };
 	buffer.assign(b, b + sizeof(b));
@@ -184,7 +184,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4) {
 	// Just tell it that the target is only 16 bytes long (instead of 20)
 	// *****************************************************
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
-	int64_t seq_result = 0;
+	int64 seq_result = 0;
 	impl->Put(pkey, skey, &put_callback, &seq_result, 0);
 	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	ASSERT_NO_FATAL_FAILURE(expect_query_type());
@@ -199,7 +199,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4) {
 	expect_reply_id();
 	expect_target();
 
-	int64_t seq = 0;
+	int64 seq = 0;
 	const char* v = "sample";
 	len = bencoder(message, 1024)
 		.d()
@@ -226,7 +226,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4) {
 	expect_signature();
 	expect_token(response_token);
 	expect_value(v, strlen(v));
-	EXPECT_EQ(int64_t(1), seq_result);
+	EXPECT_EQ(int64(1), seq_result);
 }
 
 TEST_F(dht_impl_test, TestPutRPC_ipv4_cas) {
@@ -245,7 +245,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_cas) {
 	target.id[4] = 'JJJJ'; // JJJJ
 
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
-	int64_t seq = 2;
+	int64 seq = 2;
 	impl->Put(pkey, skey, &put_callback, NULL, IDht::with_cas, seq);
 	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	ASSERT_NO_FATAL_FAILURE(expect_query_type());
@@ -310,7 +310,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_seq_fail) {
 	target.id[4] = 'JJJJ'; // JJJJ
 
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
-	int64_t seq = 2;
+	int64 seq = 2;
 	impl->Put(pkey, skey, &put_callback, NULL, IDht::with_cas, seq);
 	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	ASSERT_NO_FATAL_FAILURE(expect_query_type());
@@ -360,7 +360,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_seq_fail) {
 	// oh no we have a higher sequence number now and thus we shall complain
 	len = bencoder(message, 1024)
 		.d()
-			("e").l()(static_cast<int64_t>(302))("error message!").e()
+			("e").l()(static_cast<int64>(302))("error message!").e()
 			("ip")("abcdxy") ("r").d()
 				("id")((unsigned char*)&peer_id.id.id[0], 20).e()
 			("t")(tid.b, tid.len) ("y")("e")
@@ -443,7 +443,7 @@ TEST_F(dht_impl_test, TestAnnouncePeerWithImpliedport) {
 	socket4.Reset();
 	impl->Tick();
 	impl->ProcessIncoming((unsigned char*)&testData[0],
-			testData.size(), s_addr);
+			testData.size(), bind_addr);
 
 	DhtID id;
 	// grab the id typed into the string at the top
@@ -485,7 +485,7 @@ TEST_F(dht_impl_test, TestAnnouncePeerWithOutImpliedport) {
 	socket4.Reset();
 	impl->Tick();
 	impl->ProcessIncoming((unsigned char*)&testData[0],
-			testData.size(), s_addr);
+			testData.size(), bind_addr);
 
 	DhtID id;
 	// grab the id typed into the string at the top
@@ -516,7 +516,7 @@ TEST_F(dht_impl_test, TestVoteRPC_ipv4) {
 				("id")("abcdefghij0123456789")
 				("target")(make_random_key_20())
 				("token")(token)
-				("vote")(int64_t(1)).e()
+				("vote")(int64(1)).e()
 			("q")("vote")
 			("t")("aa")
 			("y")("q")
@@ -561,14 +561,14 @@ TEST_F(dht_impl_test, TestVoteRPC_ipv4_MultipleVotes) {
 				("id")("abcdefghij0123456789")
 				("target")(target)
 				("token")(token)
-				("vote")(int64_t(5)).e()
+				("vote")(int64(5)).e()
 			("q")("vote")
 			("t")("aa")
 			("y")("q")
 		.e() ();
 
 	// parse and send the first vote message
-	impl->ProcessIncoming(message, len, s_addr);
+	impl->ProcessIncoming(message, len, bind_addr);
 
 	// prepare to send the second vote message
 	impl->Tick();
@@ -581,7 +581,7 @@ TEST_F(dht_impl_test, TestVoteRPC_ipv4_MultipleVotes) {
 				("id")("abcdefghij0123456789")
 				("target")(target)
 				("token")(token)
-				("vote")(int64_t(2)).e()
+				("vote")(int64(2)).e()
 			("q")("vote")
 			("t")("aa")
 			("y")("q")
@@ -626,8 +626,8 @@ TEST_F(dht_impl_test, TestDHTScrapeSeed0_ipv4) {
 			("a").d()
 				("id")("abcdefghij0101010101")
 				("info_hash")(infoHashKey)
-				("port")(int64_t(6881))
-				("seed")(int64_t(0))
+				("port")(int64(6881))
+				("seed")(int64(0))
 				("token")(token)
 				("name")("test torrent").e()
 			("q")("announce_peer")
@@ -642,8 +642,8 @@ TEST_F(dht_impl_test, TestDHTScrapeSeed0_ipv4) {
 			("a").d()
 				("id")("abcdefghij0101010101")
 				("info_hash")(infoHashKey)
-				("port")(int64_t(6881))
-				("scrape")(int64_t(1)).e()
+				("port")(int64(6881))
+				("scrape")(int64(1)).e()
 			("q")("get_peers")
 			("t")("aa")
 			("y")("q")
@@ -683,8 +683,8 @@ TEST_F(dht_impl_test, TestDHTScrapeSeed1_ipv4) {
 			("a").d()
 				("id")("abcdefghij0123456789")
 				("info_hash")(infoHashKey)
-				("port")(int64_t(6881))
-				("seed")(int64_t(1))
+				("port")(int64(6881))
+				("seed")(int64(1))
 				("token")(token)
 				("name")("test torrent").e()
 			("q")("announce_peer")
@@ -699,8 +699,8 @@ TEST_F(dht_impl_test, TestDHTScrapeSeed1_ipv4) {
 			("a").d()
 				("id")("abcdefghij0123456789")
 				("info_hash")(infoHashKey)
-				("port")(int64_t(6881))
-				("scrape")(int64_t(1)).e()
+				("port")(int64(6881))
+				("scrape")(int64(1)).e()
 			("q")("get_peers")
 			("t")("aa")
 			("y")("q")
@@ -738,7 +738,7 @@ TEST_F(dht_impl_test, TestDHTForNonexistantPeers_ipv4) {
 				("a").d()
 					("id")(id)
 					("info_hash")(make_random_key_20())
-					("port")(int64_t(port))
+					("port")(int64(port))
 					("name")(std::string("name") + itoa_buf)
 					("token")(token).e()
 				("q")("announce_peer")
@@ -758,7 +758,7 @@ TEST_F(dht_impl_test, TestDHTForNonexistantPeers_ipv4) {
 			("a").d()
 				("id")("abcdefghij0123456789")
 				("info_hash")("__nonexistenthash___")
-				("port")(int64_t(port)).e()
+				("port")(int64(port)).e()
 			("q")("get_peers")
 			("t")("aa")
 			("y")("q")
@@ -837,7 +837,7 @@ TEST_F(dht_impl_test, TestUnknownCmdNotProcessed_ipv4) {
 	std::string testData("d1:ad2:id20:abcdefghij012345678911:unknown_arg"
 			"20:mnopqrstuvwxyz123456e1:q11:unknown_cmd1:t2:aa1:y1:qe");
 	impl->ProcessIncoming((unsigned char*)testData.c_str(), testData.size(),
-			s_addr);
+			bind_addr);
 
 	// get the bencoded string out of the socket
 	std::string bencMessage = socket4.GetSentDataAsString();
@@ -862,7 +862,7 @@ TEST_F(dht_impl_test, TestImmutablePutRPC_ipv4) {
 			("y")("q")
 		.e() ();
 
-	impl->ProcessIncoming(message, len, s_addr);
+	impl->ProcessIncoming(message, len, bind_addr);
 	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	ASSERT_NO_FATAL_FAILURE(expect_response_type());
 	expect_transaction_id("aa", 2);
@@ -886,7 +886,7 @@ TEST_F(dht_impl_test, TestImmutableGetRPC_ipv4) {
 			("y")("q")
 		.e() ();
 
-	impl->ProcessIncoming(message, len, s_addr);
+	impl->ProcessIncoming(message, len, bind_addr);
 	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	ASSERT_NO_FATAL_FAILURE(expect_response_type());
 	expect_transaction_id("aa", 2);
@@ -909,7 +909,7 @@ TEST_F(dht_impl_test, TestImmutableGetRPC_ipv4) {
 		.e() ();
 	// parse and send the message constructed above
 	socket4.Reset();
-	impl->ProcessIncoming(message, len, s_addr);
+	impl->ProcessIncoming(message, len, bind_addr);
 	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	ASSERT_NO_FATAL_FAILURE(expect_response_type());
 	expect_transaction_id("aa", 2);
@@ -1016,7 +1016,7 @@ TEST_F(dht_impl_test, TestMultipleImmutablePutAndGetRPC_ipv4) {
 			.e() ();
 		socket4.Reset();
 		impl->Tick();
-		impl->ProcessIncoming(message, len, s_addr);
+		impl->ProcessIncoming(message, len, bind_addr);
 		ASSERT_NO_FATAL_FAILURE(fetch_dict());
 		ASSERT_NO_FATAL_FAILURE(expect_response_type());
 		get_reply();

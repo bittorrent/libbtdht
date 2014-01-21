@@ -23,7 +23,8 @@ project
 	<include>$(GMOCK_ROOT)/include
 	<include>$(GTEST_ROOT)
 	<include>$(GMOCK_ROOT)
-	<define>GTEST_USE_OWN_TR1_TUPLE=1
+	<toolset>gcc:<define>GTEST_USE_OWN_TR1_TUPLE=1
+	<toolset>darwin:<define>GTEST_USE_OWN_TR1_TUPLE=1
 
 	<include>../src
 	<include>/opt/local/include

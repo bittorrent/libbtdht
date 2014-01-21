@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <vector>
 #include <string>
+#include "snprintf.h"
 
 #include <stack>
 
@@ -10,7 +11,7 @@
 class bencoder {
 	unsigned char* buffer;
 	unsigned char* start;
-	int64_t len;
+	int64 len;
 	std::stack<char> checker; // state machine for bencoded result validation
 
 	// maintains encountered dictionary state, 'k' means key
@@ -25,9 +26,9 @@ class bencoder {
 	}
 
 	public:
-		bencoder(unsigned char* buffer, int64_t len) : buffer(buffer),
+		bencoder(unsigned char* buffer, int64 len) : buffer(buffer),
 				start(buffer), len(len) {}
-		bencoder& operator() (int64_t value) {
+		bencoder& operator() (int64 value) {
 			update_checker();
 			long written = snprintf(reinterpret_cast<char*>(buffer), len,
 					"i%de", int(value));
@@ -54,7 +55,7 @@ class bencoder {
 			len -= written;
 			return *this;
 		}
-		inline bencoder& operator() (unsigned char const *value, int64_t v_len) {
+		inline bencoder& operator() (unsigned char const *value, int64 v_len) {
 			assert(v_len > 0);
 			update_checker();
 			long written = snprintf(reinterpret_cast<char*>(buffer), len, "%zu:",
@@ -112,7 +113,7 @@ class bencoder {
 			return (*this)('e');
 		}
 
-		inline int64_t operator() () {
+		inline int64 operator() () {
 			assert(checker.empty());
 			return buffer - start;
 		}

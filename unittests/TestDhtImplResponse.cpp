@@ -6,7 +6,7 @@ class dht_impl_response_test : public dht_impl_test {
 		const char* compact_ip;
 
 		virtual void SetUp() override {
-			socket4.SetBindAddr(s_addr);
+			socket4.SetBindAddr(bind_addr);
 			dht_impl_test::SetUp();
 			impl->Enable(true, 0);
 			init_dht_id();
@@ -51,9 +51,9 @@ class dht_impl_response_test : public dht_impl_test {
 			EXPECT_FALSE(strcmp(expected.c_str(), (char*)name.b));
 		}
 
-		void expect_port(int16_t expected) {
+		void expect_port(int16 expected) {
 			ASSERT_NO_FATAL_FAILURE(get_reply());
-			int16_t port;
+			int16 port;
 			port = reply->GetInt("port");
 			EXPECT_EQ(expected, port);
 		}
@@ -63,7 +63,7 @@ class dht_impl_response_test : public dht_impl_test {
 			EXPECT_EQ(seed, reply->GetInt("seed"));
 		}
 
-		void expect_implied_port(int16_t port) {
+		void expect_implied_port(int16 port) {
 			ASSERT_NO_FATAL_FAILURE(get_reply());
 			EXPECT_EQ(port, reply->GetInt("implied_port"));
 		}
@@ -362,7 +362,7 @@ TEST_F(dht_impl_response_test, TestSendPings) {
 	// -2 means we think we have completed bootstrapping
 	impl->_dht_bootstrap = -2;
 	// prevent restart due to exgternal IP voting
-	impl->_lastLeadingAddress = s_addr;
+	impl->_lastLeadingAddress = bind_addr;
 	// Here, we send a response right away
 	ASSERT_TRUE(impl->ProcessIncoming((byte *) buf, sb.p - buf, peer_id.addr));
 
