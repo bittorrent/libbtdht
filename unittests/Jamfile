@@ -28,7 +28,8 @@ project
 
 	<include>../src
 	<include>/opt/local/include
-
+	
+	<toolset>gcc:<linkflags>-pthread
 	<toolset>clang:<cxxflags>-Wall
 	<toolset>clang:<cxxflags>-Wno-invalid-source-encoding
 	<toolset>clang:<cxxflags>-Wno-multichar

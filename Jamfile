@@ -2,7 +2,7 @@ import feature : feature ;
 
 use-project /ut_utils : ut_utils ;
 
-SOURCES = DHTMessage DhtImpl ExternalIPCounter blockallocator dht ;
+SOURCES = DHTMessage DhtImpl ExternalIPCounter blockallocator dht crc32c ;
 
 lib ut_dht : src/$(SOURCES).cpp
 	: # requirements

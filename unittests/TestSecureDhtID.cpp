@@ -15,12 +15,12 @@ TEST(secure_dht_id_test, secure_dht_id_test) {
 	SockAddr addr_2 = SockAddr::parse_addr("[2001:420:80:1::5]");
 
 	for( int i = 0;  i <5;  i++) {
-		DhtCalculateHardenedID(addr_1, Id_1, sha1_callback);
-		DhtCalculateHardenedID(addr_2, Id_2, sha1_callback);
-		EXPECT_TRUE(DhtVerifyHardenedID(addr_1, Id_1, sha1_callback));
-		EXPECT_TRUE(DhtVerifyHardenedID(addr_2, Id_2, sha1_callback));
-		EXPECT_TRUE(!DhtVerifyHardenedID(addr_2, Id_1, sha1_callback));
-		EXPECT_TRUE(!DhtVerifyHardenedID(addr_1, Id_2, sha1_callback));
+		DhtCalculateHardenedID(addr_1, Id_1);
+		DhtCalculateHardenedID(addr_2, Id_2);
+		EXPECT_TRUE(DhtVerifyHardenedID(addr_1, Id_1));
+		EXPECT_TRUE(DhtVerifyHardenedID(addr_2, Id_2));
+		EXPECT_TRUE(!DhtVerifyHardenedID(addr_2, Id_1));
+		EXPECT_TRUE(!DhtVerifyHardenedID(addr_1, Id_2));
 		addr_1._sin4++;
 		addr_2._sin4++;
 	}
@@ -36,18 +36,23 @@ TEST(secure_dht_id_test, secure_dht_id_test) {
 	uint8 seeds[] = { 1, 86, 22, 65, 90 };
 
 	uint8 prefixes[][4] = {
-		{ 0xf7, 0x66, 0xf9, 0xf5 },
-		{ 0x7e, 0xe0, 0x47, 0x79 },
-		{ 0x76, 0xa6, 0x26, 0xff },
-		{ 0xbe, 0xb4, 0xe6, 0x19 },
-		{ 0xac, 0xe5, 0x61, 0x3a },
+		{ 0x5f, 0xbf, 0xbf },
+		{ 0x5a, 0x3c, 0xe9 },
+		{ 0xa5, 0xd4, 0x32 },
+		{ 0x1b, 0x03, 0x21 },
+		{ 0xe5, 0x6f, 0x6c },
 	};
+
+	uint8 mask[3] = { 0xff, 0xff, 0xf8 };
+
 
 	for (int i = 0; i < 5; ++i) {
 		SockAddr addr = SockAddr::parse_addr(ips[i]);
-		sha1_hash id = generate_node_id_prefix(addr, seeds[i], sha1_callback);
-		for (int j = 0; j < 4; ++j) {
-			EXPECT_EQ(prefixes[i][j], id[j]);
+		uint32 id = generate_node_id_prefix(addr, seeds[i]);
+		int bits_to_shift = 24;
+		for (int j = 0; j < 3; ++j) { 
+			EXPECT_EQ(prefixes[i][j] & mask[j] , (byte)(id>>bits_to_shift) & mask[j]);
+			bits_to_shift -= 8;
 		}
 	}
 }

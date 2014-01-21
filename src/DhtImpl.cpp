@@ -30,7 +30,7 @@
 #define LOWER_SEQ 302
 
 bool DhtVerifyHardenedID(const SockAddr& addr, byte const* node_id, DhtSHACallback* sha);
-void DhtCalculateHardenedID(const SockAddr& addr, byte *node_id, DhtSHACallback* sha);
+void DhtCalculateHardenedID(const SockAddr& addr, byte *node_id);
 
 int clamp(int v, int min, int max)
 {
@@ -309,7 +309,7 @@ void DhtImpl::GenerateId()
 	byte id_bytes[DHT_ID_SIZE];
 
 	if(_ip_counter && _ip_counter->GetIP(externIp)){
-		DhtCalculateHardenedID(externIp, id_bytes, _sha_callback);
+		DhtCalculateHardenedID(externIp, id_bytes);
 	} else {
 		uint32 *pTemp = (uint32 *) id_bytes;
 		// Generate a random ID

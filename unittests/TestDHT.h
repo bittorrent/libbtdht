@@ -35,14 +35,11 @@ using namespace ::testing;
 const std::string DHTID_BYTES("AAAABBBBCCCCDDDDEEEE");
 
 // defined in DhtImpl.cpp
-extern bool DhtVerifyHardenedID(const SockAddr& addr, byte const* node_id,
-		DhtSHACallback* sha);
-extern void DhtCalculateHardenedID(const SockAddr& addr, byte *node_id,
-		DhtSHACallback* sha);
+extern bool DhtVerifyHardenedID(const SockAddr& addr, byte const* node_id);
+extern void DhtCalculateHardenedID(const SockAddr& addr, byte *node_id);
 
 // defined in dht.cpp
-extern sha1_hash generate_node_id_prefix(const SockAddr& addr, int random,
-		DhtSHACallback* sha);
+extern uint32 generate_node_id_prefix(const SockAddr& addr, int random);
 
 // utility objects
 inline sha1_hash sha1_callback(const byte* buf, int len) {

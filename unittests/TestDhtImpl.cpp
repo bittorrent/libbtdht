@@ -1,5 +1,5 @@
 #include <bitset>
-
+#include "utypes.h"
 #include "TestDhtImpl.h"
 
 void put_callback(void* ctx, std::vector<char>& buffer, int64 seq) {
