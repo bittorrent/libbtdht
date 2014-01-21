@@ -6,16 +6,7 @@
 #include "sockaddr.h"
 #include "utypes.h"
 
-extern void crc32c_init(void);
 extern uint32 crc32c(const unsigned char* buf, uint32 len=4);
-
-static struct init_crc32c 
-{
-	init_crc32c()
-	{
-		crc32c_init();
-	}
-} initialize_crc32c_table;
 
 smart_ptr<IDht> create_dht(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_socket_mgr
 	, DhtSaveCallback* save, DhtLoadCallback* load)

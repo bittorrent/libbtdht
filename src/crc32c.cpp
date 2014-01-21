@@ -44,7 +44,7 @@
 static uint32 crc32c_table[256];
 
 /* Construct table for software CRC-32C calculation. */
-void crc32c_init(void)
+static void crc32c_init(void)
 {
     uint32 n, crc;
 
@@ -61,6 +61,14 @@ void crc32c_init(void)
         crc32c_table[n] = crc;
     }
 }
+
+static struct init_crc32c 
+{
+	init_crc32c()
+	{
+		crc32c_init();
+	}
+} initialize_crc32c_table;
 
 /* Table-driven software version as a fall-back.  This is about 15 times slower
    than using the hardware instructions.  This assumes little-endian integers,
