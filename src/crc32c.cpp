@@ -70,9 +70,6 @@ uint32 crc32c(const unsigned char *buf, uint32 len=4)
 {
     const unsigned char *next = buf;
     uint64 crc;
-
-    //pthread_once(&crc32c_once_sw, crc32c_init_sw);
-    
 	crc = 0xffffffff;
     while (len && ((uintptr_t)next & 7) != 0) {
         crc = crc32c_table[(crc ^ *next++) & 0xff] ^ (crc >> 8);
