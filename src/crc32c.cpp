@@ -36,7 +36,7 @@
 //#include<iostream>
 /* CRC-32C (iSCSI) polynomial in reversed bit order. */
 #include "utypes.h"
-#include <arpa/inet.h>
+#include <stdint.h>
 #define POLY 0x82f63b78
 
 /* Table for a quadword-at-a-time software crc. */
