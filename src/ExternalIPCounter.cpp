@@ -16,15 +16,23 @@ void ExternalIPCounter::Rotate()
 	if (!IsExpired()) return;
 
 	if (_winnerV4 != _map.end()) {
-		if(_last_winner4 != _winnerV4->first && _ip_change_observer){
+		byte ip_winner[4];
+		byte last_winner[4];
+		_winnerV4->first.compact(ip_winner, true);
+		_last_winner4.compact(last_winner, true);
+		if(memcmp(ip_winner, last_winner, 4) && _ip_change_observer){
 			_ip_change_observer->on_ip_change(_winnerV4->first);
 		}
 		_last_winner4 = _winnerV4->first;
 		_last_votes4 = _winnerV4->second;
 	}
 	if (_winnerV6 != _map.end()) {
-		if(_last_winner6 != _winnerV6->first && _ip_change_observer){
-			_ip_change_observer->on_ip_change(_winnerV4->first);
+		byte ip_winner[16];
+		byte last_winner[16];
+		_winnerV6->first.compact(ip_winner, true);
+		_last_winner6.compact(last_winner, true);
+		if(memcmp(ip_winner, last_winner, 16) && _ip_change_observer){
+			_ip_change_observer->on_ip_change(_winnerV6->first);
 		}
 		_last_winner6 = _winnerV6->first;
 		_last_votes6 = _winnerV6->second;
