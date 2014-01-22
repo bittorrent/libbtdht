@@ -14,7 +14,7 @@
 // allows the dht client to define what SHA-1 implementation to use
 typedef sha1_hash SHACallback(byte const* buf, int len);
 
-struct ip_change_tracker {
+struct ip_change_observer {
 	virtual void on_ip_change(SockAddr const & new_ip) = 0;
 };
 
@@ -22,7 +22,7 @@ class ExternalIPCounter
 {
 public:
 	ExternalIPCounter(SHACallback* sha);
-	void set_ip_change_tracker(ip_change_tracker * ip_tracker){_ip_change_tracker = ip_tracker;}
+	void set_ip_change_observer(ip_change_observer * ip_observer){_ip_change_observer = ip_observer;}
 	void CountIP( const SockAddr& addr, const SockAddr& voter );
 	void CountIP( const SockAddr& addr );
 	bool GetIP( SockAddr& addr ) const;
@@ -47,7 +47,7 @@ private:
 	SockAddr _last_winner6;
 	int _last_votes4;
 	int _last_votes6;
-	ip_change_tracker * _ip_change_tracker;
+	ip_change_observer * _ip_change_observer;
 	SHACallback* _sha_callback;
 };
 
