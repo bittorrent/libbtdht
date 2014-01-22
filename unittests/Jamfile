@@ -15,6 +15,7 @@ project
 	<source>$(GMOCK_ROOT)/src/gmock-all.cc
 	<source>$(GMOCK_ROOT)/src/gmock_main.cc
 	<define>_DEBUG_DHT=1
+	<define>_WIN32_WINNT=0x0501
 #	<define>ENABLE_SRP=1
 	<library>/ut_dht//ut_dht/<link>static
 	<library>/boost//system/<link>static
