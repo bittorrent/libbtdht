@@ -46,7 +46,7 @@ void ExternalIPCounter::Rotate()
 	_voterFilter.clear();
 }
 
-void ExternalIPCounter::CountIP( const SockAddr& addr ) {
+void ExternalIPCounter::CountIP( const SockAddr& addr, int weight ) {
 	// ignore anyone who claims our external IP is
 	// INADDR_ANY or on a local network
 	if(addr.is_addr_any() || is_ip_local(addr))
@@ -59,22 +59,22 @@ void ExternalIPCounter::CountIP( const SockAddr& addr ) {
 	Rotate();
 
 	// attempt to insert this vote
-	std::pair<candidate_map::iterator, bool> inserted = _map.insert(std::make_pair(addr, 1));
+	std::pair<candidate_map::iterator, bool> inserted = _map.insert(std::make_pair(addr, weight));
 
 	// if the new IP wasn't inserted, it's already in there
 	// increase the vote counter
 	if (!inserted.second)
-		inserted.first->second++;
+		inserted.first->second += weight;
 
 	// if the IP vout count exceeds the current leader, replace it
 	if(addr.isv4() && (_winnerV4 == _map.end() || inserted.first->second > _winnerV4->second))
 		_winnerV4 = inserted.first;
 	if(addr.isv6() && (_winnerV6 == _map.end() || inserted.first->second > _winnerV6->second))
 		_winnerV6 = inserted.first;
-	_TotalVotes++;
+	_TotalVotes += weight;
 }
 
-void ExternalIPCounter::CountIP( const SockAddr& addr, const SockAddr& voter ) {
+void ExternalIPCounter::CountIP( const SockAddr& addr, const SockAddr& voter, int weight ) {
 	// Don't let local peers vote on our IP address
 
 	if (is_ip_local(voter))
@@ -93,7 +93,7 @@ void ExternalIPCounter::CountIP( const SockAddr& addr, const SockAddr& voter ) {
 			return;
 		_voterFilter.add(key);
 	}
-	CountIP(addr);
+	CountIP(addr, weight);
 }
 
 bool ExternalIPCounter::GetIP(SockAddr &addr) const {
@@ -150,7 +150,7 @@ bool ExternalIPCounter::GetIPv6(SockAddr &addr) const {
 // both thresholds must be crossed (time and count)
 bool ExternalIPCounter::IsExpired() const {
 	if(!_HeatStarted) return false;
-	if((_HeatStarted + EXTERNAL_IP_HEAT_DURATION) > time(NULL)) return false;
+	//if((_HeatStarted + EXTERNAL_IP_HEAT_DURATION) > time(NULL)) return false;
 	return (_TotalVotes > EXTERNAL_IP_HEAT_MAX_VOTES)?true:false;
 }
 
