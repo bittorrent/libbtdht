@@ -150,7 +150,10 @@ bool ExternalIPCounter::GetIPv6(SockAddr &addr) const {
 // both thresholds must be crossed (time and count)
 bool ExternalIPCounter::IsExpired() const {
 	if(!_HeatStarted) return false;
-	//if((_HeatStarted + EXTERNAL_IP_HEAT_DURATION) > time(NULL)) return false;
-	return (_TotalVotes > EXTERNAL_IP_HEAT_MAX_VOTES)?true:false;
+	if(_TotalVotes > EXTERNAL_IP_HEAT_MAX_VOTES ||
+		(_HeatStarted + EXTERNAL_IP_HEAT_DURATION) < time(NULL))
+		return true;
+	return false;
+
 }
 
