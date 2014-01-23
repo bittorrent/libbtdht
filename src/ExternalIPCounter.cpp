@@ -18,8 +18,8 @@ void ExternalIPCounter::Rotate()
 	if (_winnerV4 != _map.end()) {
 		byte ip_winner[4];
 		byte last_winner[4];
-		_winnerV4->first.compact(ip_winner, true);
-		_last_winner4.compact(last_winner, true);
+		_winnerV4->first.compact(ip_winner, false);
+		_last_winner4.compact(last_winner, false);
 		if(memcmp(ip_winner, last_winner, 4) && _ip_change_observer){
 			_ip_change_observer->on_ip_change(_winnerV4->first);
 		}
@@ -29,8 +29,8 @@ void ExternalIPCounter::Rotate()
 	if (_winnerV6 != _map.end()) {
 		byte ip_winner[16];
 		byte last_winner[16];
-		_winnerV6->first.compact(ip_winner, true);
-		_last_winner6.compact(last_winner, true);
+		_winnerV6->first.compact(ip_winner, false);
+		_last_winner6.compact(last_winner, false);
 		if(memcmp(ip_winner, last_winner, 16) && _ip_change_observer){
 			_ip_change_observer->on_ip_change(_winnerV6->first);
 		}
@@ -47,7 +47,6 @@ void ExternalIPCounter::Rotate()
 }
 
 void ExternalIPCounter::CountIP( const SockAddr& addr ) {
-
 	// ignore anyone who claims our external IP is
 	// INADDR_ANY or on a local network
 	if(addr.is_addr_any() || is_ip_local(addr))
@@ -77,6 +76,7 @@ void ExternalIPCounter::CountIP( const SockAddr& addr ) {
 
 void ExternalIPCounter::CountIP( const SockAddr& addr, const SockAddr& voter ) {
 	// Don't let local peers vote on our IP address
+
 	if (is_ip_local(voter))
 		return;
 
