@@ -1871,7 +1871,7 @@ bool DhtImpl::ProcessQueryGet(DHTMessage &message, DhtPeerID &peerID,
 	Buffer signatureToReturn;
 	Buffer keyToReturn;
 	DataStore<DhtID, MutableData>::pair_iterator mutableStoreIterator;
-	int64 sequenceNum;
+	int64 sequenceNum = 0;
 	// if there is no target, there is nothing to do
 	if (message.target.len == 0){
 		Account(DHT_INVALID_PQ_BAD_GET_TARGET, packetSize);
