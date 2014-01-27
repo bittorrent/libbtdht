@@ -3751,7 +3751,7 @@ void DhtBroadcastScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id, D
 
 void FindNodeDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
 {
-	char buf[1024];
+	char buf[1500];
 	SimpleBencoder sb(buf);
 	char const* end = buf + sizeof(buf);
 
