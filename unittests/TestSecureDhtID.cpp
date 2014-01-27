@@ -1,14 +1,6 @@
 #include "TestDHT.h"
 
 TEST(secure_dht_id_test, secure_dht_id_test) {
-#ifdef WIN32
-	// XXX: ouch. akelly in r20567 made me do this.
-	extern DWORD _tls_index;
-	extern bool _tls_set;
-	_tls_index = TlsAlloc();
-	EXPECT_TRUE(_tls_index != TLS_OUT_OF_INDEXES);
-	_tls_set = true;
-#endif
 
 	byte Id_1[20], Id_2[20];
 	SockAddr addr_1 = SockAddr::parse_addr("4.3.2.1");
