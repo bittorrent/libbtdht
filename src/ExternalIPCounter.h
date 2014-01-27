@@ -23,8 +23,8 @@ class ExternalIPCounter
 public:
 	ExternalIPCounter(SHACallback* sha);
 	void set_ip_change_observer(ip_change_observer * ip_observer){_ip_change_observer = ip_observer;}
-	void CountIP( const SockAddr& addr, const SockAddr& voter );
-	void CountIP( const SockAddr& addr );
+	void CountIP( const SockAddr& addr, const SockAddr& voter, int weight = 1);
+	void CountIP( const SockAddr& addr, int weight = 1 );
 	bool GetIP( SockAddr& addr ) const;
 	bool GetIPv4( SockAddr& addr ) const;
 	bool GetIPv6( SockAddr& addr ) const;
