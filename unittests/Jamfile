@@ -8,6 +8,8 @@ use-project /ut_dht : .. ;
 GTEST_ROOT = ../ut_utils/vendor/gtest-1.6.0 ;
 GMOCK_ROOT = ../ut_utils/vendor/gmock-1.6.0 ;
 
+lib pthread : : <name>pthread <link>shared ;
+
 project
 	: requirements
 	<source>UnitTestUDPSocket.cpp
@@ -19,6 +21,7 @@ project
 #	<define>ENABLE_SRP=1
 	<library>/ut_dht//ut_dht/<link>static
 	<library>/boost//system/<link>static
+	<target-os>linux:<library>pthread
 
 	<include>$(GTEST_ROOT)/include
 	<include>$(GMOCK_ROOT)/include
