@@ -3874,7 +3874,7 @@ DhtProcessBase* GetPeersDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager 
 
 void GetPeersDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
 {
-	const int bufLen = 1024;
+	const int bufLen = 1500;
 	char rpcArgsBuf[bufLen];
 	char buf[bufLen];
 
@@ -3989,7 +3989,7 @@ DhtProcessBase* AnnounceDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager 
 
 void AnnounceDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
 {
-	const int bufLen = 1024;
+	const int bufLen = 1500;
 	char rpcArgsBuf[bufLen];
 	char buf[bufLen];
 
@@ -4082,7 +4082,7 @@ DhtProcessBase* GetDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
 
 void GetDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
 {
-	const int bufLen = 1024;
+	const int bufLen = 1500;
 	char buf[bufLen];
 
 	SimpleBencoder sb(buf);
@@ -4161,7 +4161,7 @@ void PutDhtProcess::Sign(std::vector<char> &signature, std::vector<char> v, byte
 }
 
 bool DhtImpl::Verify(byte const * signature, byte const * message, int message_length, byte *pkey, int64 seq) {
-	unsigned char buf[1024];
+	unsigned char buf[1500];
 	int index = sprintf(reinterpret_cast<char*>(buf), MUTABLE_PAYLOAD_FORMAT, seq);
 	memcpy(buf + index, message, message_length);
 	return _ed25519_verify_callback(signature, buf, message_length + index, pkey);
@@ -4186,7 +4186,7 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 		Sign(signature, blk, _skey, seq);
 	}
 	
-	const int bufLen = 1024;
+	const int bufLen = 1500;
 	char buf[bufLen];
 
 	SimpleBencoder sb(buf);
@@ -4324,7 +4324,7 @@ DhtProcessBase* ScrapeDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &d
 
 void VoteDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
 {
-	char buf[1024];
+	char buf[1500];
 	byte target_bytes[DHT_ID_SIZE];
 
 	DhtIDToBytes(target_bytes, target);
