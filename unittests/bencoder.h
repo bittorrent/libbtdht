@@ -48,8 +48,8 @@ class bencoder {
 		}
 		inline bencoder& operator() (char const *value) {
 			update_checker();
-			long written = snprintf(reinterpret_cast<char*>(buffer), len, "%zu:%s",
-					strlen(value), value);
+			long written = snprintf(reinterpret_cast<char*>(buffer), len, "%d:%s",
+					int(strlen(value)), value);
 			assert(written <= len);
 			buffer += written;
 			len -= written;
@@ -58,8 +58,13 @@ class bencoder {
 		inline bencoder& operator() (unsigned char const *value, int64 v_len) {
 			assert(v_len > 0);
 			update_checker();
-			long written = snprintf(reinterpret_cast<char*>(buffer), len, "%zu:",
-					static_cast<size_t>(v_len));
+			long written = snprintf(reinterpret_cast<char*>(buffer), len,
+#ifdef _MSC_VER
+				"%I64d:",
+#else
+				"%" PRId64 ":",
+#endif
+				v_len);
 			assert(written + v_len <= len);
 			std::memcpy(buffer + written, value, v_len);
 			buffer += written + v_len;
@@ -68,8 +73,8 @@ class bencoder {
 		}
 		inline bencoder& operator() (std::vector<unsigned char> const &value) {
 			update_checker();
-			long written = snprintf(reinterpret_cast<char*>(buffer), len, "%zu:",
-					value.size());
+			long written = snprintf(reinterpret_cast<char*>(buffer), len, "%u:",
+				uint(value.size()));
 			assert(written + value.size() <= len);
 			std::memcpy(buffer + written, &(value[0]), value.size());
 			buffer += written + value.size();
@@ -78,8 +83,8 @@ class bencoder {
 		}
 		inline bencoder& operator() (std::string const &value) {
 			update_checker();
-			long written = snprintf(reinterpret_cast<char*>(buffer), len, "%zu:",
-					value.size());
+			long written = snprintf(reinterpret_cast<char*>(buffer), len, "%u:",
+					uint(value.size()));
 			assert(written + value.size() <= len);
 			std::memcpy(buffer + written, &(value[0]), value.size());
 			buffer += written + value.size();
