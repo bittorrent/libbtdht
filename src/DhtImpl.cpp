@@ -2950,10 +2950,10 @@ bool DhtImpl::ParseKnownPackets(const SockAddr& addr, byte *buf, int pkt_size)
 		return false;
 
 	// compare the static portions of the packet
-	static cstr a = "d1:ad2:id20:";
-	static cstr b = "e1:q4:ping1:t4:";
-	static cstr c = "1:v4:";
-	static cstr d = "1:y1:qe";
+	static char a[] = "d1:ad2:id20:";
+	static char b[] = "e1:q4:ping1:t4:";
+	static char c[] = "1:v4:";
+	static char d[] = "1:y1:qe";
 
 	if (memcmp(buf, a, sizeof(a)-1))
 		return false;
