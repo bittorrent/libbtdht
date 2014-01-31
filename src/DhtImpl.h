@@ -186,17 +186,16 @@ public:
 
 template<typename DataType>
 inline PairContainerBase<DataType>::PairContainerBase()
-{
-	previousBfCount = 0;
-}
+	: previousBfCount(0)
+	, lastUse(0)
+{}
 
 template<typename DataType>
 inline PairContainerBase<DataType>::PairContainerBase(DataType const& valueIn, time_t time)
 	: value(valueIn)
+	, previousBfCount(0)
 	, lastUse(time)
-{
-	previousBfCount = 0;
-}
+{}
 
 /**
  A bloom filter (_bf) is associated with the data for the purpose of determining
@@ -955,7 +954,9 @@ class DhtProcessManager : public DhtLookupNodeList
 	public:
 		DhtProcessManager():_currentProcessNumber(0){}
 		DhtProcessManager(DhtPeerID** ids, unsigned int numId, const DhtID &target)
-			:DhtLookupNodeList(ids,numId,target) {}
+			: DhtLookupNodeList(ids,numId,target)
+			, _currentProcessNumber(0)
+		{}
 		~DhtProcessManager();
 		unsigned int AddDhtProcess(DhtProcessBase *process);
 		void Start();
@@ -1617,27 +1618,30 @@ inline ScrapeDhtProcess::~ScrapeDhtProcess()
 //*****************************************************************************
 class VoteDhtProcess : public DhtBroadcastScheduler
 {
-	private:
-		int voteValue;
+private:
+	int voteValue;
 
-	protected:
-		virtual void ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags);
-		virtual void DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID);
+protected:
+	virtual void ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags);
+	virtual void DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID);
 
-	public:
+public:
 
-		VoteDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks);
-		virtual ~VoteDhtProcess(){}
-		void SetVoteValue(int value);
-		virtual void Start();
+	VoteDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks);
+	virtual ~VoteDhtProcess(){}
+	void SetVoteValue(int value);
+	virtual void Start();
 
-		static DhtProcessBase* Create(DhtImpl* pImpl, DhtProcessManager &dpm,
-								const DhtID &target2, int target2_len,
-								CallBackPointers &cbPointers, int voteValue);
+	static DhtProcessBase* Create(DhtImpl* pImpl, DhtProcessManager &dpm
+		, const DhtID &target2, int target2_len
+		, CallBackPointers &cbPointers, int voteValue);
 };
 
-inline VoteDhtProcess::VoteDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks)
-											: DhtBroadcastScheduler(pDhtImpl,dpm,target2,target2_len,startTime,consumerCallbacks)
+inline VoteDhtProcess::VoteDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
+	, const DhtID &target2, int target2_len, time_t startTime
+	, const CallBackPointers &consumerCallbacks)
+	: DhtBroadcastScheduler(pDhtImpl,dpm,target2,target2_len,startTime,consumerCallbacks)
+	, voteValue(0)
 {
 }
 

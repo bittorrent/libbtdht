@@ -49,6 +49,8 @@ void DHTMessage::Init()
 	portNum = vote = seed = scrape = noseed = sequenceNum = 0;
 	error_code = 0;
 	error_message = NULL;
+	impliedPort = 0;
+	_bDictForUser = NULL;
 }
 
 /** This version of DecodeMessageData() can NOT extract a 'v' region

@@ -7,7 +7,9 @@
 ExternalIPCounter::ExternalIPCounter(SHACallback* sha)
 	: _winnerV4(_map.end()), _winnerV6(_map.end()), _HeatStarted(0)
 	, _TotalVotes(0)
-	, _last_votes4(0), _last_votes6(0)
+	, _last_votes4(0)
+	, _last_votes6(0)
+	, _ip_change_observer(NULL)
 	, _sha_callback(sha)
 {}
 

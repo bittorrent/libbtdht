@@ -73,6 +73,7 @@ static void do_log(char const* fmt, ...)
 
 	fprintf(stderr, "DHT: %s\n", buf);
 	// TODO: call callback or something
+	va_end(args);
 }
 
 #if defined(_DEBUG_DHT)
@@ -1160,8 +1161,7 @@ void DhtImpl::ExpirePeersFromStore(time_t expire_before)
 		// if nobody has voted for 2 hours, expire it!
 		if (it->last_use + 2 * 60 * 60 > time(NULL)) continue;
 
-		_vote_store.erase(it);
-		--it;
+		it = _vote_store.erase(it);
 	}
 }
 
@@ -4118,7 +4118,8 @@ PutDhtProcess::PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 	, const byte * pkey, const byte * skey, time_t startTime
 	, const CallBackPointers &consumerCallbacks, int flags)
 	: DhtBroadcastScheduler(pDhtImpl, dpm, target, target_len
-		,startTime, consumerCallbacks), _with_cas(flags & IDht::with_cas)
+		, startTime, consumerCallbacks), _with_cas(flags & IDht::with_cas)
+	, getProc(NULL)
 {
 
 	signature.clear();
