@@ -2272,7 +2272,11 @@ void DhtImpl::GenRandomIDInBucket(DhtID &target, DhtBucket &bucket)
 		i -= 1;
 	}
 	assert(i >= 0 && i <= 4);
-	uint32 m = 1 << span;
+	assert(span <= 32);
+
+	// shifting by the bitwidth or more is undefined behavior!
+	// that's why we have to check for 32 here
+	uint32 m = span == 32 ? 0 : 1 << span;
 	target.id[i] = (target.id[i] & ~(m - 1)) | (rand() & (m - 1));
 }
 
@@ -4118,7 +4122,7 @@ PutDhtProcess::PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 	, const byte * pkey, const byte * skey, time_t startTime
 	, const CallBackPointers &consumerCallbacks, int flags)
 	: DhtBroadcastScheduler(pDhtImpl, dpm, target, target_len
-		, startTime, consumerCallbacks), _with_cas(flags & IDht::with_cas)
+	, startTime, consumerCallbacks), _with_cas(flags & IDht::with_cas)
 	, getProc(NULL)
 {
 

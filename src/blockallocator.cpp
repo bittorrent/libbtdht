@@ -11,7 +11,7 @@ template<typename T> T static inline exch(T &a, const T b) {
 
 void BlockAllocator::Grow()
 {
-	byte *block = new byte[_size * _grow];
+	byte *block = new byte[int64(_size) * _grow];
 	for(int i=_grow; --i>=0; ) {
 		void *a = block + i * _size;
 		*(void**)a = exch(_free, a);
