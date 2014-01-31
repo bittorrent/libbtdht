@@ -88,8 +88,8 @@ void ExternalIPCounter::CountIP( const SockAddr& addr, const SockAddr& voter, in
 	if ( ! voter.is_addr_any() ) {
 		// TODO: we should support IPv6 voters as well
 		// If voter is in bloom filter, return
-		uint32 addr = voter.get_addr4();
-		sha1_hash key = _sha_callback((const byte*)&addr, 4);
+		uint32 vaddr = voter.get_addr4();
+		sha1_hash key = _sha_callback((const byte*)&vaddr, 4);
 
 		if (_voterFilter.test(key))
 			return;
