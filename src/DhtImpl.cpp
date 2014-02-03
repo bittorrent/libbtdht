@@ -3512,7 +3512,9 @@ void DhtLookupScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id, DhtR
 	Schedule();
 }
 
-DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(const DhtPeerID &peer_id, DHTMessage &message, uint flags) {
+DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(
+	const DhtPeerID &peer_id, DHTMessage &message, uint flags)
+{
 	DhtFindNodeEntry *dfnh = NULL;
 	bool errored = false;
 
@@ -3522,12 +3524,10 @@ DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(const DhtPeerID &pe
 		// extract the possible reply arguments
 		Buffer nodes;
 		Buffer info_hash;
-		Buffer file_name;
 		std::vector<Buffer> values;
 
 		nodes.b = (byte*)message.replyDict->GetString("nodes", &nodes.len);
 		info_hash.b = (byte*)message.replyDict->GetString("info_hash", &info_hash.len);
-		file_name.b = (byte*)message.replyDict->GetString("n", &file_name.len);
 
 		BencodedList *valuesList = message.replyDict->GetList("values");
 		if (valuesList) {
@@ -3540,19 +3540,21 @@ DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(const DhtPeerID &pe
 			}
 		}
 
-		if(callbackPointers.partialCallback && info_hash.len == DHT_ID_SIZE && info_hash.b) {
+		if (callbackPointers.partialCallback && info_hash.len == DHT_ID_SIZE && info_hash.b) {
 			//we should only call this once
 			callbackPointers.partialCallback(callbackPointers.callbackContext, info_hash.b);
 			callbackPointers.partialCallback = NULL;
 		}
 
-		if(callbackPointers.filenameCallback){ // if there is a filename callback, see if a filename is in the reply
+		// if there is a filename callback, see if a filename is in the reply
+		if (callbackPointers.filenameCallback) {
 			Buffer filename;
 			filename.b = (byte*)message.replyDict->GetString("n", &filename.len);
-			if(filename.b && filename.len){
+			if (filename.b && filename.len) {
 				byte target_bytes[DHT_ID_SIZE];
 				DhtIDToBytes(target_bytes, target);
-				callbackPointers.filenameCallback(callbackPointers.callbackContext, target_bytes, filename.b);
+				callbackPointers.filenameCallback(callbackPointers.callbackContext
+					, target_bytes, filename.b);
 			}
 		}
 
