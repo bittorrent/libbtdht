@@ -3,7 +3,7 @@
 DhtID random_id() {
 	byte bytes[20];
 	for (int i = 0; i < 20; ++i) {
-		bytes[i] = rand();
+		bytes[i] = rand() & 0xff;
 	}
 	DhtID id;
 	CopyBytesToDhtID(id, bytes);
@@ -14,7 +14,7 @@ SockAddr random_address() {
 	SockAddr ret;
 	memset(ret._in._in6, 0, 16);
 	for (int i  = 12; i < 16; ++i) {
-		ret._in._in6[i] = rand();
+		ret._in._in6[i] = rand() & 0xff;
 	}
 	ret.set_port((rand() % 1000) + 1024);
 	return ret;

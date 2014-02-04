@@ -43,7 +43,7 @@ TEST(secure_dht_id_test, secure_dht_id_test) {
 		uint32 id = generate_node_id_prefix(addr, seeds[i]);
 		int bits_to_shift = 24;
 		for (int j = 0; j < 3; ++j) { 
-			EXPECT_EQ(prefixes[i][j] & mask[j] , (byte)(id>>bits_to_shift) & mask[j]);
+			EXPECT_EQ(prefixes[i][j] & mask[j] , (byte)((id>>bits_to_shift) & 0xff) & mask[j]);
 			bits_to_shift -= 8;
 		}
 	}

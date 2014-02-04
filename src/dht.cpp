@@ -37,7 +37,7 @@ uint32 generate_node_id_prefix(const SockAddr& addr, int random)
 		for (int i = 0; i < 4; ++i) octets[i] &= mask[i];
 		size = 4;
 	}
-	octets[0] |= (random<<5);
+	octets[0] |= (random<<5) & 0xff;
 
 	return crc32c((const unsigned char*)octets, size);
 }
@@ -49,10 +49,10 @@ bool DhtVerifyHardenedID(const SockAddr& addr, byte const* node_id)
 	uint seed = node_id[19];
 	uint32 crc32_hash = generate_node_id_prefix(addr, seed);
 //compare the first 21 bits only, so keep bits 17 to 21 only.
-	byte from_hash = static_cast<byte>(crc32_hash >> 8);
+	byte from_hash = static_cast<byte>((crc32_hash >> 8) & 0xff);
 	byte from_node = node_id[2] ;
-	return node_id[0] == static_cast<byte>(crc32_hash >> 24) &&
-		node_id[1] == static_cast<byte>(crc32_hash >> 16) &&
+	return node_id[0] == static_cast<byte>((crc32_hash >> 24) & 0xff) &&
+		node_id[1] == static_cast<byte>((crc32_hash >> 16) & 0xff) &&
 		(from_hash & 0xf8) == (from_node & 0xf8);
 }
 
@@ -61,13 +61,13 @@ void DhtCalculateHardenedID(const SockAddr& addr, byte *node_id)
 {
 	uint seed = rand() & 0xff;
 	uint32 crc32_hash = generate_node_id_prefix(addr, seed);
-	node_id[0] = static_cast<byte>(crc32_hash >> 24);
-	node_id[1] = static_cast<byte>(crc32_hash >> 16);
-	node_id[2] = static_cast<byte>(crc32_hash >> 8);
+	node_id[0] = static_cast<byte>((crc32_hash >> 24) & 0xff);
+	node_id[1] = static_cast<byte>((crc32_hash >> 16) & 0xff);
+	node_id[2] = static_cast<byte>((crc32_hash >> 8) & 0xff);
 	//need to change all bits except the first 5, xor randomizes the rest of the bits
 	node_id[2] ^= static_cast<byte>(rand() & 0x7);
 	for (int i = 3; i < 19; i++)
-		node_id[i] = static_cast<byte>(rand());
+		node_id[i] = static_cast<byte>(rand() & 0xff);
 	node_id[19] = static_cast<byte>(seed);
 }
 
