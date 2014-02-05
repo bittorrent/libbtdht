@@ -279,6 +279,14 @@ bool DhtImpl::IsEnabled()
 }
 
 /**
+ * Make sure the buckets are refreshed next time Tick is called
+ */
+void DhtImpl::ForceRefresh()
+{
+	_refresh_buckets_counter = 0;
+}
+
+/**
  * Return true once bootstrap is complete every 4 seconds   // 4 seconds limits the amount of DHT traffic
  */
 bool DhtImpl::CanAnnounce()

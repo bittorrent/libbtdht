@@ -1687,6 +1687,7 @@ public:
 	void Tick();
 	void Enable(bool enabled, int rate);
 	bool IsEnabled();
+	void ForceRefresh();
 
 	bool CanAnnounce();
 

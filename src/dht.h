@@ -128,6 +128,7 @@ public:
 	virtual void Shutdown() = 0;
 	virtual void Initialize(UDPSocketInterface *, UDPSocketInterface *) = 0;
 	virtual bool IsEnabled() = 0;
+	virtual void ForceRefresh() = 0;
 	virtual bool ProcessIncoming(byte *buffer, size_t len, const SockAddr& addr) = 0;
 #ifdef _DEBUG_MEM_LEAK
 	virtual int FreeRequests() = 0;
