@@ -30,6 +30,9 @@ public:
 	bool GetIPv6( SockAddr& addr ) const;
 
 	void SetHeatStarted(time_t t) { _HeatStarted = t; }
+
+	void Reset();
+
 private:
 	void Rotate();
 	bool IsExpired() const;
