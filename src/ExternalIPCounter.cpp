@@ -48,6 +48,19 @@ void ExternalIPCounter::Rotate()
 	_voterFilter.clear();
 }
 
+void ExternalIPCounter::Reset()
+{
+       _TotalVotes = 0;
+       _last_votes4 = _last_votes6 = 0;
+       _map.clear();
+       _winnerV6 = _map.end();
+       _winnerV4 = _map.end();
+       _HeatStarted = time(NULL);
+       _voterFilter.clear();
+       memset(&_last_winner4, 0, sizeof(SockAddr));
+       memset(&_last_winner6, 0, sizeof(SockAddr));
+}
+
 void ExternalIPCounter::CountIP( const SockAddr& addr, int weight ) {
 	// ignore anyone who claims our external IP is
 	// INADDR_ANY or on a local network
