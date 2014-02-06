@@ -9,11 +9,9 @@ lib ut_dht : src/$(SOURCES).cpp
 	  <include>src
 	  <library>/ut_utils//ut_utils/<link>static
 	  <target-os>windows:<define>WIN32
-	  <define>_WIN32_WINNT=0x0501
 	: # default build
 	  <link>static
 	: # usage-requirements
 	  <include>src
-	  <define>_WIN32_WINNT=0x0501
 	;
 
