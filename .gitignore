@@ -29,6 +29,7 @@ Makefile.in
 /config.guess
 /config.sub
 
+/bin
 /unittests/bin
 
 # http://www.gnu.org/software/libtool

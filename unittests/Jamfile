@@ -42,4 +42,5 @@ project
 
 unit-test unittests : TestDhtID.cpp TestSecureDhtID.cpp TestDataStore.cpp
 	TestDhtImpl.cpp TestDhtImplSpeed.cpp TestRoutingTable.cpp
-	TestDhtImplResponse.cpp TestDHTMessageObject.cpp TestDHTRoutingTable.cpp ;
+	TestDhtImplResponse.cpp TestDHTMessageObject.cpp TestExternalIPCounter.cpp
+	TestDHTRoutingTable.cpp ;
