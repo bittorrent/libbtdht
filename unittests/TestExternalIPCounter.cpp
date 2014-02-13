@@ -4,13 +4,8 @@
 #include "sockaddr.h"
 #include <sha1_hash.h>
 
-#include <boost/asio.hpp>
 #include <boost/uuid/sha1.hpp>
-
 using namespace boost::uuids::detail;
-
-using boost::asio::ip::address_v4;
-using boost::asio::ip::udp;
 
 // TODO: this test should be moved into ut_dht!
 struct ip_change_observer_test : ip_change_observer{
@@ -93,7 +88,7 @@ TEST(externalipcounter, trigger)
 	SockAddr sockAddr;
 	external_ip.GetIP(sockAddr);
 
-	ASSERT_EQ(udp::endpoint(address_v4(sockAddr.get_addr4()), sockAddr.get_port()), udp::endpoint(address_v4::from_string("20.20.20.20"), 40000));
+	ASSERT_TRUE(sockAddr == addr2);
 	ASSERT_FALSE(icot.flag);
 
 	external_ip.CountIP(addr2, src_addr3, 60);
@@ -102,7 +97,7 @@ TEST(externalipcounter, trigger)
 	external_ip.CountIP(addr3, src_addr3, 60);
 	external_ip.CountIP(addr4, src_addr4, 70);
 	external_ip.GetIP(sockAddr);
-	ASSERT_EQ(udp::endpoint(address_v4(sockAddr.get_addr4()), sockAddr.get_port()), udp::endpoint(address_v4::from_string("30.30.30.10"), 30000));
+	ASSERT_TRUE(sockAddr == addr3);
 	ASSERT_TRUE(icot.flag);
 
 }
