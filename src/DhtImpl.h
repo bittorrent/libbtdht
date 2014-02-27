@@ -770,10 +770,18 @@ public:
 
 #define CROSBY_E (2*60) // age in second a peer must be before we include them in find nodes
 
-
+//TODO: its usage should be replaced with smart_buffer everywhere
 struct SimpleBencoder {
 	char *p;
-	SimpleBencoder(char *a) { p=a; }
+#if defined(__GNUC__) || defined(__clang__)
+	SimpleBencoder(char *a) __attribute__ ((deprecated))
+#elif defined(_MSC_VER)
+	__declspec(deprecated) SimpleBencoder(char *a)
+#else
+#pragma message("WARNING: DEPRECATED not defined for this compiler.")
+	SimpleBencoder(char *a)
+#endif
+		{ p=a; }
 	void Out(cstr s);
 	void put_buf(byte const* buf, int len);
 };
@@ -1995,6 +2003,7 @@ public:
 
 	void put_transaction_id(SimpleBencoder& sb, Buffer tid, char const* end);
 	void put_version(SimpleBencoder& sb, char const* end);
+	const unsigned char* get_version();
 private:
 	void send_put_response(SimpleBencoder& sb, char const* end,
 			Buffer& transaction_id, int packetSize, const DhtPeerID &peerID);

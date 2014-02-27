@@ -39,6 +39,41 @@ int clamp(int v, int min, int max)
 	return v;
 }
 
+class smart_buffer {
+	unsigned char* buffer;
+	unsigned char* start;
+	unsigned char* end;
+
+public:
+	smart_buffer(unsigned char* buffer, int64 len) :
+		buffer(buffer), start(buffer), end(buffer + len) {}
+	smart_buffer& operator() (char const* fmt, ...) {
+		if (buffer < end) {
+			va_list list;
+			va_start(list, fmt);
+			int64 written = vsnprintf(reinterpret_cast<char*>(buffer), end - buffer,
+					fmt, list);
+			// if we fuck up formatting, vsnprintf will return a negative value
+			assert(written >= 0);
+			if (written >= 0) {
+				buffer += written;
+			} else {
+				buffer = end;
+			}
+			va_end(list);
+		}
+		return *this;
+	}
+	smart_buffer& operator() (unsigned char const* value, int64 len) {
+		if(buffer < end) {
+			memcpy(buffer, value, len);
+			buffer += len;
+		}
+		return *this;
+	}
+	int64 operator() () {return buffer < end ? buffer - start : -1;}
+};
+
 #if g_log_dht
 
 uint prebitcmp(const uint32 *a, const uint32 *b, size_t size) { // Simple dirty "count bit prefix in common" function
@@ -192,6 +227,10 @@ void DhtImpl::SetVersion(char const* client, int major, int minor)
 	_dht_utversion[1] = client[1];
 	_dht_utversion[2] = major;
 	_dht_utversion[3] = minor;
+}
+
+const unsigned char* DhtImpl::get_version() {
+	return _dht_utversion;
 }
 
 /**
@@ -902,20 +941,17 @@ uint DhtImpl::FindNodes(const DhtID &target, DhtPeerID **list, uint numwant, int
 	return num;
 }
 
-
 void SimpleBencoder::Out(cstr s)
 {
 	while (*s)
 		*p++ = *s++;
 }
 
+// TODO: purge this horror
 void SimpleBencoder::put_buf(byte const* buf, int len)
 {
-	while (len)
-	{
-		*p++ = *buf++;
-		--len;
-	}
+	memcpy(p, buf, len);
+	p += len;
 }
 
 #ifdef _DEBUG_MEM_LEAK
@@ -4186,10 +4222,11 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 {
 
 	int64 seq = processManager.seq() + 1;
-	if(signature.size() == 0){
+	// note that blk is returned by reference
+	std::vector<char> blk = processManager.get_data_blk();
+	if(signature.size() == 0) {
 		callbackPointers.putCallback(callbackPointers.callbackContext
-			, processManager.get_data_blk(), seq);
-		std::vector<char> blk = processManager.get_data_blk();
+			, blk, seq);
 
 		// the callback must return either an empty buffer, or
 		// a valid bencoded structure
@@ -4201,49 +4238,37 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 		Sign(signature, blk, _skey, seq);
 	}
 	
-	const int bufLen = 1500;
-	char buf[bufLen];
-
-	SimpleBencoder sb(buf);
-	char const* end = buf + sizeof(buf);
-
-	sb.p += snprintf(sb.p, (end - sb.p), "d1:ad");
+	static const int buf_len = 1500;
+	char buf[buf_len];
+	smart_buffer sb(reinterpret_cast<unsigned char*>(buf), buf_len);
+	sb("d1:ad");
 
 	if (!nodeInfo.cas.is_all_zero()) {
-		sb.p += snprintf(sb.p, (end - sb.p), "3:cas20:");
-		sb.put_buf(nodeInfo.cas.value, 20);
+		sb("3:cas20:")(nodeInfo.cas.value, 20);
 	}
-	
-	sb.p += snprintf(sb.p, (end - sb.p), "2:id20:");
-	sb.put_buf((byte*)this->_id, DHT_ID_SIZE);
+	sb("2:id20:")((byte*)this->_id, DHT_ID_SIZE);
+	sb("1:k32:")((byte*)this->_pkey, 32);
+	sb("3:seqi%" PRId64 "e", seq);
+	sb("3:sig64:")((byte*)&signature[0], 64);
+	sb("5:token")("%d:", int(nodeInfo.token.len));
+	sb(reinterpret_cast<unsigned char*>(nodeInfo.token.b),
+			int(nodeInfo.token.len));
+	sb("1:v")(reinterpret_cast<unsigned char*>(&blk[0]), blk.size());
+	sb("e1:q3:put");
+	sb("1:t%d:", 4)(reinterpret_cast<const unsigned char*>(&transactionID), 4);
+	const unsigned char * dht_utversion = impl->get_version();
+	sb("1:v4:%c%c%c%c", dht_utversion[0], dht_utversion[1], dht_utversion[2],
+			dht_utversion[3]);
+	sb("1:y1:qe");
+	int64 len = sb();
 
-	sb.p += snprintf(sb.p, (end - sb.p), "1:k32:");
-	sb.put_buf((byte*)this->_pkey, 32);
-
-	sb.p += snprintf(sb.p, (end - sb.p), "3:seqi%" PRId64 "e", seq);
-
-	sb.p += snprintf(sb.p, (end - sb.p), "3:sig64:");
-	sb.put_buf((byte*)&signature[0], 64);
-
-	sb.p += snprintf(sb.p, (end - sb.p), "5:token");
-	sb.p += snprintf(sb.p, (end - sb.p), "%d:", int(nodeInfo.token.len));
-	sb.put_buf((byte*)nodeInfo.token.b, int(nodeInfo.token.len));
-
-	Buffer v;
-	v.b = (byte*)processManager.get_data_blk(v.len);
-	sb.p += snprintf(sb.p, (end - sb.p), "1:v");
-	//sb.p += snprintf(sb.p, (end - sb.p), "%d:", int(v.len));
-	sb.put_buf(v.b, v.len);
-
-	sb.p += snprintf(sb.p, (end - sb.p), "e1:q3:put");
-
-	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4), end);
-	
-	impl->put_version(sb, end);
-	
-	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:qe");
 	// send the query
-	impl->SendTo(nodeInfo.id, buf, sb.p - buf);
+	if (len > 0) {
+		impl->SendTo(nodeInfo.id, buf, len);
+	} else {
+		do_log("DHT put blob exceeds %i byte maximum size! blk size: %lu", buf_len,
+				blk.size());
+	}
 }
 
 void PutDhtProcess::ImplementationSpecificReplyProcess(void *userdata
