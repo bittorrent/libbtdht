@@ -348,15 +348,11 @@ TEST_F(dht_impl_response_test, TestSendPings) {
 	ASSERT_FALSE(!tid.b || tid.len > 16);
 
 	// specify and send the fake response
-	char buf[256];
-	char const* const end = buf + sizeof(buf);
-	//TODO: get rid of this shit
-	SimpleBencoder sb(buf);
-	sb.put_buf((const unsigned char*)("d1:rd2:id20:"), strlen("d1:rd2:id20:"));
-	sb.put_buf((const unsigned char*)(peer_id.id.id), 20);
-	sb.p += snprintf(sb.p, (end - sb.p), "e1:t%lu:", tid.len);
-	sb.put_buf((const unsigned char*)(tid.b), tid.len);
-	sb.put_buf((const unsigned char*)("1:v4:UTê`1:y1:re"),
+	unsigned char buf[256];
+	smart_buffer sb(buf, 256);
+	sb("d1:rd2:id20:")((const unsigned char*)(peer_id.id.id), 20);
+	sb("e1:t%lu:", tid.len)(tid);
+	sb((const unsigned char*)("1:v4:UTê`1:y1:re"),
 			strlen("1:v4:UTê`1:y1:re"));
 
 	// -2 means we think we have completed bootstrapping
@@ -364,7 +360,7 @@ TEST_F(dht_impl_response_test, TestSendPings) {
 	// prevent restart due to exgternal IP voting
 	impl->_lastLeadingAddress = bind_addr;
 	// Here, we send a response right away
-	ASSERT_TRUE(impl->ProcessIncoming((byte *) buf, sb.p - buf, peer_id.addr));
+	ASSERT_TRUE(impl->ProcessIncoming((byte *) buf, sb.length(), peer_id.addr));
 
 	// Now, ping the same peer, but pretend it is slow and/or doesn't answer
 	DhtRequest *req = impl->SendPing(peer_id);

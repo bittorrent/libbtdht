@@ -64,6 +64,7 @@ public:
 	}
 };
 
+
 const char *format_dht_id(const DhtID &id);
 
 /**
@@ -156,6 +157,66 @@ struct VoteContainer {
 	}
 };
 
+class smart_buffer {
+	unsigned char* buffer;
+	unsigned char* start;
+	unsigned char* end;
+
+public:
+	smart_buffer(unsigned char* buffer, int64 len) :
+		buffer(buffer), start(buffer), end(buffer + len) {}
+	smart_buffer& operator() (char const* fmt, ...) {
+		if (buffer < end) {
+			va_list list;
+			va_start(list, fmt);
+			int64 written = vsnprintf(reinterpret_cast<char*>(buffer), end - buffer,
+					fmt, list);
+			// if we fuck up formatting, vsnprintf will return a negative value
+			assert(written >= 0);
+			if (written >= 0) {
+				buffer += written;
+			} else {
+				buffer = end;
+			}
+			va_end(list);
+		}
+		return *this;
+	}
+	smart_buffer& operator() (unsigned char const* value, int64 len) {
+		if (buffer < end) {
+			memcpy(buffer, value, len);
+			buffer += len;
+		}
+		return *this;
+	}
+	smart_buffer& operator() (DhtID const& value) {
+		if (buffer < end) {
+			if (buffer + DHT_ID_SIZE < end) {
+				DhtIDToBytes(buffer, value);
+			}
+			buffer += DHT_ID_SIZE;
+		}
+		return *this;
+	}
+	smart_buffer& operator() (SockAddr const& value) {
+		int value_size = value.isv4() ? 6 : 18;
+		if (buffer < end) {
+			if (buffer + value_size < end) {
+				value.compact(buffer, true);
+			}
+			buffer += value_size;
+		}
+		return *this;
+	}
+	smart_buffer& operator() (Buffer const& value) {
+		return (*this)(value.b, value.len);
+	}
+
+	unsigned char const * begin() const {
+		return start;
+	}
+	int64 length() const { return buffer < end ? buffer - start : -1; }
+};
 
 /*******************************************************************************
 
@@ -769,22 +830,6 @@ public:
 #define FAIL_THRES_BAD 5 // really bad, force delete even if buckets are empty..
 
 #define CROSBY_E (2*60) // age in second a peer must be before we include them in find nodes
-
-//TODO: its usage should be replaced with smart_buffer everywhere
-struct SimpleBencoder {
-	char *p;
-#if defined(__GNUC__) || defined(__clang__)
-	SimpleBencoder(char *a) __attribute__ ((deprecated))
-#elif defined(_MSC_VER)
-	__declspec(deprecated) SimpleBencoder(char *a)
-#else
-#pragma message("WARNING: DEPRECATED not defined for this compiler.")
-	SimpleBencoder(char *a)
-#endif
-		{ p=a; }
-	void Out(cstr s);
-	void put_buf(byte const* buf, int len);
-};
 
 enum QueriedStatus
 {
@@ -1946,7 +1991,7 @@ public:
 	int clean_up_dht_request();
 #endif
 
-	int BuildFindNodesPacket(SimpleBencoder &sb, DhtID &target_id, int size);
+	int BuildFindNodesPacket(smart_buffer &sb, DhtID &target_id, int size);
 
 	// Get the storage container associated with a info_hash
 	std::vector<VoteContainer>::iterator GetVoteStorageForID(DhtID const& key);
@@ -1961,7 +2006,7 @@ public:
 
 	// add a vote to the vote store for 'target'. Fill in a vote
 	// response into sb.
-	void AddVoteToStore(SimpleBencoder& sb, DhtID& target
+	void AddVoteToStore(smart_buffer& sb, DhtID& target
 		, SockAddr const& addr, int vote);
 
 
@@ -1990,7 +2035,7 @@ public:
 	bool IsCompatibleIPPeerIDPair(const SockAddr& addr, byte const* id);
 	bool IsCompatibleIPPeerIDPair(const SockAddr& addr, DhtID const& id);
 
-	void AddIP(SimpleBencoder& sb, byte const* id, SockAddr const& addr);
+	void AddIP(smart_buffer& sb, byte const* id, SockAddr const& addr);
 
 #if USE_DHTFEED
 	void dht_name_resolved(const byte *info_hash, const byte *file_name);
@@ -2001,15 +2046,15 @@ public:
 	static void add_to_dht_feed_static(void *ctx, byte const* info_hash, char const* file_name);
 #endif
 
-	void put_transaction_id(SimpleBencoder& sb, Buffer tid, char const* end);
-	void put_version(SimpleBencoder& sb, char const* end);
+	void put_transaction_id(smart_buffer& sb, Buffer tid);
+	void put_version(smart_buffer& sb);
 	const unsigned char* get_version();
 private:
-	void send_put_response(SimpleBencoder& sb, char const* end,
-			Buffer& transaction_id, int packetSize, const DhtPeerID &peerID);
-	void send_put_response(SimpleBencoder& sb, char const* end,
-			Buffer& transaction_id, int packetSize, const DhtPeerID &peerID,
-			unsigned int error_code, char const* error_message);
+	void send_put_response(smart_buffer& sb, Buffer& transaction_id,
+			int packetSize, const DhtPeerID &peerID);
+	void send_put_response(smart_buffer& sb, Buffer& transaction_id,
+			int packetSize, const DhtPeerID &peerID, unsigned int error_code,
+			char const* error_message);
 
 public:
 	bool ProcessQueryPing(DHTMessage &message, DhtPeerID &peerID, int packetSize);

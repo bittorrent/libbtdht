@@ -10,7 +10,6 @@
 #include "DhtImpl.h"
 #include "snprintf.h"
 #include "RefBase.h"
-#include "tailqueue.h"
 #include "get_microseconds.h"
 #include "udp_utils.h"
 #include "bloom_filter.h"
@@ -38,41 +37,6 @@ int clamp(int v, int min, int max)
 	if (v > max) return max;
 	return v;
 }
-
-class smart_buffer {
-	unsigned char* buffer;
-	unsigned char* start;
-	unsigned char* end;
-
-public:
-	smart_buffer(unsigned char* buffer, int64 len) :
-		buffer(buffer), start(buffer), end(buffer + len) {}
-	smart_buffer& operator() (char const* fmt, ...) {
-		if (buffer < end) {
-			va_list list;
-			va_start(list, fmt);
-			int64 written = vsnprintf(reinterpret_cast<char*>(buffer), end - buffer,
-					fmt, list);
-			// if we fuck up formatting, vsnprintf will return a negative value
-			assert(written >= 0);
-			if (written >= 0) {
-				buffer += written;
-			} else {
-				buffer = end;
-			}
-			va_end(list);
-		}
-		return *this;
-	}
-	smart_buffer& operator() (unsigned char const* value, int64 len) {
-		if(buffer < end) {
-			memcpy(buffer, value, len);
-			buffer += len;
-		}
-		return *this;
-	}
-	int64 operator() () {return buffer < end ? buffer - start : -1;}
-};
 
 #if g_log_dht
 
@@ -765,11 +729,9 @@ DhtRequest *DhtImpl::AllocateRequest(const DhtPeerID &peer_id)
 	return req;
 }
 
-DhtRequest *DhtImpl::SendPing(const DhtPeerID &peer_id)
-{
-	char buf[120];
-	SimpleBencoder sb(buf);
-	char const* end = buf + sizeof(buf);
+DhtRequest *DhtImpl::SendPing(const DhtPeerID &peer_id) {
+	unsigned char buf[120];
+	smart_buffer sb(buf, sizeof(buf));
 
 	DhtRequest *req = AllocateRequest(peer_id);
 
@@ -777,14 +739,13 @@ DhtRequest *DhtImpl::SendPing(const DhtPeerID &peer_id)
 	debug_log("SEND PING(%d): %A", req->tid, &peer_id.addr);
 #endif
 
-	sb.p += snprintf(sb.p, (end - sb.p), "d1:ad2:id20:");
-	sb.put_buf(_my_id_bytes, DHT_ID_SIZE);
-	sb.p += snprintf(sb.p, (end - sb.p), "e1:q4:ping");
-	put_transaction_id(sb, Buffer((byte*)&req->tid, 4), end);
-	put_version(sb, end);
-	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:qe");
+	sb("d1:ad2:id20:")(_my_id_bytes, DHT_ID_SIZE)("e1:q4:ping");
+	put_transaction_id(sb, Buffer((byte*)&req->tid, 4));
+	put_version(sb);
+	sb("1:y1:qe");
+	assert(sb.length() >= 0);
 
-	SendTo(peer_id, buf, sb.p - buf);
+	SendTo(peer_id, buf, sb.length());
 	return req;
 }
 
@@ -941,19 +902,6 @@ uint DhtImpl::FindNodes(const DhtID &target, DhtPeerID **list, uint numwant, int
 	return num;
 }
 
-void SimpleBencoder::Out(cstr s)
-{
-	while (*s)
-		*p++ = *s++;
-}
-
-// TODO: purge this horror
-void SimpleBencoder::put_buf(byte const* buf, int len)
-{
-	memcpy(p, buf, len);
-	p += len;
-}
-
 #ifdef _DEBUG_MEM_LEAK
 // **** NOTE ****
 #error DhtProcess no longer exists and these functions were created to assist\
@@ -1004,7 +952,7 @@ void SimpleBencoder::put_buf(byte const* buf, int len)
 // d( "a"= d("id" = <hash>, "target" = <hash>), "q"="find_node", "t" = 0, "y" = "q")
 // d( "r" = d( "id" = <hash>, "nodes" = <208 byte string>), "t" = 1, "y" = "r")
 
-int DhtImpl::BuildFindNodesPacket(SimpleBencoder &sb, DhtID &target_id, int size)
+int DhtImpl::BuildFindNodesPacket(smart_buffer &sb, DhtID &target_id, int size)
 {
 	DhtPeerID *list[KADEMLIA_K];
 	uint n = FindNodes(target_id, list, sizeof(list)/sizeof(list[0]), 0, CROSBY_E);
@@ -1022,12 +970,11 @@ int DhtImpl::BuildFindNodesPacket(SimpleBencoder &sb, DhtID &target_id, int size
 	// i.e. bucket size
 	if (n > 8) n = 8;
 
-	sb.p += snprintf(sb.p, 27, "5:nodes%d:", n * 26); // XXX size is arbitrary
+	sb("5:nodes%d:", n * 26);
 	for(uint i=0; i!=n; i++) {
-		DhtIDToBytes((byte*)sb.p, list[i]->id);
-		sb.p += DHT_ID_SIZE;
-		sb.p += list[i]->addr.compact((byte*)sb.p, true);
+		sb(list[i]->id)(list[i]->addr);
 	}
+	assert(sb.length() >= 0);
 	return n;
 }
 
@@ -1090,7 +1037,7 @@ void DhtImpl::hash_ip(SockAddr const& ip, sha1_hash& h)
 
 // add a vote to the vote store for 'target'. Fill in a vote
 // response into sb.
-void DhtImpl::AddVoteToStore(SimpleBencoder& sb, DhtID& target
+void DhtImpl::AddVoteToStore(smart_buffer& sb, DhtID& target
 	, SockAddr const& addr, int vote)
 {
 	std::vector<VoteContainer>::iterator it = GetVoteStorageForID(target);
@@ -1123,9 +1070,8 @@ void DhtImpl::AddVoteToStore(SimpleBencoder& sb, DhtID& target
 	}
 
 	// add response
-	sb.p += snprintf(sb.p, 120, "1:vli%dei%dei%dei%dei%dee"
-		, vc->num_votes[0] , vc->num_votes[1] , vc->num_votes[2]
-		, vc->num_votes[3] , vc->num_votes[4]);
+	sb("1:vli%dei%dei%dei%dei%dee", vc->num_votes[0], vc->num_votes[1],
+			vc->num_votes[2], vc->num_votes[3], vc->num_votes[4]);
 }
 #ifdef _DEBUG_MEM_LEAK
 //redefine this...undefed above to handle new (ptr) Type
@@ -1335,24 +1281,21 @@ bool DhtImpl::ParseIncomingICMP(BencEntity &benc, const SockAddr& addr)
 }
 
 
-void DhtImpl::AddIP(SimpleBencoder& sb, byte const* id, SockAddr const& addr)
+void DhtImpl::AddIP(smart_buffer& sb, byte const* id, SockAddr const& addr)
 {
 	//verify the ip here...we need to notify them if they're using a
 	//peer id that doesn't match with their external ip
 
-//	if (!DhtVerifyHardenedID(addr, id, _sha_callback)) {
-		//We want to always notify nodes of their external IP and port, 
-		//partly because it's a good idea to always know your external IP and port, 
-		//but specifically for BT Chat we want to store our own IP port in an encrypted data blob, in a put request	
-		if (addr.isv4()) {
-			sb.p += snprintf(sb.p, 35, "2:ip6:");
-			sb.p += addr.compact((byte*)sb.p, true);
-		} else {
-			sb.p += snprintf(sb.p, 35, "2:ip18:");
-			sb.p += addr.compact((byte*)sb.p, true);
-		}
+	//	if (!DhtVerifyHardenedID(addr, id, _sha_callback)) {
+	//We want to always notify nodes of their external IP and port, 
+	//partly because it's a good idea to always know your external IP and port, 
+	//but specifically for BT Chat we want to store our own IP port in an encrypted data blob, in a put request	
+	if (addr.isv4()) {
+		sb("2:ip6:")(addr);
+	} else {
+		sb("2:ip18:")(addr);
 	}
-//}
+}
 
 
 //--------------------------------------------------------------------------------
@@ -1452,26 +1395,19 @@ void DhtImpl::add_to_dht_feed(byte const* info_hash, char const* file_name)
 }
 #endif
 
-void DhtImpl::put_transaction_id(SimpleBencoder& sb, Buffer tid, char const* end)
-{
-	sb.p += snprintf(sb.p, (end - sb.p), "1:t%d:", int(tid.len));
-	sb.put_buf(tid.b, tid.len);
+void DhtImpl::put_transaction_id(smart_buffer& sb, Buffer tid) {
+	sb("1:t%d:", int(tid.len))(tid);
 }
 
-void DhtImpl::put_version(SimpleBencoder& sb, char const* end)
-{
-	sb.p += snprintf(sb.p, (end - sb.p), "1:v4:%c%c%c%c"
-		, _dht_utversion[0]
-		, _dht_utversion[1]
-		, _dht_utversion[2]
-		, _dht_utversion[3]);
+void DhtImpl::put_version(smart_buffer& sb) {
+	sb("1:v4:%c%c%c%c", _dht_utversion[0], _dht_utversion[1], _dht_utversion[2],
+			_dht_utversion[3]);
 }
 
 bool DhtImpl::ProcessQueryAnnouncePeer(DHTMessage& message, DhtPeerID &peerID,
 		int packetSize) {
-	char buf[256];
-	char const* const end = buf + sizeof(buf);
-	SimpleBencoder sb(buf);
+	unsigned char buf[256];
+	smart_buffer sb(buf, sizeof(buf));
 
 	// read port
 	if (message.portNum < 0 && !message.impliedPort) {
@@ -1527,32 +1463,26 @@ bool DhtImpl::ProcessQueryAnnouncePeer(DHTMessage& message, DhtPeerID &peerID,
 #endif
 
 	// Send a simple reply with my ID
-	sb.p += snprintf(sb.p, (end - sb.p), "d");
-	
+	sb("d");
 	AddIP(sb, message.id, peerID.addr);
-
-	sb.p += snprintf(sb.p, (end - sb.p), "1:rd2:id20:");
-	sb.put_buf(_my_id_bytes, DHT_ID_SIZE);
-	sb.p += snprintf(sb.p, (end - sb.p), "e");
-
-	put_transaction_id(sb, message.transactionID, end);
-	put_version(sb, end);
-	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:re");
+	sb("1:rd2:id20:")(_my_id_bytes, DHT_ID_SIZE)("e");
+	put_transaction_id(sb, message.transactionID);
+	put_version(sb);
+	sb("1:y1:re");
 
 	Account(DHT_BW_IN_REQ, packetSize);
-	assert(sb.p < buf + sizeof(buf));
-	Account(DHT_BW_OUT_REPL, sb.p - buf);
+	assert(sb.length() >= -1);
+	Account(DHT_BW_OUT_REPL, sb.length());
 
 	// Send the reply to the peer.
-	SendTo(peerID, buf, sb.p - buf);
+	SendTo(peerID, buf, sb.length());
 	return true;
 }
 
 bool DhtImpl::ProcessQueryGetPeers(DHTMessage &message, DhtPeerID &peerID,
 		int packetSize) {
-	char buf[8192];
-	char const* const end = buf + sizeof(buf);
-	SimpleBencoder sb(buf);
+	unsigned char buf[8192];
+	smart_buffer sb(buf, sizeof(buf));
 
 	DhtID info_hash_id;
 	sha1_hash ttoken;
@@ -1576,11 +1506,9 @@ bool DhtImpl::ProcessQueryGetPeers(DHTMessage &message, DhtPeerID &peerID,
 	str file_name = NULL;
 
 	// start the output info
-	sb.Out("d");
-
+	sb("d");
 	AddIP(sb, message.id, peerID.addr);
-
-	sb.Out("1:rd");
+	sb("1:rd");
 
 	const std::vector<StoredPeer> *sc = GetPeersFromStore(info_hash_id
 			, &file_name, num_peers);
@@ -1599,15 +1527,12 @@ bool DhtImpl::ProcessQueryGetPeers(DHTMessage &message, DhtPeerID &peerID,
 			else downloaders.add(h);
 		}
 
-		sb.p += snprintf(sb.p, (end - sb.p), "4:BFpe256:");
-		sb.put_buf(downloaders.get_set(), 256);
-		sb.p += snprintf(sb.p, (end - sb.p), "4:BFsd256:");
-		sb.put_buf(seeds.get_set(), 256);
+		sb("4:BFpe256:")(downloaders.get_set(), 256);
+		sb("4:BFsd256:")(seeds.get_set(), 256);
 	}
 
 	GenerateWriteToken(&ttoken, peerID);
-	sb.p += snprintf(sb.p, 35, "2:id20:");
-	sb.put_buf(_my_id_bytes, DHT_ID_SIZE);
+	sb("2:id20:")(_my_id_bytes, DHT_ID_SIZE);
 
 	if (message.filename.len) {
 		int len = (message.filename.len>50) ? 50 : message.filename.len;
@@ -1615,13 +1540,13 @@ bool DhtImpl::ProcessQueryGetPeers(DHTMessage &message, DhtPeerID &peerID,
 		// extra conservative with the quite limited MTU space.
 		// nodes and peers are much more useful than the filename
 		// and should get the vast majority of it
-		sb.p += snprintf(sb.p, (end - sb.p), "1:n%d:%.*s", len, len, message.filename.b);
+		sb("1:n%d:%.*s", len, len, message.filename.b);
 	}
 
 	bool has_values = sc != NULL && !message.scrape;
 	uint n = (std::min)((sc ? sc->size() : 0), size_t(num_peers));
 	int size =
-		(sb.p - buf) // written so far
+		(sb.length()) // written so far
 		+ (has_values ? (10 + n * 8) : 0) // the values
 		+ 30 // token
 		+ 7 + message.transactionID.len + 18; // tail (t, v and y)
@@ -1630,8 +1555,7 @@ bool DhtImpl::ProcessQueryGetPeers(DHTMessage &message, DhtPeerID &peerID,
 	assert(size <= mtu);
 
 	BuildFindNodesPacket(sb, info_hash_id, mtu - size);
-	sb.p += snprintf(sb.p, (end - sb.p), "5:token20:");
-	sb.put_buf(ttoken.value, DHT_ID_SIZE);
+	sb("5:token20:")(ttoken.value, DHT_ID_SIZE);
 
 #if defined(_DEBUG_DHT)
 	char const* temp = format_dht_id(info_hash_id);
@@ -1640,35 +1564,31 @@ bool DhtImpl::ProcessQueryGetPeers(DHTMessage &message, DhtPeerID &peerID,
 #endif
 
 	if (has_values) {
-		int left = mtu - (sb.p - buf + 10);
+		int left = mtu - (sb.length() + 10);
 		if (n > left / 8) n = left / 8;
-		assert(sb.p - buf + 10 + 8 * n <= mtu);
+		assert(sb.length() + 10 + 8 * n <= mtu);
 		if (n > 0) {
-			sb.p += snprintf(sb.p, end - sb.p, "6:valuesl");
+			sb("6:valuesl");
 			for(uint i=0; i!=n; i++) {
-				sb.p += snprintf(sb.p, (end - sb.p), "6:");
-				// This will print out the ip/port
-				sb.put_buf((*sc)[i].ip, 4);
-				sb.put_buf((*sc)[i].port, 2);
+				sb("6:")((*sc)[i].ip, 4)((*sc)[i].port, 2);
 			}
-			*sb.p++ = 'e';
+			sb("e");
 		}
 	}
 
-	assert(sb.p - buf <= mtu);
-	sb.p += snprintf(sb.p, (end - sb.p), "e");
+	sb("e");
 
 	Account(DHT_BW_IN_REQ, packetSize);
-	put_transaction_id(sb, message.transactionID, end);
-	put_version(sb, end);
+	put_transaction_id(sb, message.transactionID);
+	put_version(sb);
 
-	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:re");
+	sb("1:y1:re");
 
-	assert(sb.p < buf + sizeof(buf));
-	Account(DHT_BW_OUT_REPL, sb.p - buf);
+	assert(sb.length() >= 0 && sb.length() <= mtu);
+	Account(DHT_BW_OUT_REPL, sb.length());
 
 	// Send the reply to the peer.
-	SendTo(peerID, buf, sb.p - buf);
+	SendTo(peerID, buf, sb.length());
 	return true;
 }
 
@@ -1681,20 +1601,15 @@ bool DhtImpl::ProcessQueryFindNode(DHTMessage &message, DhtPeerID &peerID,
 	}
 	CopyBytesToDhtID(target_id, message.target.b);
 
-	char buf[512];
-	char const* const end = buf + sizeof(buf);
-	SimpleBencoder sb(buf);
+	unsigned char buf[512];
+	smart_buffer sb(buf, sizeof(buf));
 
 	// Send my own ID
-	sb.p += snprintf(sb.p, (end - sb.p), "d");
-	
+	sb("d");
 	AddIP(sb, message.id, peerID.addr);
 	
-	sb.p += snprintf(sb.p, (end - sb.p), "1:rd2:id20:");
-	sb.put_buf(_my_id_bytes, DHT_ID_SIZE);
-
-	int size =
-		(sb.p - buf) // written so far
+	sb("1:rd2:id20:")(_my_id_bytes, DHT_ID_SIZE);
+	int size = sb.length() // written so far
 		+ 7 + message.transactionID.len + 18; // tail (t, v and y)
 
 	const uint16 mtu = GetUDP_MTU(peerID.addr);
@@ -1710,64 +1625,54 @@ bool DhtImpl::ProcessQueryFindNode(DHTMessage &message, DhtPeerID &peerID,
 		, format_dht_id(target_id), n);
 #endif
 
-	assert(sb.p - buf <= mtu);
-
 	Account(DHT_BW_IN_REQ, packetSize);
-	sb.p += snprintf(sb.p, (end - sb.p), "e");
+	sb("e");
 
-	put_transaction_id(sb, message.transactionID, end);
-	put_version(sb, end);
-	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:re");
+	put_transaction_id(sb, message.transactionID);
+	put_version(sb);
+	sb("1:y1:re");
 
-	assert(sb.p < buf + sizeof(buf));
-	Account(DHT_BW_OUT_REPL, sb.p - buf);
+	assert(sb.length() >= 0 && sb.length() <= mtu);
 
-	// Send the reply to the peer.
-	SendTo(peerID, buf, sb.p - buf);
+	Account(DHT_BW_OUT_REPL, sb.length());
+
+	SendTo(peerID, buf, sb.length());
 	return true;
 }
 
-void DhtImpl::send_put_response(SimpleBencoder& sb, char const* end,
-		Buffer& transaction_id, int packetSize, const DhtPeerID &peerID) {
-	char const * const original = sb.p;
-	sb.p += snprintf(sb.p, (end - sb.p), "d1:rd2:id20:");
-	sb.put_buf(_my_id_bytes, DHT_ID_SIZE);
-	sb.p += snprintf(sb.p, (end - sb.p), "e");
+void DhtImpl::send_put_response(smart_buffer& sb, Buffer& transaction_id,
+		int packetSize, const DhtPeerID &peerID) {
+	sb("d1:rd2:id20:")(_my_id_bytes, DHT_ID_SIZE)("e");
 
-	put_transaction_id(sb, transaction_id, end);
-	put_version(sb, end);
-	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:re");
-	assert(sb.p < end);
+	put_transaction_id(sb, transaction_id);
+	put_version(sb);
+	sb("1:y1:re");
+	assert(sb.length() >= 0);
 	Account(DHT_BW_IN_REQ, packetSize);
-	Account(DHT_BW_OUT_REPL, sb.p - original);
-	SendTo(peerID, original, sb.p - original);
+	Account(DHT_BW_OUT_REPL, sb.length());
+	SendTo(peerID, sb.begin(), sb.length());
 }
 
-void DhtImpl::send_put_response(SimpleBencoder& sb, char const* end,
-		Buffer& transaction_id, int packetSize, const DhtPeerID &peerID,
-		unsigned int error_code, char const* error_message) {
+void DhtImpl::send_put_response(smart_buffer& sb, Buffer& transaction_id,
+		int packetSize, const DhtPeerID &peerID, unsigned int error_code,
+		char const* error_message) {
 	assert(error_message != NULL);
-	char const * const original = sb.p;
-	sb.p += snprintf(sb.p, (end - sb.p), "d1:eli%ue%zu:%se", error_code,
-			strlen(error_message), error_message);
-	sb.p += snprintf(sb.p, (end - sb.p), "1:rd2:id20:");
-	sb.put_buf(_my_id_bytes, DHT_ID_SIZE);
-	sb.p += snprintf(sb.p, (end - sb.p), "e");
+	sb("d1:eli%ue%zu:%se", error_code, strlen(error_message), error_message);
+	sb("1:rd2:id20:")(_my_id_bytes, DHT_ID_SIZE)("e");
 
-	put_transaction_id(sb, transaction_id, end);
-	put_version(sb, end);
-	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:ee");
-	assert(sb.p < end);
+	put_transaction_id(sb, transaction_id);
+	put_version(sb);
+	sb("1:y1:ee");
+	assert(sb.length() >= 0);
 	Account(DHT_BW_IN_REQ, packetSize);
-	Account(DHT_BW_OUT_REPL, sb.p - original);
-	SendTo(peerID, original, sb.p - original);
+	Account(DHT_BW_OUT_REPL, sb.length());
+	SendTo(peerID, sb.begin(), sb.length());
 }
 
 bool DhtImpl::ProcessQueryPut(DHTMessage &message, DhtPeerID &peerID,
 		int packetSize) {
-	char buf[256];
-	char const* const end = buf + sizeof(buf);
-	SimpleBencoder sb(buf);
+	unsigned char buf[256];
+	smart_buffer sb(buf, sizeof(buf));
 	DhtID targetDhtID;
 
 	// read the token
@@ -1796,7 +1701,7 @@ bool DhtImpl::ProcessQueryPut(DHTMessage &message, DhtPeerID &peerID,
 	if(message.vBuf.len < 2 || message.vBuf.len > 1000)
 	{	// v is too big or small
 		Account(DHT_INVALID_PQ_BAD_PUT_BAD_V_SIZE, packetSize);
-		send_put_response(sb, end, message.transactionID, packetSize, peerID,
+		send_put_response(sb, message.transactionID, packetSize, peerID,
 				MESSAGE_TOO_BIG, "Message exceeds maximum size.");
 		return true;
 	}
@@ -1810,7 +1715,7 @@ bool DhtImpl::ProcessQueryPut(DHTMessage &message, DhtPeerID &peerID,
 		}
 		if (!Verify(message.signature.b, message.vBuf.b, message.vBuf.len, message.key.b, message.sequenceNum)) {
 			Account(DHT_INVALID_PQ_BAD_PUT_SIGNATURE, packetSize);
-			send_put_response(sb, end, message.transactionID, packetSize, peerID,
+			send_put_response(sb, message.transactionID, packetSize, peerID,
 					INVALID_SIGNATURE, "Invalid message signature.");
 			return true;
 		}
@@ -1855,7 +1760,7 @@ bool DhtImpl::ProcessQueryPut(DHTMessage &message, DhtPeerID &peerID,
 				if (!(message.cas.is_all_zero()) &&
 						message.cas != containerPtr->value.cas) {
 					Account(DHT_INVALID_PQ_BAD_PUT_CAS, packetSize);
-					send_put_response(sb, end, message.transactionID, packetSize, peerID,
+					send_put_response(sb, message.transactionID, packetSize, peerID,
 							CAS_MISMATCH, "Invalid CAS.");
 					return true;
 				} else {
@@ -1877,7 +1782,7 @@ bool DhtImpl::ProcessQueryPut(DHTMessage &message, DhtPeerID &peerID,
 					containerPtr->lastUse = time(NULL);
 				}
 			} else {
-					send_put_response(sb, end, message.transactionID, packetSize, peerID,
+					send_put_response(sb, message.transactionID, packetSize, peerID,
 							LOWER_SEQ, "Replacement sequence number is lower.");
 					return true;
 			}
@@ -1899,15 +1804,14 @@ bool DhtImpl::ProcessQueryPut(DHTMessage &message, DhtPeerID &peerID,
 	}
 
 	// build a simple reply with this node's ID
-	send_put_response(sb, end, message.transactionID, packetSize, peerID);
+	send_put_response(sb, message.transactionID, packetSize, peerID);
 	return true;
 }
 
 bool DhtImpl::ProcessQueryGet(DHTMessage &message, DhtPeerID &peerID,
 		int packetSize) {
-	char buf[8192];
-	char const* const end = buf + sizeof(buf);
-	SimpleBencoder sb(buf);
+	unsigned char buf[8192];
+	smart_buffer sb(buf, sizeof(buf));
 
 	DhtID targetId;
 	sha1_hash ttoken;
@@ -1970,9 +1874,7 @@ bool DhtImpl::ProcessQueryGet(DHTMessage &message, DhtPeerID &peerID,
 	}
 
 	const uint16 mtu = GetUDP_MTU(peerID.addr);
-	int size =
-		(sb.p - buf) // written so far
-		+ keyToReturn.len ? (5 + keyToReturn.len) : 0       // "4:key" + number of key bytes
+	int size = keyToReturn.len ? (5 + keyToReturn.len) : 0 // "4:key" + number of key bytes
 		+ signatureToReturn.len ? 5 + signatureToReturn.len : 0 // "4:sig" + number of signature bytes
 		+ valueToReturn.len ? 3 + valueToReturn.len : 0    // "1:v" + num bytes for value 'v'
 		+ 30 // token
@@ -1980,56 +1882,48 @@ bool DhtImpl::ProcessQueryGet(DHTMessage &message, DhtPeerID &peerID,
 	assert(size <= mtu);
 
 	// start the output info
-	sb.Out("d1:rd");
-	sb.p += snprintf(sb.p, 35, "2:id20:");
-	sb.put_buf(_my_id_bytes, DHT_ID_SIZE);
+	sb("d1:rd");
+	sb("2:id20:")(_my_id_bytes, DHT_ID_SIZE);
 
-	if (keyToReturn.len){	// add a "key" field to the response, if there is one
-		sb.p += snprintf(sb.p, (end-sb.p), "1:k%d:", int(keyToReturn.len));
-		sb.put_buf((byte*)keyToReturn.b, keyToReturn.len);
+	if (keyToReturn.len) {	// add a "key" field to the response, if there is one
+		sb("1:k%d:", int(keyToReturn.len))(keyToReturn);
 	}
 
 	BuildFindNodesPacket(sb, targetId, mtu - size);
 
-	sb.p += snprintf(sb.p, (end - sb.p), "3:seqi");
-	sb.p += snprintf(sb.p, (end - sb.p), "%" PRId64 "e", sequenceNum);
+	sb("3:seqi%" PRId64 "e", sequenceNum);
 
 	if (signatureToReturn.len) {
 		// add a "sig" field to the response, if there is one
-		sb.p += snprintf(sb.p, (end-sb.p), "3:sig%d:", int(signatureToReturn.len));
-		sb.put_buf((byte*)signatureToReturn.b, signatureToReturn.len);
+		sb("3:sig%d:", int(signatureToReturn.len))(signatureToReturn);
 	}
 
 	GenerateWriteToken(&ttoken, peerID);
-	sb.p += snprintf(sb.p, (end - sb.p), "5:token20:");
-	sb.put_buf(ttoken.value, DHT_ID_SIZE);
+	sb("5:token20:")(ttoken.value, DHT_ID_SIZE);
 
-	if (valueToReturn.len){	// add a "v" field to the response, if there is one
-		sb.p += snprintf(sb.p, (end-sb.p), "1:v");
-		sb.put_buf(valueToReturn.b, valueToReturn.len);
+	if (valueToReturn.len) {	// add a "v" field to the response, if there is one
+		sb("1:v")(valueToReturn);
 	}
 
-	assert(sb.p - buf <= mtu);
 	Account(DHT_BW_IN_REQ, packetSize);
 
-	sb.p += snprintf(sb.p, (end - sb.p), "e");
-	put_transaction_id(sb, message.transactionID, end);
-	put_version(sb, end);
-	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:re");
+	sb("e");
+	put_transaction_id(sb, message.transactionID);
+	put_version(sb);
+	sb("1:y1:re");
 
-	assert(sb.p < buf + sizeof(buf));
-	Account(DHT_BW_OUT_REPL, sb.p - buf);
+	assert(sb.length() >= 0 && sb.length() <= mtu);
+	Account(DHT_BW_OUT_REPL, sb.length());
 
 	// Send the reply
-	SendTo(peerID, buf, sb.p - buf);
+	SendTo(peerID, buf, sb.length());
 	return true;
 }
 
 bool DhtImpl::ProcessQueryVote(DHTMessage &message, DhtPeerID &peerID,
 		int packetSize) {
-	char buf[512];
-	char const* const end = buf + sizeof(buf);
-	SimpleBencoder sb(buf);
+	unsigned char buf[512];
+	smart_buffer sb(buf, sizeof(buf));
 
 	// read the target
 	DhtID target_id;
@@ -2055,64 +1949,54 @@ bool DhtImpl::ProcessQueryVote(DHTMessage &message, DhtPeerID &peerID,
 	}
 
 	// Send my own ID
-	sb.p += snprintf(sb.p, (end - sb.p), "d");
-
+	sb("d");
 	AddIP(sb, message.id, peerID.addr);
-
-	sb.p += snprintf(sb.p, (end - sb.p), "1:rd2:id20:");
-	sb.put_buf(_my_id_bytes, DHT_ID_SIZE);
+	sb("1:rd2:id20:")(_my_id_bytes, DHT_ID_SIZE);
 
 	if (message.vote > 5) message.vote = 5;
 	else if (message.vote < 0) message.vote = 0;
 
 	AddVoteToStore(sb, target_id, peerID.addr, message.vote);
 
-	assert(sb.p - buf <= GetUDP_MTU(peerID.addr));
-
 	Account(DHT_BW_IN_REQ, packetSize);
 
-	sb.p += snprintf(sb.p, (end - sb.p), "e");
+	sb("e");
+	put_transaction_id(sb, message.transactionID);
+	put_version(sb);
+	sb("1:y1:re");
 
-	put_transaction_id(sb, message.transactionID, end);
-	put_version(sb, end);
-	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:re");
-
-	assert(sb.p < buf + sizeof(buf));
-	Account(DHT_BW_OUT_REPL, sb.p - buf);
+	assert(sb.length() >= 0 && sb.length() <= GetUDP_MTU(peerID.addr));
+	Account(DHT_BW_OUT_REPL, sb.length());
 
 	// Send the reply to the peer.
-	SendTo(peerID, buf, sb.p - buf);
+	SendTo(peerID, buf, sb.length());
 	return true;
 }
 
 bool DhtImpl::ProcessQueryPing(DHTMessage &message, DhtPeerID &peerID,
 		int packetSize) {
-	char buf[256];
-	char const* const end = buf + sizeof(buf);
-	SimpleBencoder sb(buf);
+	unsigned char buf[256];
+	smart_buffer sb(buf, sizeof(buf));
 
 #if defined(_DEBUG_DHT)
 		debug_log("PING");
 #endif
 
-	sb.p += snprintf(sb.p, (end - sb.p), "d");
-
+	sb("d");
 	AddIP(sb, message.id, peerID.addr);
 
-	sb.p += snprintf(sb.p, (end - sb.p), "1:rd2:id20:");
-	sb.put_buf(_my_id_bytes, DHT_ID_SIZE);
-	sb.p += snprintf(sb.p, (end - sb.p), "e");
+	sb("1:rd2:id20:")(_my_id_bytes, DHT_ID_SIZE)("e");
 
-	put_transaction_id(sb, message.transactionID, end);
-	put_version(sb, end);
-	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:re");
+	put_transaction_id(sb, message.transactionID);
+	put_version(sb);
+	sb("1:y1:re");
 
 	Account(DHT_BW_IN_REQ, packetSize);
-	assert(sb.p < buf + sizeof(buf));
-	Account(DHT_BW_OUT_REPL, sb.p - buf);
+	assert(sb.length() >= 0);
+	Account(DHT_BW_OUT_REPL, sb.length());
 
 	// Send the reply to the peer.
-	SendTo(peerID, buf, sb.p - buf);
+	SendTo(peerID, buf, sb.length());
 	return true;
 }
 
@@ -3801,21 +3685,19 @@ void DhtBroadcastScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id, D
 
 void FindNodeDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
 {
-	char buf[1500];
-	SimpleBencoder sb(buf);
-	char const* end = buf + sizeof(buf);
+	unsigned char buf[1500];
+	smart_buffer sb(buf, sizeof(buf));
 
 	// The find_node rpc
-	sb.p += snprintf(sb.p, (end - sb.p), "d1:ad2:id20:");
-	sb.put_buf(impl->_my_id_bytes, DHT_ID_SIZE);
-	sb.p += snprintf(sb.p, (end - sb.p), "6:target20:");
-	sb.put_buf(target_bytes, DHT_ID_SIZE);
-	sb.p += snprintf(sb.p, (end - sb.p), "e1:q9:find_node");
-	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4), end);
-	impl->put_version(sb, end);
-	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:qe");
+	sb("d1:ad2:id20:")(impl->_my_id_bytes, DHT_ID_SIZE);
+	sb("6:target20:")(target_bytes, DHT_ID_SIZE);
+	sb("e1:q9:find_node");
+	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4));
+	impl->put_version(sb);
+	sb("1:y1:qe");
 
-	impl->SendTo(nodeInfo.id, buf, sb.p - buf);
+	assert(sb.length() >= 0);
+	impl->SendTo(nodeInfo.id, buf, sb.length());
 }
 
 /**
@@ -3924,24 +3806,24 @@ DhtProcessBase* GetPeersDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager 
 
 void GetPeersDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
 {
-	const int bufLen = 1500;
+	static const int bufLen = 1500;
 	char rpcArgsBuf[bufLen];
-	char buf[bufLen];
+	unsigned char buf[bufLen];
 
-	SimpleBencoder sb(buf);
-	char const* end = buf + sizeof(buf);
+	smart_buffer sb(buf, bufLen);
 
-	sb.p += snprintf(sb.p, (end - sb.p), "d1:ad");
+	sb("d1:ad");
 
 	int args_len = gpArgumenterPtr->BuildArgumentBytes((byte*)rpcArgsBuf, bufLen);
-	sb.put_buf((byte*)rpcArgsBuf, args_len);
+	sb((byte*)rpcArgsBuf, args_len);
 
-	sb.p += snprintf(sb.p, (end - sb.p), "e1:q9:get_peers");
-	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4), end);
-	impl->put_version(sb, end);
-	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:qe");
+	sb("e1:q9:get_peers");
+	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4));
+	impl->put_version(sb);
+	sb("1:y1:qe");
 
-	impl->SendTo(nodeInfo.id, buf, sb.p - buf);
+	assert(sb.length() >= 0);
+	impl->SendTo(nodeInfo.id, buf, sb.length());
 }
 
 
@@ -4039,9 +3921,9 @@ DhtProcessBase* AnnounceDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager 
 
 void AnnounceDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
 {
-	const int bufLen = 1500;
+	static const int bufLen = 1500;
 	char rpcArgsBuf[bufLen];
-	char buf[bufLen];
+	unsigned char buf[bufLen];
 
 	// convert the token
 	ArgumenterValueInfo& argBuf = announceArgumenterPtr->GetArgumenterValueInfo(a_token);
@@ -4053,21 +3935,19 @@ void AnnounceDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsi
 	announceArgumenterPtr->enabled[a_token] = true;
 
 	// build the bencoded query string
-	SimpleBencoder sb(buf);
-	char const* end = buf + sizeof(buf);
+	smart_buffer sb(buf, bufLen);
 
-	sb.p += snprintf(sb.p, (end - sb.p), "d1:ad");
+	sb("d1:ad");
 
 	int args_len = announceArgumenterPtr->BuildArgumentBytes((byte*)rpcArgsBuf, bufLen);
-	sb.put_buf((byte*)rpcArgsBuf, args_len);
+	sb((byte*)rpcArgsBuf, args_len);
+	sb("e1:q13:announce_peer");
+	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4));
+	impl->put_version(sb);
+	sb("1:y1:qe");
 
-	sb.p += snprintf(sb.p, (end - sb.p), "e1:q13:announce_peer");
-	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4), end);
-	impl->put_version(sb, end);
-	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:qe");
-
-	// send the query
-	impl->SendTo(nodeInfo.id, buf, sb.p - buf);
+	assert(sb.length() >= 0);
+	impl->SendTo(nodeInfo.id, buf, sb.length());
 }
 
 void AnnounceDhtProcess::ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags)
@@ -4132,30 +4012,23 @@ DhtProcessBase* GetDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
 
 void GetDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
 {
-	const int bufLen = 1500;
-	char buf[bufLen];
+	static const int bufLen = 1500;
+	unsigned char buf[bufLen];
+	smart_buffer sb(buf, bufLen);
 
-	SimpleBencoder sb(buf);
-	char const* end = buf + sizeof(buf);
-
-	sb.p += snprintf(sb.p, (end - sb.p), "d1:ad");
-
-	sb.p += snprintf(sb.p, (end - sb.p), "2:id20:");
-	sb.put_buf((byte*)this->_id, DHT_ID_SIZE);
-
-	sb.p += snprintf(sb.p, (end - sb.p), "6:target20:");
+	sb("d1:ad2:id20:")((byte*)this->_id, DHT_ID_SIZE)("6:target20:");
 
 	byte targetAsID[DHT_ID_SIZE];
 
 	DhtIDToBytes(targetAsID, target);
-	sb.put_buf(targetAsID, DHT_ID_SIZE);
-
-	sb.p += snprintf(sb.p, (end - sb.p), "e1:q3:get");
-	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4), end);
-	impl->put_version(sb, end);
-	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:qe");
+	sb(targetAsID, DHT_ID_SIZE);
+	sb("e1:q3:get");
+	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4));
+	impl->put_version(sb);
+	sb("1:y1:qe");
 	
-	impl->SendTo(nodeInfo.id, buf, sb.p - buf);
+	assert(sb.length() >= 0);
+	impl->SendTo(nodeInfo.id, buf, sb.length());
 }
 
 //*****************************************************************************
@@ -4239,7 +4112,7 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 	}
 	
 	static const int buf_len = 1500;
-	char buf[buf_len];
+	unsigned char buf[buf_len];
 	smart_buffer sb(reinterpret_cast<unsigned char*>(buf), buf_len);
 	sb("d1:ad");
 
@@ -4260,7 +4133,7 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 	sb("1:v4:%c%c%c%c", dht_utversion[0], dht_utversion[1], dht_utversion[2],
 			dht_utversion[3]);
 	sb("1:y1:qe");
-	int64 len = sb();
+	int64 len = sb.length();
 
 	// send the query
 	if (len > 0) {
@@ -4364,28 +4237,24 @@ DhtProcessBase* ScrapeDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &d
 
 void VoteDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
 {
-	char buf[1500];
+	unsigned char buf[1500];
 	byte target_bytes[DHT_ID_SIZE];
 
 	DhtIDToBytes(target_bytes, target);
 
-	SimpleBencoder sb(buf);
-	char const* end = buf + sizeof(buf);
+	smart_buffer sb(buf, sizeof(buf));
 
 	// The find_node rpc
-	sb.p += snprintf(sb.p, (end - sb.p), "d1:ad2:id20:");
-	sb.put_buf(impl->_my_id_bytes, DHT_ID_SIZE);
-	sb.p += snprintf(sb.p, (end - sb.p), "6:target20:");
-	sb.put_buf(target_bytes, DHT_ID_SIZE);
-	sb.p += snprintf(sb.p, (end - sb.p), "5:token%d:", int(nodeInfo.token.len));
-	sb.put_buf(nodeInfo.token.b, nodeInfo.token.len);
-	sb.p += snprintf(sb.p, (end - sb.p), "4:votei%de", voteValue);
-	sb.p += snprintf(sb.p, (end - sb.p), "e1:q4:vote");
-	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4), end);
-	impl->put_version(sb, end);
-	sb.p += snprintf(sb.p, (end - sb.p), "1:y1:qe");
+	sb("d1:ad2:id20:")(impl->_my_id_bytes, DHT_ID_SIZE);
+	sb("6:target20:")(target_bytes, DHT_ID_SIZE);
+	sb("5:token%d:", int(nodeInfo.token.len))(nodeInfo.token);
+	sb("4:votei%de", voteValue)("e1:q4:vote");
+	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4));
+	impl->put_version(sb);
+	sb("1:y1:qe");
 
-	impl->SendTo(nodeInfo.id, buf, sb.p - buf);
+	assert(sb.length() >= 0);
+	impl->SendTo(nodeInfo.id, buf, sb.length());
 }
 
 /**
