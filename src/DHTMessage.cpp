@@ -170,6 +170,7 @@ void DHTMessage::DecodeQuery(BencodedDict &bDict)
 	else if(strcmp(command,"vote") == 0){
 		dhtCommand = DHT_QUERY_VOTE;
 		target.b = (byte*)args->GetString("target", &target.len);
+		if (target.len != 20) _argumentsAreValid = false;
 		token.b = (byte*)args->GetString("token", &token.len);
 		vote = args->GetInt("vote", 0);
 		filename.b = (byte*)args->GetString("name", &filename.len);
@@ -177,32 +178,38 @@ void DHTMessage::DecodeQuery(BencodedDict &bDict)
 	else if(strcmp(command,"get") == 0){
 		dhtCommand = DHT_QUERY_GET;
 		target.b = (byte*)args->GetString("target", &target.len);
-		key.b = (byte*)args->GetString("k", &key.len);
+		if (target.len != 20) _argumentsAreValid = false;
 	}
 	else if(strcmp(command,"put") == 0){
 		dhtCommand = DHT_QUERY_PUT;
 		token.b = (byte*)args->GetString("token", &token.len);
 		vBuf.len = region.second - region.first;
 		vBuf.b = region.first;
-		signature.b = (byte*)args->GetString("sig", &signature.len); // 256 bytes
-		key.b = (byte*)args->GetString("k", &key.len); // 268 bytes
+		signature.b = (byte*)args->GetString("sig", &signature.len); // 64 bytes
+		if (signature.b && signature.len != 64) _argumentsAreValid = false;
+		key.b = (byte*)args->GetString("k", &key.len); // 32 bytes
+		if (key.b && key.len != 32) _argumentsAreValid = false;
 		sequenceNum = args->GetInt("seq", 0);
 		cas = reinterpret_cast<const byte*>(args->GetString("cas", 20));
 	}
 	else if(strcmp(command,"ping") == 0){
 		dhtCommand = DHT_QUERY_PING;
 	}
-	else{
+	else {
 		// unknown messages with either a 'target'
 		// or an 'info-hash' argument are treated
 		// as a find node to not block future extensions
 		dhtCommand = DHT_QUERY_FIND_NODE; // assume find_node...
 		target.b = (byte*)args->GetString("target", &target.len);
 		// check that there is a target; if not...
-		if(!target.b){
+		if (target.b) {
+			if (target.len != 20) _argumentsAreValid = false;
+		}
+		else {
 			target.b = (byte*)args->GetString("info_hash", &target.len);
+			if (target.len != 20) _argumentsAreValid = false;
 			// see if there is an info_hash to use as a target; if not...
-			if(!target.b){
+			if (!target.b) {
 				// we have an invalid query command
 				dhtCommand = DHT_QUERY_UNDEFINED;
 			}

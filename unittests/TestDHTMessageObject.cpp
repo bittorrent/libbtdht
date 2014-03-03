@@ -113,13 +113,12 @@ TEST(DHTMessageClassTest, DecodeImmutablePutQueryTest) {
 }
 
 TEST(DHTMessageClassTest, DecodeMutableGetQueryTest) {
-	const char* frontText = "d1:y1:q1:ad2:id20:abcdefghij01234567891:k248:";
+	const char* frontText = "d1:y1:q1:ad2:id20:abcdefghij0123456789";
 	const char* backText = "6:target20:11112222333344445555e1:q3:get1:t2:aae";
 
-	// build up a query with a 248 byte key element 'k'
+	// build up a query with a 32 byte key element 'k'
 	std::string bMessage;
 	bMessage += frontText;
-	for(int x=0; x<31; ++x) bMessage += "kkkkkkkk"; // put 248 k's in the 'k' element
 	bMessage += backText;
 
 	DHTMessage message((unsigned char*)bMessage.c_str(), bMessage.length());
@@ -132,22 +131,19 @@ TEST(DHTMessageClassTest, DecodeMutableGetQueryTest) {
 	EXPECT_FALSE(memcmp((byte*)"aa", message.transactionID.b, 2));
 	EXPECT_FALSE(memcmp((byte*)"abcdefghij0123456789", message.id, 20));
 	EXPECT_FALSE(memcmp((byte*)"11112222333344445555", message.target.b, 20));
-	EXPECT_EQ(248, message.key.len);
-	EXPECT_EQ('k', message.key.b[0]);   // first character should be 'k'
-	EXPECT_EQ('k', message.key.b[247]); // last character should be 'k'
 }
 
 TEST(DHTMessageClassTest, DecodeMutablePutQueryTest) {
-	const char* frontText = "d1:y1:q1:ad2:id20:abcdefghij01234567891:k268:";
-	const char* seqSigText = "3:seqi787e3:sig256:";
+	const char* frontText = "d1:y1:q1:ad2:id20:abcdefghij01234567891:k32:";
+	const char* seqSigText = "3:seqi787e3:sig64:";
 	const char* backText = "5:token20:azaztokenzaztokenzaz1:v"
 		"28:bencoded data in 'v' elemente1:q3:put1:t2:aae"; // a immutable put query
 
 	std::string bMessage;
 	bMessage += frontText; // start the bencoded message string
-	for(int x=0; x<268; ++x) bMessage += "k"; // add 268 characters for the 'key' element
+	for(int x=0; x<32; ++x) bMessage += "k"; // add 32 characters for the 'key' element
 	bMessage += seqSigText; // add the sequence number and set up for the signature element
-	for(int x=0; x<256; ++x) bMessage += "s"; // add 256 characters for the 'sig' element
+	for(int x=0; x<64; ++x) bMessage += "s"; // add 64 characters for the 'sig' element
 	bMessage += backText; // finish the bencoded string
 
 	DHTMessage message((unsigned char*)bMessage.c_str(), bMessage.length());
@@ -167,14 +163,14 @@ TEST(DHTMessageClassTest, DecodeMutablePutQueryTest) {
 				message.vBuf.len));
 
 	// test the key info
-	EXPECT_EQ(268, message.key.len);
+	EXPECT_EQ(32, message.key.len);
 	EXPECT_EQ('k', message.key.b[0]);   // first character should be 'k'
-	EXPECT_EQ('k', message.key.b[267]); // last character should be 'k'
+	EXPECT_EQ('k', message.key.b[31]); // last character should be 'k'
 
 	// test the sig info
-	EXPECT_EQ(256, message.signature.len);
+	EXPECT_EQ(64, message.signature.len);
 	EXPECT_EQ('s', message.signature.b[0]);   // first character should be 'k'
-	EXPECT_EQ('s', message.signature.b[255]); // last character should be 'k'
+	EXPECT_EQ('s', message.signature.b[63]); // last character should be 'k'
 
 	// test the seq number
 	EXPECT_EQ(787, message.sequenceNum);
@@ -185,16 +181,16 @@ TEST(DHTMessageClassTest, DecodeMutablePutQueryTest) {
 }
 
 TEST(DHTMessageClassTest, DecodeMutablePutQueryTestWithRegion) {
-	const char* frontText = "d1:y1:q1:ad2:id20:abcdefghij01234567891:k268:";
-	const char* seqSigText = "3:seqi787e3:sig256:";
+	const char* frontText = "d1:y1:q1:ad2:id20:abcdefghij01234567891:k32:";
+	const char* seqSigText = "3:seqi787e3:sig64:";
 	const char* backText = "5:token20:azaztokenzaztokenzaz1:v"
 		"28:bencoded data in 'v' elemente1:q3:put1:t2:aae"; // a immutable put query
 
 	std::string bMessage;
 	bMessage += frontText; // start the bencoded message string
-	for(int x=0; x<268; ++x) bMessage += "k"; // add 268 characters for the 'key' element
+	for(int x=0; x<32; ++x) bMessage += "k"; // add 32 characters for the 'key' element
 	bMessage += seqSigText; // add the sequence number and set up for the signature element
-	for(int x=0; x<256; ++x) bMessage += "s"; // add 256 characters for the 'sig' element
+	for(int x=0; x<64; ++x) bMessage += "s"; // add 64 characters for the 'sig' element
 	bMessage += backText; // finish the bencoded string
 
 	DHTMessage message((unsigned char*)bMessage.c_str(), bMessage.length());
@@ -213,14 +209,14 @@ TEST(DHTMessageClassTest, DecodeMutablePutQueryTestWithRegion) {
 				message.vBuf.len));
 
 	// test the key info
-	EXPECT_EQ(268, message.key.len);
+	EXPECT_EQ(32, message.key.len);
 	EXPECT_EQ('k', message.key.b[0]);   // first character should be 'k'
-	EXPECT_EQ('k', message.key.b[267]); // last character should be 'k'
+	EXPECT_EQ('k', message.key.b[31]); // last character should be 'k'
 
 	// test the sig info
-	EXPECT_EQ(256, message.signature.len);
+	EXPECT_EQ(64, message.signature.len);
 	EXPECT_EQ('s', message.signature.b[0]);   // first character should be 'k'
-	EXPECT_EQ('s', message.signature.b[255]); // last character should be 'k'
+	EXPECT_EQ('s', message.signature.b[63]); // last character should be 'k'
 
 	// test the seq number
 	EXPECT_EQ(787, message.sequenceNum);

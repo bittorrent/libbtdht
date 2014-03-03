@@ -1822,24 +1822,18 @@ bool DhtImpl::ProcessQueryPut(DHTMessage &message, DhtPeerID &peerID,
 		// store the data under a sha1 hash of the entire public key
 		CopyBytesToDhtID(targetDhtID, _sha_callback((const byte*)message.key.b, message.key.len).value);
 		PairContainerBase<MutableData>* containerPtr = NULL;
-		if (_mutablePutStore.AddKeyToList(addrHashPtr, targetDhtID, &containerPtr, time(NULL)) == NEW_ITEM){
+		if (_mutablePutStore.AddKeyToList(addrHashPtr, targetDhtID, &containerPtr, time(NULL)) == NEW_ITEM) {
 			// this is new to the store, set the sequence num, copy the 'v' bytes, store the signature and key
 			containerPtr->value.sequenceNum = message.sequenceNum;
-			for (int x=0; x<message.vBuf.len; ++x){
-				containerPtr->value.v.push_back(message.vBuf.b[x]);
-			}
+			containerPtr->value.v.assign(message.vBuf.b, message.vBuf.b + message.vBuf.len);
 			// store the signature
-			containerPtr->value.rsaSignatureLen = message.signature.len;
-			for (int x=0; x<message.signature.len; ++x){
-				containerPtr->value.rsaSignature[x] = message.signature.b[x];
-			}
+			memcpy(containerPtr->value.signature, message.signature.b, message.signature.len);
 			// store the key
-			for (int x=0; x<message.key.len; ++x){
-				containerPtr->value.rsaKey.push_back(message.key.b[x]);
-			}
+			memcpy(containerPtr->value.key, message.key.b, message.key.len);
+
 			byte to_hash[1040]; // 1000 byte message + seq + formatting
 			int written = snprintf(reinterpret_cast<char*>(to_hash), 1040,
-					MUTABLE_PAYLOAD_FORMAT, message.sequenceNum);
+				MUTABLE_PAYLOAD_FORMAT, message.sequenceNum);
 			assert((written + message.vBuf.len) <= 1040);
 			memcpy(to_hash + written, message.vBuf.b, message.vBuf.len);
 
@@ -1863,15 +1857,9 @@ bool DhtImpl::ProcessQueryPut(DHTMessage &message, DhtPeerID &peerID,
 						// update the sequence number
 						containerPtr->value.sequenceNum = message.sequenceNum;
 						// update the value stored
-						containerPtr->value.v.clear();
-						for (int x=0; x<message.vBuf.len; ++x){
-							containerPtr->value.v.push_back(message.vBuf.b[x]);
-						}
+						containerPtr->value.v.assign(message.vBuf.b, message.vBuf.b + message.vBuf.len);
 						// update the signature
-						containerPtr->value.rsaSignatureLen = message.signature.len;
-						for (int x=0; x<message.signature.len; ++x){
-							containerPtr->value.rsaSignature[x] = message.signature.b[x];
-						}
+						memcpy(containerPtr->value.signature, message.signature.b, message.signature.len);
 					}
 					// update the last time accessed
 					containerPtr->lastUse = time(NULL);
@@ -1947,10 +1935,10 @@ bool DhtImpl::ProcessQueryGet(DHTMessage &message, DhtPeerID &peerID,
 		assert(mutableStoreIterator->first == targetId);
 		valueToReturn.len = mutableStoreIterator->second.value.v.size();
 		valueToReturn.b = &(mutableStoreIterator->second.value.v.front());
-		signatureToReturn.len = mutableStoreIterator->second.value.rsaSignatureLen;
-		signatureToReturn.b = (byte*)(mutableStoreIterator->second.value.rsaSignature);
-		keyToReturn.len = mutableStoreIterator->second.value.rsaKey.size();
-		keyToReturn.b = &(mutableStoreIterator->second.value.rsaKey.front());
+		signatureToReturn.len = sizeof(mutableStoreIterator->second.value.signature);
+		signatureToReturn.b = (byte*)(mutableStoreIterator->second.value.signature);
+		keyToReturn.len = sizeof(mutableStoreIterator->second.value.key);
+		keyToReturn.b = mutableStoreIterator->second.value.key;
 		sequenceNum = mutableStoreIterator->second.value.sequenceNum;
 		mutableStoreIterator->second.lastUse = time(NULL);
 	}
@@ -1964,7 +1952,7 @@ bool DhtImpl::ProcessQueryGet(DHTMessage &message, DhtPeerID &peerID,
 			// we have a v value
 			assert(immutableStoreIterator->first == targetId);
 			valueToReturn.len = immutableStoreIterator->second.value.size();
-			valueToReturn.b = &(immutableStoreIterator->second.value.front());
+			valueToReturn.b = &immutableStoreIterator->second.value[0];
 			immutableStoreIterator->second.lastUse = time(NULL);
 		}
 	}

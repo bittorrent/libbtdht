@@ -538,11 +538,12 @@ This simple struct collects the information from a mutable put rpc.
 struct MutableData
 {
 	int64 sequenceNum;
-	byte rsaSignature[256];  // rsa signatures are either 128 or 256 bytes
-	unsigned int rsaSignatureLen;
+	// ed25519 signatire
+	byte signature[64];
+	// ed25519 key
+	byte key[32];
 	sha1_hash cas; // hash of sequence number and value
 	bool cas_initialized;
-	std::vector<byte> rsaKey;
 	std::vector<byte> v;
 };
 
