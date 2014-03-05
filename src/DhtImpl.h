@@ -9,6 +9,7 @@
 #include <vector>
 #include <map>
 #include <algorithm> // for min_element
+#include <stdarg.h> // for va_start etc.
 
 #include "smart_ptr.h" // for smart_ptr
 #include "blockallocator.h"
