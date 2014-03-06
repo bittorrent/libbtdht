@@ -451,6 +451,19 @@ bool ValidateEncoding( const void * data, uint len )
 
 #endif
 
+bool DhtImpl::AccountAndSend(const DhtPeerID &peer, const void *data, int len,
+		int packetSize) {
+	Account(DHT_BW_IN_REQ, packetSize);
+
+	if (len < 0) {
+		do_log("dht blob exceeds maximum size.");
+		return false;
+	}
+	Account(DHT_BW_OUT_REPL, len);
+	SendTo(peer, data, len);
+	return true;
+}
+
 void DhtImpl::SendTo(const DhtPeerID &peer, const void *data, uint len)
 {
 	if (!_dht_enabled) return;
@@ -744,7 +757,11 @@ DhtRequest *DhtImpl::SendPing(const DhtPeerID &peer_id) {
 	put_version(sb);
 	sb("1:y1:qe");
 	assert(sb.length() >= 0);
-
+	
+	if (sb.length() < 0) {
+		do_log("SendPing blob exceeds maximum size.");
+		return NULL;
+	}
 	SendTo(peer_id, buf, sb.length());
 	return req;
 }
@@ -1470,13 +1487,8 @@ bool DhtImpl::ProcessQueryAnnouncePeer(DHTMessage& message, DhtPeerID &peerID,
 	put_version(sb);
 	sb("1:y1:re");
 
-	Account(DHT_BW_IN_REQ, packetSize);
-	assert(sb.length() >= -1);
-	Account(DHT_BW_OUT_REPL, sb.length());
-
-	// Send the reply to the peer.
-	SendTo(peerID, buf, sb.length());
-	return true;
+	assert(sb.length() >= 0);
+	return AccountAndSend(peerID, buf, sb.length(), packetSize);
 }
 
 bool DhtImpl::ProcessQueryGetPeers(DHTMessage &message, DhtPeerID &peerID,
@@ -1578,18 +1590,14 @@ bool DhtImpl::ProcessQueryGetPeers(DHTMessage &message, DhtPeerID &peerID,
 
 	sb("e");
 
-	Account(DHT_BW_IN_REQ, packetSize);
 	put_transaction_id(sb, message.transactionID);
 	put_version(sb);
 
 	sb("1:y1:re");
 
 	assert(sb.length() >= 0 && sb.length() <= mtu);
-	Account(DHT_BW_OUT_REPL, sb.length());
 
-	// Send the reply to the peer.
-	SendTo(peerID, buf, sb.length());
-	return true;
+	return AccountAndSend(peerID, buf, sb.length(), packetSize);
 }
 
 bool DhtImpl::ProcessQueryFindNode(DHTMessage &message, DhtPeerID &peerID,
@@ -1625,19 +1633,14 @@ bool DhtImpl::ProcessQueryFindNode(DHTMessage &message, DhtPeerID &peerID,
 		, format_dht_id(target_id), n);
 #endif
 
-	Account(DHT_BW_IN_REQ, packetSize);
 	sb("e");
-
 	put_transaction_id(sb, message.transactionID);
 	put_version(sb);
 	sb("1:y1:re");
 
 	assert(sb.length() >= 0 && sb.length() <= mtu);
 
-	Account(DHT_BW_OUT_REPL, sb.length());
-
-	SendTo(peerID, buf, sb.length());
-	return true;
+	return AccountAndSend(peerID, buf, sb.length(), packetSize);
 }
 
 void DhtImpl::send_put_response(smart_buffer& sb, Buffer& transaction_id,
@@ -1648,9 +1651,8 @@ void DhtImpl::send_put_response(smart_buffer& sb, Buffer& transaction_id,
 	put_version(sb);
 	sb("1:y1:re");
 	assert(sb.length() >= 0);
-	Account(DHT_BW_IN_REQ, packetSize);
-	Account(DHT_BW_OUT_REPL, sb.length());
-	SendTo(peerID, sb.begin(), sb.length());
+
+	AccountAndSend(peerID, sb.begin(), sb.length(), packetSize);
 }
 
 void DhtImpl::send_put_response(smart_buffer& sb, Buffer& transaction_id,
@@ -1664,9 +1666,8 @@ void DhtImpl::send_put_response(smart_buffer& sb, Buffer& transaction_id,
 	put_version(sb);
 	sb("1:y1:ee");
 	assert(sb.length() >= 0);
-	Account(DHT_BW_IN_REQ, packetSize);
-	Account(DHT_BW_OUT_REPL, sb.length());
-	SendTo(peerID, sb.begin(), sb.length());
+
+	AccountAndSend(peerID, sb.begin(), sb.length(), packetSize);
 }
 
 bool DhtImpl::ProcessQueryPut(DHTMessage &message, DhtPeerID &peerID,
@@ -1893,19 +1894,14 @@ bool DhtImpl::ProcessQueryGet(DHTMessage &message, DhtPeerID &peerID,
 		sb("1:v")(valueToReturn);
 	}
 
-	Account(DHT_BW_IN_REQ, packetSize);
-
 	sb("e");
 	put_transaction_id(sb, message.transactionID);
 	put_version(sb);
 	sb("1:y1:re");
 
 	assert(sb.length() >= 0 && sb.length() <= mtu);
-	Account(DHT_BW_OUT_REPL, sb.length());
 
-	// Send the reply
-	SendTo(peerID, buf, sb.length());
-	return true;
+	return AccountAndSend(peerID, buf, sb.length(), packetSize);
 }
 
 bool DhtImpl::ProcessQueryVote(DHTMessage &message, DhtPeerID &peerID,
@@ -1946,19 +1942,15 @@ bool DhtImpl::ProcessQueryVote(DHTMessage &message, DhtPeerID &peerID,
 
 	AddVoteToStore(sb, target_id, peerID.addr, message.vote);
 
-	Account(DHT_BW_IN_REQ, packetSize);
-
 	sb("e");
 	put_transaction_id(sb, message.transactionID);
 	put_version(sb);
 	sb("1:y1:re");
 
 	assert(sb.length() >= 0 && sb.length() <= GetUDP_MTU(peerID.addr));
-	Account(DHT_BW_OUT_REPL, sb.length());
 
 	// Send the reply to the peer.
-	SendTo(peerID, buf, sb.length());
-	return true;
+	return AccountAndSend(peerID, buf, sb.length(), packetSize);
 }
 
 bool DhtImpl::ProcessQueryPing(DHTMessage &message, DhtPeerID &peerID,
@@ -1979,13 +1971,9 @@ bool DhtImpl::ProcessQueryPing(DHTMessage &message, DhtPeerID &peerID,
 	put_version(sb);
 	sb("1:y1:re");
 
-	Account(DHT_BW_IN_REQ, packetSize);
 	assert(sb.length() >= 0);
-	Account(DHT_BW_OUT_REPL, sb.length());
 
-	// Send the reply to the peer.
-	SendTo(peerID, buf, sb.length());
-	return true;
+	return AccountAndSend(peerID, sb.begin(), sb.length(), packetSize);
 }
 
 bool DhtImpl::ProcessQuery(DhtPeerID& peerID, DHTMessage &message, int packetSize) {
@@ -3685,6 +3673,10 @@ void FindNodeDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsi
 	sb("1:y1:qe");
 
 	assert(sb.length() >= 0);
+	if (sb.length() < 0) {
+		do_log("DhtSendRPC blob exceeds maximum size.");
+		return;
+	}
 	impl->SendTo(nodeInfo.id, buf, sb.length());
 }
 
@@ -3811,6 +3803,10 @@ void GetPeersDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsi
 	sb("1:y1:qe");
 
 	assert(sb.length() >= 0);
+	if (sb.length() < 0) {
+		do_log("DhtSendRPC blob exceeds maximum size");
+		return;
+	}
 	impl->SendTo(nodeInfo.id, buf, sb.length());
 }
 
@@ -3935,6 +3931,10 @@ void AnnounceDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsi
 	sb("1:y1:qe");
 
 	assert(sb.length() >= 0);
+	if (sb.length() < 0) {
+		do_log("DhtSendRPC blob exceeds maximum size.");
+		return;
+	}
 	impl->SendTo(nodeInfo.id, buf, sb.length());
 }
 
@@ -4016,6 +4016,11 @@ void GetDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 	sb("1:y1:qe");
 	
 	assert(sb.length() >= 0);
+
+	if (sb.length() < 0) {
+		do_log("DhtSendRPC blob exceeds maximum size.");
+		return;
+	}
 	impl->SendTo(nodeInfo.id, buf, sb.length());
 }
 
@@ -4124,12 +4129,12 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 	int64 len = sb.length();
 
 	// send the query
-	if (len > 0) {
-		impl->SendTo(nodeInfo.id, buf, len);
-	} else {
+	if (len < 0) {
 		do_log("DHT put blob exceeds %i byte maximum size! blk size: %lu", buf_len,
 				blk.size());
+		return;
 	}
+	impl->SendTo(nodeInfo.id, buf, len);
 }
 
 void PutDhtProcess::ImplementationSpecificReplyProcess(void *userdata
@@ -4242,6 +4247,10 @@ void VoteDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned
 	sb("1:y1:qe");
 
 	assert(sb.length() >= 0);
+	if (sb.length() < 0) {
+		do_log("DhSendRPC blob exceeds maximum size");
+		return;
+	}
 	impl->SendTo(nodeInfo.id, buf, sb.length());
 }
 

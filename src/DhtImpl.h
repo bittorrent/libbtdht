@@ -1958,6 +1958,8 @@ public:
 	//--------------------------------------------------------------------------------
 
 
+	bool AccountAndSend(const DhtPeerID &peer, const void *data, int len,
+			int packetSize);
 	void SendTo(const DhtPeerID &peer, const void *data, uint len);
 
 	// determine which bucket an id belongs to
