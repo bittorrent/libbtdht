@@ -9,6 +9,7 @@ lib ut_dht : src/$(SOURCES).cpp
 	  <include>src
 	  <library>/ut_utils//ut_utils/<link>static
 	  <target-os>windows:<define>WIN32
+     <toolset>gcc:<cxxflags>-Wno-invalid-offsetof
 	: # default build
 	  <link>static
 	: # usage-requirements
