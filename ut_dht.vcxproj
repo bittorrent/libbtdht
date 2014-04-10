@@ -115,6 +115,7 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="..\ut_core\prop_sheets\win32-2012.props" />
     <Import Project="..\ut_core\prop_sheets\debug-2012.props" />
+    <Import Project="..\ut_core\prop_sheets\memleak.vsprops" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='WinRTDebug|Win32'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
