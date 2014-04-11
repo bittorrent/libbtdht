@@ -2783,6 +2783,15 @@ void DhtImpl::Restart() {
 	bool old_g_dht_enabled = _dht_enabled;
 	Enable(0,0); // Stop Dht...this also enables the bootstrap process
 
+	// this is called from GenerateID, which gets called when we initialize
+	// the DHT. The problem of setting _dht_peer_count to zero is that
+	// immediately following this, we receive handle the respons and consider
+	// the bootstrap a failure (because we don't have any nodes)
+
+	// store the nodes in a temporary vector while tearing down
+	// and setting up the routing table again
+	std::vector<DhtPeer*> temp;
+
 	// clear the buckets
 	for(int i = 0; i < _buckets.size(); i++) {
 		for (DhtPeer **peer = &_buckets[i]->peers.first(); *peer;) {
@@ -2791,12 +2800,12 @@ void DhtImpl::Restart() {
 			// in the linked list, so there's no need to step forward
 			// explicitly.
 			_buckets[i]->peers.unlinknext(peer);
-			_dht_peer_allocator.Free(p);
+			temp.push_back(p);
 		}
 		for (DhtPeer **peer = &_buckets[i]->replacement_peers.first(); *peer;) {
 			DhtPeer *p = *peer;
 			_buckets[i]->replacement_peers.unlinknext(peer);
-			_dht_peer_allocator.Free(p);
+			temp.push_back(p);
 		}
 		_dht_bucket_allocator.Free(_buckets[i]);
 	}
@@ -2804,6 +2813,7 @@ void DhtImpl::Restart() {
 	_refresh_buckets_counter = 0;
 	_refresh_bucket = 0;
 	_dht_peers_count = 0;
+
 	_outstanding_add_node = 0;
 
 	// Initialize the buckets
@@ -2814,6 +2824,20 @@ void DhtImpl::Restart() {
 		// map the [0, 32) range onto the top of
 		// the first word in the ID
 		bucket->first.id[0] = uint(i) << (32 - 5);
+	}
+
+	for (std::vector<DhtPeer*>::iterator i = temp.begin(), end(temp.end());
+		i != end; ++i) {
+		DhtPeer* p = *i;
+		Update(p->id
+#if g_log_dht
+			, p->origin
+#else
+			, 0
+#endif
+			, p->rtt != INT_MAX, p->rtt);
+
+		_dht_peer_allocator.Free(p);
 	}
 
 	// Need to do this twice so prev_token becomes random too

@@ -629,7 +629,7 @@ public:
 
 	// round trip time of this node. This is
 	// a sliding average. Every time we hear from this
-	// not we update our understanding of its RTT.
+	// node we update our understanding of its RTT.
 	// this is used to prioritize nodes with low RTT,
 	// to speed up lookups
 	// if this is INT_MAX, it means we don't know its RTT yet
