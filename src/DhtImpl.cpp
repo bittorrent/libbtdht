@@ -1164,9 +1164,12 @@ void DhtImpl::ExpirePeersFromStore(time_t expire_before)
 		}
 	}
 
-	for (std::vector<VoteContainer>::iterator it = _vote_store.begin(); it != _vote_store.end(); ++it) {
+	for (std::vector<VoteContainer>::iterator it = _vote_store.begin(); it != _vote_store.end();) {
 		// if nobody has voted for 2 hours, expire it!
-		if (it->last_use + 2 * 60 * 60 > time(NULL)) continue;
+		if (it->last_use + 2 * 60 * 60 > time(NULL)) {
+			++it;
+			continue;
+		}
 
 		it = _vote_store.erase(it);
 	}
