@@ -4293,10 +4293,14 @@ DhtProcessBase* VoteDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 	return process;
 }
 
-void VoteDhtProcess::ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags)
+void VoteDhtProcess::ImplementationSpecificReplyProcess(void *userdata
+	, const DhtPeerID &peer_id, DHTMessage &message, uint flags)
 {
 	int num_votes[5];
-	BencodedList *votes = message.replyDict->GetList("v");
+	BencodedList *votes = NULL;
+	if (message.replyDict != NULL)
+		votes = message.replyDict->GetList("v");
+
 	if (votes) {
 		for (int i = 0; i < 5; ++i) {
 			if (i >= votes->GetCount()) {
