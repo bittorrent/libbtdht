@@ -3457,10 +3457,16 @@ DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(
 		Buffer info_hash;
 		std::vector<Buffer> values;
 
-		nodes.b = (byte*)message.replyDict->GetString("nodes", &nodes.len);
-		info_hash.b = (byte*)message.replyDict->GetString("info_hash", &info_hash.len);
+		BencodedList* valuesList = NULL;
+		if (message.replyDict) {
+			nodes.b = (byte*)message.replyDict->GetString("nodes", &nodes.len);
+			info_hash.b = (byte*)message.replyDict->GetString("info_hash", &info_hash.len);
+			valuesList = message.replyDict->GetList("values");
+		} else {
+			nodes.b = NULL;
+			info_hash.b = NULL;
+		}
 
-		BencodedList *valuesList = message.replyDict->GetList("values");
 		if (valuesList) {
 			for(uint i=0; i!=valuesList->GetCount(); i++) {
 				Buffer b;
@@ -3478,7 +3484,7 @@ DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(
 		}
 
 		// if there is a filename callback, see if a filename is in the reply
-		if (callbackPointers.filenameCallback) {
+		if (callbackPointers.filenameCallback && message.replyDict) {
 			Buffer filename;
 			filename.b = (byte*)message.replyDict->GetString("n", &filename.len);
 			if (filename.b && filename.len) {
@@ -3562,7 +3568,12 @@ DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(
 		// This is needed to be able to announce to the peers.
 		// it's also required to cast votes
 		Buffer token;
-		token.b = (byte*)message.replyDict->GetString("token", &token.len);
+		if (message.replyDict) {
+			token.b = (byte*)message.replyDict->GetString("token", &token.len);
+		} else {
+			token.b = NULL;
+		}
+
 		if (token.b && token.len <= 20) {
 			dfnh->token.len = token.len;
 			assert(dfnh->token.b == NULL);
