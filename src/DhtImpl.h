@@ -167,46 +167,54 @@ public:
 	smart_buffer(unsigned char* buffer, int64 len) :
 		buffer(buffer), start(buffer), end(buffer + len) {}
 	smart_buffer& operator() (char const* fmt, ...) {
-		if (buffer < end) {
-			va_list list;
-			va_start(list, fmt);
-			int64 written = vsnprintf(reinterpret_cast<char*>(buffer), end - buffer,
-					fmt, list);
-			// if we fuck up formatting, vsnprintf will return a negative value
-			assert(written >= 0);
-			if (written >= 0) {
-				buffer += written;
-			} else {
-				buffer = end;
-			}
-			va_end(list);
+
+		assert(buffer < end);
+		if (buffer >= end) return *this;
+
+		va_list list;
+		va_start(list, fmt);
+		int64 written = vsnprintf(reinterpret_cast<char*>(buffer), end - buffer,
+				fmt, list);
+		// if we fuck up formatting, vsnprintf will return a negative value
+		assert(written >= 0);
+		if (written >= 0) {
+			buffer += written;
+		} else {
+			buffer = end;
 		}
+		va_end(list);
 		return *this;
 	}
 	smart_buffer& operator() (unsigned char const* value, int64 len) {
-		if (buffer < end) {
-			memcpy(buffer, value, len);
-			buffer += len;
-		}
+		assert(buffer < end);
+		if (buffer >= end) return *this;
+
+		memcpy(buffer, value, len);
+		buffer += len;
 		return *this;
 	}
 	smart_buffer& operator() (DhtID const& value) {
-		if (buffer < end) {
-			if (buffer + DHT_ID_SIZE < end) {
-				DhtIDToBytes(buffer, value);
-			}
-			buffer += DHT_ID_SIZE;
-		}
+		assert(buffer < end);
+		if (buffer >= end) return *this;
+
+		assert(buffer + DHT_ID_SIZE <= end);
+		if (buffer + DHT_ID_SIZE > end) return *this;
+
+		DhtIDToBytes(buffer, value);
+		buffer += DHT_ID_SIZE;
 		return *this;
 	}
 	smart_buffer& operator() (SockAddr const& value) {
 		int value_size = value.isv4() ? 6 : 18;
-		if (buffer < end) {
-			if (buffer + value_size < end) {
-				value.compact(buffer, true);
-			}
-			buffer += value_size;
-		}
+		assert(buffer < end);
+		if (buffer >= end) return *this;
+
+		assert(buffer + value_size <= end);
+		if (buffer + value_size > end) return *this;
+
+		value.compact(buffer, true);
+
+		buffer += value_size;
 		return *this;
 	}
 	smart_buffer& operator() (Buffer const& value) {

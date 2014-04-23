@@ -4127,10 +4127,12 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 
 	int64 seq = processManager.seq() + 1;
 	// note that blk is returned by reference
+	// we want a copy that the put callback can modify
 	std::vector<char> blk = processManager.get_data_blk();
-	if(signature.size() == 0) {
+	if (signature.size() == 0) {
 		callbackPointers.putCallback(callbackPointers.callbackContext
 			, blk, seq);
+		assert(blk.size() <= 1024);
 
 		// the callback must return either an empty buffer, or
 		// a valid bencoded structure
