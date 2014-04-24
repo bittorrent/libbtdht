@@ -4128,8 +4128,8 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 	int64 seq = processManager.seq() + 1;
 	// note that blk is returned by reference
 	// we want a copy that the put callback can modify
-	std::vector<char> blk = processManager.get_data_blk();
-	if (signature.size() == 0) {
+	std::vector<char>& blk = processManager.get_data_blk();
+	if (signature.empty() || blk.empty()) {
 		callbackPointers.putCallback(callbackPointers.callbackContext
 			, blk, seq);
 
@@ -4147,6 +4147,10 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 
 		Sign(signature, blk, _skey, seq);
 	}
+
+	// the buffer has to be greater than zero. The empty string must be
+	// represented by "0:"
+	assert(blk.size() > 0);
 	
 	static const int buf_len = 1500;
 	unsigned char buf[buf_len];
