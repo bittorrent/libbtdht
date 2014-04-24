@@ -157,6 +157,9 @@ DhtImpl::DhtImpl(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_so
 	_mutablePutStore.SetCurrentTime(time(NULL));
 	_mutablePutStore.SetMaximumAge(7200); // 2 hours
 	_mutablePutStore.SetMaximumSize(1000);
+
+	// zero-out _dht_account
+	memset(_dht_accounting, 0, sizeof(_dht_accounting));
 }
 
 DhtImpl::~DhtImpl()
