@@ -4132,6 +4132,10 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 	if (signature.size() == 0) {
 		callbackPointers.putCallback(callbackPointers.callbackContext
 			, blk, seq);
+
+		// the buffer has to be greater than zero. The empty string must be
+		// represented by "0:"
+		assert(blk.size() > 0);
 		assert(blk.size() <= 1024);
 
 		// the callback must return either an empty buffer, or
