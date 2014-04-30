@@ -225,6 +225,13 @@ public:
 		return start;
 	}
 	int64 length() const { return buffer < end ? buffer - start : -1; }
+	int get_pos() const { return buffer - start; }
+	void restore_pos(int pos)
+	{
+		assert(pos >= 0);
+		assert(pos < length());
+		buffer = start + pos;
+	}
 };
 
 /*******************************************************************************
