@@ -186,7 +186,7 @@ public:
 		return *this;
 	}
 	smart_buffer& operator() (unsigned char const* value, int64 len) {
-		assert(buffer < end);
+		assert(buffer + len < end);
 		if (buffer >= end) return *this;
 
 		memcpy(buffer, value, len);

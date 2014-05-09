@@ -1678,7 +1678,7 @@ void DhtImpl::send_put_response(smart_buffer& sb, Buffer& transaction_id,
 
 bool DhtImpl::ProcessQueryPut(DHTMessage &message, DhtPeerID &peerID,
 		int packetSize) {
-	unsigned char buf[256];
+	unsigned char buf[8192];
 	smart_buffer sb(buf, sizeof(buf));
 	DhtID targetDhtID;
 
@@ -1961,7 +1961,7 @@ bool DhtImpl::ProcessQueryVote(DHTMessage &message, DhtPeerID &peerID,
 
 bool DhtImpl::ProcessQueryPing(DHTMessage &message, DhtPeerID &peerID,
 		int packetSize) {
-	unsigned char buf[256];
+	unsigned char buf[512];
 	smart_buffer sb(buf, sizeof(buf));
 
 #if defined(_DEBUG_DHT)
