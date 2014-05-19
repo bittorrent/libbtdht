@@ -2081,15 +2081,15 @@ bool DhtImpl::ProcessResponse(DhtPeerID& peerID, DHTMessage &message, int pkt_si
 		peer->client.from_compact(message.version.b, message.version.len);
 	}
 
-	SockAddr myIp;
-	if(message.external_ip.len == 6){
+	if (message.external_ip.len == 6) {
+		SockAddr myIp;
 		myIp.set_addr4(*((uint32 *) message.external_ip.b));
 		myIp.set_port(ReadBE16(message.external_ip.b+4));
-	}else if(message.external_ip.len == 18){
+		CountExternalIPReport(myIp, req->peer.addr);
+	} else if (message.external_ip.len == 18) {
+		SockAddr myIp;
 		myIp.set_addr6(*((in6_addr *) message.external_ip.b));
 		myIp.set_port(ReadBE16(message.external_ip.b+16));
-	}
-	if (!myIp.is_addr_any()){
 		CountExternalIPReport(myIp, req->peer.addr);
 	}
 
