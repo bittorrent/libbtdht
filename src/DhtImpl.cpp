@@ -3036,7 +3036,7 @@ void DhtImpl::CountExternalIPReport( const SockAddr& addr, const SockAddr& voter
 
 	SockAddr tempWinner;
 	_ip_counter->CountIP(addr, voter);
-	if(_ip_counter->GetIP(tempWinner) && tempWinner != _lastLeadingAddress){
+	if(_ip_counter->GetIP(tempWinner) && !tempWinner.ip_eq(_lastLeadingAddress)) {
 		_lastLeadingAddress = tempWinner;
 		GenerateId();
 		Restart();
