@@ -297,7 +297,7 @@ void DhtImpl::ForceRefresh()
  */
 bool DhtImpl::CanAnnounce()
 {
-	if (_dht_bootstrap != -2  || !_allow_new_job)
+	if (_dht_bootstrap != -2  || !_allow_new_job || _dht_peers_count < 32)
 		return false;
 	return true;
 }
