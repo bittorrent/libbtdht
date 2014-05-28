@@ -2404,7 +2404,7 @@ void DhtImpl::ProcessCallback()
 	// That was due to the timeout error happened in the first DHT nodes lookup, which means we only
 	// connected to the inital DHT routers but none of them replied in 4 seconds. If we failed to get enough
 	// nodes in the first attempt, we will redo the bootstrapping again in 15 seconds.
-	if (_dht_peers_count > 2) {
+	if (_dht_peers_count >= 8) {
 		_dht_bootstrap = -2;
 		_dht_bootstrap_failed = 0;
 		_refresh_bucket = 0;
@@ -2683,7 +2683,7 @@ void DhtImpl::Tick()
 		_5min_counter = 0;
 		RandomizeWriteToken();
 		ExpirePeersFromStore(time(NULL) - 30 * 60);
-		if (_dht_peers_count <= 2)
+		if (_dht_peers_count < 8)
 			_dht_bootstrap = 1;
 		_immutablePutStore.UpdateUsage(time(NULL));
 		_mutablePutStore.UpdateUsage(time(NULL));
