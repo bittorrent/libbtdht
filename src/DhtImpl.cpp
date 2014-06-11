@@ -3112,6 +3112,9 @@ DhtPeer* DhtImpl::Update(const DhtPeerID &id, uint origin, bool seen, int rtt)
 	candidateNode.rtt = rtt;
 	candidateNode.num_fail = 0;
 	candidateNode.first_seen = candidateNode.lastContactTime = seen ? time(NULL) : 0;
+#if g_log_dht
+	candidateNode.origin = origin;
+#endif
 
 	// try putting the node in the active node list (or updating it if it's already there)
 	bool added = bucket.InsertOrUpdateNode(this, candidateNode, DhtBucket::peer_list, &returnNode);
