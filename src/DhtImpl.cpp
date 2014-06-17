@@ -705,6 +705,10 @@ void DhtImpl::SplitBucket(uint bucket_id)
 		p->ComputeSubPrefix(span, KADEMLIA_BUCKET_SIZE_POWER); // reset the sub-prefix info for routing table performance optimization for the new span
 		if (p->id.id.id[slot] & mask) {
 			old_bucket.replacement_peers.unlinknext(peer);
+#if g_log_dht
+			assert(p->origin >= 0);
+			assert(p->origin < sizeof(g_dht_peertype_count)/sizeof(g_dht_peertype_count[0]));
+#endif
 			new_bucket.replacement_peers.enqueue(p);
 		} else {
 			peer=&(*peer)->next;
@@ -714,9 +718,14 @@ void DhtImpl::SplitBucket(uint bucket_id)
 
 DhtRequest *DhtImpl::LookupRequest(uint tid)
 {
-	for(DhtRequest *req = _requests.first(); req; req=req->next)
+	for(DhtRequest *req = _requests.first(); req; req=req->next) {
+#if g_log_dht
+		assert(req->origin >= 0);
+		assert(req->origin < sizeof(g_dht_peertype_count)/sizeof(g_dht_peertype_count[0]));
+#endif
 		if (req->tid == tid)
 			return req;
+	}
 	return NULL;
 }
 
@@ -733,6 +742,7 @@ DhtRequest *DhtImpl::AllocateRequest(const DhtPeerID &peer_id)
 	do {
 		req->tid = rand();
 	} while (LookupRequest(req->tid));
+
 	_requests.enqueue(req);
 	req->has_id = true;
 	req->slow_peer = false;
@@ -788,6 +798,8 @@ void DhtImpl::UpdateError(const DhtPeerID &id)
 			|| !bucket.replacement_peers.empty()) {
 			// failed plenty of times... delete
 #if g_log_dht
+			assert((*peer)->origin >= 0);
+			assert((*peer)->origin < sizeof(g_dht_peertype_count)/sizeof(g_dht_peertype_count[0]));
 			g_dht_peertype_count[(*peer)->origin]--;
 #endif
 			bucket.peers.unlinknext(peer);
@@ -809,6 +821,8 @@ void DhtImpl::UpdateError(const DhtPeerID &id)
 		if (id != p->id) continue;
 		if (++p->num_fail >= (p->lastContactTime ? FAIL_THRES : FAIL_THRES_NOCONTACT)) {
 #if g_log_dht
+			assert((*peer)->origin >= 0);
+			assert((*peer)->origin < sizeof(g_dht_peertype_count)/sizeof(g_dht_peertype_count[0]));
 			g_dht_peertype_count[(*peer)->origin]--;
 #endif
 			bucket.replacement_peers.unlinknext(peer);
@@ -2020,6 +2034,13 @@ bool DhtImpl::ProcessQuery(DhtPeerID& peerID, DHTMessage &message, int packetSiz
 bool DhtImpl::ProcessResponse(DhtPeerID& peerID, DHTMessage &message, int pkt_size,
 		DhtRequest *req) {
 
+#if g_log_dht
+	if (req) {
+		assert(req->origin >= 0);
+		assert(req->origin < sizeof(g_dht_peertype_count) / sizeof(g_dht_peertype_count[0]));
+	}
+#endif
+
 	if (message.transactionID.len != 4) {
 		Account(DHT_INVALID_PR_BAD_TID_LENGTH, pkt_size);
 		return false;
@@ -2523,6 +2544,8 @@ void DhtImpl::AddNode(const SockAddr& addr, void* userdata, uint origin)
 	req->_pListener = new DhtRequestListener<DhtImpl>(this, &DhtImpl::OnBootStrapPingReply, userdata);
 
 #if g_log_dht
+	assert(origin >= 0);
+	assert(origin < sizeof(g_dht_peertype_count)/sizeof(g_dht_peertype_count[0]));
 	req->origin = origin;
 #endif
 }
@@ -2632,6 +2655,11 @@ void DhtImpl::Tick()
 	// Expire 30 second old requests
 	for(DhtRequest **reqp = &_requests.first(), *req; (req = *reqp) != NULL; ) {
 		int delay = (int)(get_milliseconds() - req->time);
+
+#if g_log_dht
+		assert(req->origin >= 0);
+		assert(req->origin < sizeof(g_dht_peertype_count)/sizeof(g_dht_peertype_count[0]));
+#endif
 
 		// Support time that goes backwards
 		if (delay < 0) {
@@ -2802,15 +2830,28 @@ void DhtImpl::Restart() {
 	for(int i = 0; i < _buckets.size(); i++) {
 		for (DhtPeer **peer = &_buckets[i]->peers.first(); *peer;) {
 			DhtPeer *p = *peer;
+
+#if g_log_dht
+			assert(p->origin >= 0);
+			assert(p->origin < sizeof(g_dht_peertype_count)/sizeof(g_dht_peertype_count[0]));
+#endif
 			// unlinknext will make peer point the following entry
 			// in the linked list, so there's no need to step forward
 			// explicitly.
 			_buckets[i]->peers.unlinknext(peer);
+			p->next = NULL;
 			temp.push_back(p);
 		}
 		for (DhtPeer **peer = &_buckets[i]->replacement_peers.first(); *peer;) {
 			DhtPeer *p = *peer;
+
+#if g_log_dht
+			assert(p->origin >= 0);
+			assert(p->origin < sizeof(g_dht_peertype_count)/sizeof(g_dht_peertype_count[0]));
+#endif
+
 			_buckets[i]->replacement_peers.unlinknext(peer);
+			p->next = NULL;
 			temp.push_back(p);
 		}
 		_dht_bucket_allocator.Free(_buckets[i]);
@@ -2835,6 +2876,12 @@ void DhtImpl::Restart() {
 	for (std::vector<DhtPeer*>::iterator i = temp.begin(), end(temp.end());
 		i != end; ++i) {
 		DhtPeer* p = *i;
+
+#if g_log_dht
+		assert(p->origin >= 0);
+		assert(p->origin < sizeof(g_dht_peertype_count)/sizeof(g_dht_peertype_count[0]));
+#endif
+
 		Update(p->id
 #if g_log_dht
 			, p->origin
@@ -3086,6 +3133,11 @@ DhtPeer* DhtImpl::Update(const DhtPeerID &id, uint origin, bool seen, int rtt)
 {
 	// if seen == true, a true RTT must be provided
 	assert(rtt != INT_MAX || seen == false);
+
+#if g_log_dht
+	assert(origin >= 0);
+	assert(origin < sizeof(g_dht_peertype_count)/sizeof(g_dht_peertype_count[0]));
+#endif
 
 	if (id.addr.get_port() == 0)
 		return NULL;
@@ -3401,6 +3453,11 @@ void DhtLookupScheduler::IssueQuery(int nodeIndex)
 
 void DhtLookupScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags)
 {
+#if g_log_dht
+	assert(req->origin >= 0);
+	assert(req->origin < sizeof(g_dht_peertype_count)/sizeof(g_dht_peertype_count[0]));
+#endif
+
 	// if we are processing a reply to a non-slow peer then decrease the count of
 	// non-slow outstanding requests
 	if(!req->slow_peer){
@@ -3676,6 +3733,11 @@ Let slow peers continue until they either respond or timeout.
 */
 void DhtBroadcastScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags)
 {
+#if g_log_dht
+	assert(req->origin >= 0);
+	assert(req->origin < sizeof(g_dht_peertype_count)/sizeof(g_dht_peertype_count[0]));
+#endif
+
 	if(flags & NORMAL_RESPONSE){
 		// a normal response, let the derived class handle it
 		if (!aborted) {
@@ -4584,6 +4646,11 @@ bool DhtBucket::InsertOrUpdateNode(DhtImpl* pDhtImpl, DhtPeer const& candidateNo
 {
 	DhtBucketList &bucketList = (bucketType == peer_list) ? peers : replacement_peers;
 
+#if g_log_dht
+	assert(candidateNode.origin >= 0);
+	assert(candidateNode.origin < sizeof(g_dht_peertype_count)/sizeof(g_dht_peertype_count[0]));
+#endif
+
 	uint n = 0;	// number of peers in bucket-list
 	// for all peers in the bucket...
 	bucketList.ClearSubPrefixInfo();
@@ -4599,6 +4666,10 @@ bool DhtBucket::InsertOrUpdateNode(DhtImpl* pDhtImpl, DhtPeer const& candidateNo
 		// Check if the peer is already in the bucket
 		if (candidateNode.id != p->id) continue;
 
+#if g_log_dht
+		assert(p->origin >= 0);
+		assert(p->origin < sizeof(g_dht_peertype_count)/sizeof(g_dht_peertype_count[0]));
+#endif
 		p->num_fail = 0;
 		p->lastContactTime = candidateNode.lastContactTime;
 		if (p->first_seen == 0) {
@@ -4622,6 +4693,9 @@ bool DhtBucket::InsertOrUpdateNode(DhtImpl* pDhtImpl, DhtPeer const& candidateNo
 		peer->lastContactTime = candidateNode.lastContactTime;
 		peer->first_seen = candidateNode.first_seen;
 		peer->rtt = candidateNode.rtt;
+#if g_log_dht
+		peer->origin = candidateNode.origin;
+#endif
 		memset(&peer->client, 0, sizeof(peer->client));
 		pDhtImpl->_dht_peers_count++;
 		bucketList.enqueue(peer);
