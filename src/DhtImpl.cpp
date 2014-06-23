@@ -2126,7 +2126,10 @@ bool DhtImpl::ProcessError(DhtPeerID& peerID, DHTMessage &message, int pkt_size,
 		DhtRequest *req) {
 	// Handle an error for one of our requests.
 #if defined(_DEBUG_DHT)
-	debug_log("**** GOT ERROR '%s'", message.GetBencodedDictionary().GetString("e"));
+	if (message.error_message == NULL)
+		debug_log("**** GOT ERROR (unknown error)");
+	else
+		debug_log("**** GOT ERROR (%d) '%s'", message.error_code, message.error_message);
 #endif
 	if (req != NULL) { // this may be a response to an existing request
 		return ProcessResponse(peerID, message, pkt_size, req);
@@ -2988,6 +2991,28 @@ bool DhtImpl::ProcessIncoming(byte *buffer, size_t len, const SockAddr& addr)
 		Account(DHT_INVALID_PI_NO_DICT, len);
 		return false;
 	}
+#if defined(_DEBUG_DHT)
+	if (message.version.len == 4) {
+		debug_log(" [%d.%d.%d.%d:%u] client version: %c%c %u"
+			, addr._sin6[12]
+			, addr._sin6[13]
+			, addr._sin6[14]
+			, addr._sin6[15]
+			, addr.get_port()
+			, message.version.b[0]
+			, message.version.b[1]
+			, (int(message.version.b[2]) << 8) | message.version.b[3]
+			);
+	} else {
+		debug_log(" [%d.%d.%d.%d:%u] client version: unknown"
+			, addr._sin6[12]
+			, addr._sin6[13]
+			, addr._sin6[14]
+			, addr._sin6[15]
+			, addr.get_port()
+			);
+	}
+#endif
 	if (_dht_enabled)
 		return InterpretMessage(message, addr, len);
 
