@@ -870,6 +870,12 @@ struct DhtFindNodeEntry {
 	byte queried;
 	Buffer token;
 	sha1_hash cas; // hash of seq / value of node's data
+
+	// the two letter client version from the DHT messages
+	char client[2];
+
+	// the 16 bit version number from the DHT messages
+	uint version;
 };
 
 struct DhtGetNodeResult {
@@ -1262,6 +1268,10 @@ class DhtBroadcastScheduler : public DhtProcessBase
 			: DhtProcessBase(dpm), outstanding(0) { assert(false); }
 		virtual void Schedule();
 
+		// return true if we should not send an RPC to this node. This is
+		// used to not send put messages to nodes we know don't support it
+		virtual bool Filter(DhtFindNodeEntry const& e) { return false; }
+
 	public:
 		void OnReply(void*& userdata, const DhtPeerID &peer_id, DhtRequest *req
 			, DHTMessage &message, DhtProcessFlags flags);
@@ -1603,6 +1613,8 @@ class PutDhtProcess : public DhtBroadcastScheduler
 		virtual void CompleteThisProcess();
 		std::vector<char> signature;
 		GetDhtProcess* getProc;
+
+		virtual bool Filter(DhtFindNodeEntry const& e);
 
 	public:
 

@@ -3318,6 +3318,9 @@ void DhtLookupNodeList::InsertPeer(const DhtPeerID &id, const DhtID &target)
 	ep->queried = QUERIED_NO;
 	ep->token.len = 0;
 	ep->token.b = NULL;
+	memset(ep->cas.value, 0, sizeof(ep->cas));
+	memset(ep->client, 0, sizeof(ep->client));
+	ep->version = 0;
 }
 
 DhtLookupNodeList::~DhtLookupNodeList()
@@ -3707,6 +3710,13 @@ void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 		//fprintf(stderr, "in get: %s\n", (char*)to_hash);
 		dfnh->cas = impl->_sha_callback(to_hash, written + message.vBuf.len);
 	}
+
+	// if the node included its software version, remember that in the node
+	// table
+	if (message.version.b && message.version.len == 4) {
+		memcpy(dfnh->client, message.version.b, 2);
+		dfnh->version = (int(message.version.b[2]) << 8) | message.version.b[3];
+	}
 }
 
 //*****************************************************************************
@@ -3722,14 +3732,14 @@ void DhtBroadcastScheduler::Schedule()
 	// out, then issue another rpc.
 	int numReplies = 0, index = 0;
 	while(index < processManager.size()
-		  && outstanding < KADEMLIA_BROADCAST_OUTSTANDING
-		  && (outstanding + numReplies) < KADEMLIA_K_ANNOUNCE)
+		&& outstanding < KADEMLIA_BROADCAST_OUTSTANDING
+		&& (outstanding + numReplies) < KADEMLIA_K_ANNOUNCE)
 	{
 		switch(processManager[index].queried){
 			case QUERIED_NO:
 			{
-				if (!aborted) {
-					DhtFindNodeEntry &nodeInfo = processManager[index];
+				DhtFindNodeEntry& nodeInfo = processManager[index];
+				if (!aborted && !Filter(nodeInfo)) {
 					nodeInfo.queried = QUERIED_YES;
 					DhtRequest *req = impl->AllocateRequest(nodeInfo.id);
 					DhtSendRPC(nodeInfo, req->tid);
@@ -3770,7 +3780,16 @@ void DhtBroadcastScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id, D
 		}
 
 		DhtFindNodeEntry *dfnh = processManager.FindQueriedPeer(peer_id);
-		if (dfnh) dfnh->queried = QUERIED_REPLIED;
+		if (dfnh) {
+			dfnh->queried = QUERIED_REPLIED;
+
+			// if the node included its software version, remember that in the node
+			// table
+			if (message.version.b && message.version.len == 4) {
+				memcpy(dfnh->client, message.version.b, 2);
+				dfnh->version = (int(message.version.b[2]) << 8) | message.version.b[3];
+			}
+		}
 		outstanding--;
 		Schedule();
 	}
@@ -4192,6 +4211,28 @@ DhtProcessBase* PutDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
 	PutDhtProcess* process = new PutDhtProcess(pDhtImpl, dpm, pkey, skey, time(NULL), cbPointers, flags);
 
 	return process;
+}
+
+bool PutDhtProcess::Filter(DhtFindNodeEntry const& e)
+{
+	// uTorrent builds older than 31395 do not support the DHT put/get feature
+	if (memcmp(e.client, "UT", 2) == 0 && e.version < 31395) {
+#if defined(_DEBUG_DHT)
+		debug_log("    NOT sending PUT to %c%c %u", e.client[0], e.client[1], e.version);
+#endif
+		return true;
+	}
+
+	// libtorrent versions less than 1.0 do not support the DHT put/get feature
+	if (memcmp(e.client, "LT", 2) == 0 && e.version < 0x100) {
+#if defined(_DEBUG_DHT)
+		debug_log("    NOT sending PUT to %c%c %u", e.client[0], e.client[1], e.version);
+#endif
+		return true;
+	}
+
+	// let everything else through
+	return false;
 }
 
 void PutDhtProcess::Sign(std::vector<char> &signature, std::vector<char> v, byte * skey, int64 seq) {
