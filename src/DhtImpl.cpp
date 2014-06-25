@@ -1241,11 +1241,12 @@ void DhtImpl::RandomizeWriteToken()
 char *DhtImpl::hexify(byte *b)
 {
 	char const static hex[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-	static char buff[41];
+	static char buff[2*DHT_ID_SIZE+1];
 	for(int i=0; i!=DHT_ID_SIZE; i++) {
 		buff[i*2] = hex[b[i]>>4];
 		buff[i*2+1] = hex[b[i]&0xF];
 	}
+	buff[2*DHT_ID_SIZE] = 0;
 	return buff;
 }
 #endif
