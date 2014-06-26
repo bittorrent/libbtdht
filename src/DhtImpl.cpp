@@ -1473,7 +1473,7 @@ bool DhtImpl::ProcessQueryAnnouncePeer(DHTMessage& message, DhtPeerID &peerID,
 #if defined(_DEBUG_DHT)
 		//TODO: use static temp and strcpy into it
 		char* temp = strdup(format_dht_id(info_hash_id));
-		debug_log("ANNOUNCE_PEER: id='%s', info_hash='%s', host='%A', token='%s'", format_dht_id(peerID.id), temp, &peerID.addr, hexify(message.token.b)); //TODO: valgrind fishiness
+		debug_log("ANNOUNCE_PEER: id='%s', info_hash='%s', token='%s', host='%A'", format_dht_id(peerID.id), temp, hexify(message.token.b), &peerID.addr); //TODO: valgrind fishiness
 		free(temp);
 #endif
 
