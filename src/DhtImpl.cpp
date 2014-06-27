@@ -243,9 +243,7 @@ void DhtImpl::Initialize(UDPSocketInterface *udp_socket_mgr
 	RandomizeWriteToken();
 
 	// Load the DHT state
-#ifndef _DEBUG_DHT
 	LoadState();
-#endif
 }
 
 /**
@@ -1296,7 +1294,8 @@ bool DhtImpl::ParseIncomingICMP(BencEntity &benc, const SockAddr& addr)
 	//Account(DHT_BW_IN_REPL, pkt_size);
 
 #if defined(_DEBUG_DHT)
-	debug_log("Got ICMP error (%d seconds) tid=%d", (get_milliseconds() - req->time) / 1000, Read32(tid));
+	debug_log("Got ICMP error (rtt=%d ms) tid=%d"
+		, get_milliseconds() - req->time, Read32(tid));
 #endif
 
 	UnlinkRequest(req);
@@ -2083,8 +2082,8 @@ bool DhtImpl::ProcessResponse(DhtPeerID& peerID, DHTMessage &message, int pkt_si
 	peerID.addr.set_port(req->peer.addr.get_port());
 
 #if defined(_DEBUG_DHT)
-	debug_log("Got reply from (%d seconds) tid=%d",
-		int32(get_milliseconds() - req->time) / 1000, Read32(message.transactionID.b));
+	debug_log("Got reply (rtt=%d ms) tid=%d",
+		int32(get_milliseconds() - req->time), Read32(message.transactionID.b));
 #endif
 #if g_log_dht
 	dht_log("dlok replytime:%u\n", get_milliseconds() - req->time);
