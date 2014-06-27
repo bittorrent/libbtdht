@@ -745,14 +745,25 @@ enum KademliaConstants
 {
 	KADEMLIA_K = 8,
 	KADEMLIA_K_ANNOUNCE = 8,
-	KADEMLIA_BUCKET_SIZE = 8, // MUST be a power of 2 for routing table optimization; see KADEMLIA_BUCKET_SIZE_POWER
-	KADEMLIA_BUCKET_SIZE_POWER = 3, // MUST stay coordinated with KADEMLIA_BUCKET_SIZE
+
+	// MUST be a power of 2 for routing table optimization; see
+	// KADEMLIA_BUCKET_SIZE_POWER
+	KADEMLIA_BUCKET_SIZE = 8,
+
+	// MUST stay coordinated with KADEMLIA_BUCKET_SIZE
+	KADEMLIA_BUCKET_SIZE_POWER = 3,
 
 	// The sum of these two items should always be greater than 0.
-	KADEMLIA_LOOKUP_OUTSTANDING = 4,  // initial dht searches should allow more outstanding lookups
-	KADEMLIA_LOOKUP_OUTSTANDING_DELTA = -2, // How much to reduce the number of outstanding lookup requests allowed for
-											// less agressive dht searches once some connectivity threshold is reached.
-	KADEMLIA_BROADCAST_OUTSTANDING = 3,
+
+	// initial dht searches should allow more outstanding lookups
+	KADEMLIA_LOOKUP_OUTSTANDING = 4, 
+
+	// How much to reduce the number of outstanding lookup requests allowed for
+	// less agressive dht searches once some connectivity threshold is reached.
+	KADEMLIA_LOOKUP_OUTSTANDING_DELTA = -2,
+
+	// the number of outstanding announce_peer / put requests to have at a time
+	KADEMLIA_BROADCAST_OUTSTANDING = 4,
 };
 
 struct DhtRequest {
@@ -942,7 +953,7 @@ class DhtLookupNodeList
 {
 	private:
 		unsigned int numNodes;	// Number of entries in node table
-		DhtFindNodeEntry nodes[KADEMLIA_K*4];		// Table of closest nodes
+		DhtFindNodeEntry nodes[KADEMLIA_K*8];		// Table of closest nodes
 		static void FreeNodeEntry(DhtFindNodeEntry &ent) { if (ent.token.b) free(ent.token.b); }
 
 	protected:

@@ -3599,7 +3599,20 @@ void DhtLookupScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id
 
 	// mark this node replied and schedule more queries
 	DhtFindNodeEntry *dfnh = processManager.FindQueriedPeer(peer_id);
-	if (dfnh) dfnh->queried = QUERIED_REPLIED;
+	if (dfnh) { 
+		if (message.dhtMessageType == DHT_ERROR) {
+			dfnh->queried = QUERIED_ERROR;
+		} else {
+			dfnh->queried = QUERIED_REPLIED;
+		}
+
+		// if the node included its software version, remember that in the node
+		// table
+		if (message.version.b && message.version.len == 4) {
+			memcpy(dfnh->client, message.version.b, 2);
+			dfnh->version = (int(message.version.b[2]) << 8) | message.version.b[3];
+		}
+	}
 	Schedule();
 }
 
@@ -3690,7 +3703,8 @@ DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(
 			}
 			free(peers);
 		}
-		else if(nodes.b && nodes.len % 26 == 0){
+
+		if (nodes.b && nodes.len % 26 == 0) {
 			uint num_nodes = nodes.len / 26;
 			// Insert all peers into my internal list.
 			while (num_nodes != 0) {
@@ -3709,8 +3723,8 @@ DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(
 				}
 				num_nodes--;
 			}
-		}
-		else{
+		} else if (values.empty()) {
+			// we didn't get any nodes nor any values
 			errored = true;
 		}
 	}
@@ -3739,6 +3753,12 @@ DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(
 			assert(dfnh->token.b == NULL);
 			dfnh->token.b = (byte*)malloc(token.len);
 			memcpy(dfnh->token.b, token.b, token.len);
+		}
+
+		// capture client version
+		if (message.version.b && message.version.len == 4) {
+			memcpy(dfnh->client, message.version.b, 2);
+			dfnh->version = (int(message.version.b[2]) << 8) | message.version.b[3];
 		}
 		return dfnh;
 	}
@@ -3780,12 +3800,6 @@ void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 		dfnh->cas = impl->_sha_callback(to_hash, written + message.vBuf.len);
 	}
 
-	// if the node included its software version, remember that in the node
-	// table
-	if (message.version.b && message.version.len == 4) {
-		memcpy(dfnh->client, message.version.b, 2);
-		dfnh->version = (int(message.version.b[2]) << 8) | message.version.b[3];
-	}
 }
 
 //*****************************************************************************
