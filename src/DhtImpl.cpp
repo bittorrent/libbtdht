@@ -3376,6 +3376,21 @@ DhtProcessManager::~DhtProcessManager()
 		delete _dhtProcesses[x];
 }
 
+void DhtProcessManager::Start()
+{
+	_currentProcessNumber = 0;
+	if (_dhtProcesses.size() > 0)
+		_dhtProcesses[0]->Start();
+}
+
+void DhtProcessManager::Next()
+{
+	_currentProcessNumber++;  // increment to the next process
+	if (_currentProcessNumber < _dhtProcesses.size())
+		_dhtProcesses[_currentProcessNumber]->Start();
+	else
+		delete this; // all processes have completed; terminate the manager
+}
 
 //*****************************************************************************
 //
@@ -3384,6 +3399,58 @@ DhtProcessManager::~DhtProcessManager()
 //*****************************************************************************
 DHTMessage DhtProcessBase::dummyMessage;
 
+void DhtProcessBase::CompleteThisProcess()
+{
+	// let the process manager know that this phase of the dht process is complete
+	// and to start the next phase of the process (or terminate if all phases are
+	// complete).
+	processManager.Next();
+}
+
+void DhtProcessBase::Start()
+{
+	Schedule();
+}
+
+DhtProcessBase::DhtProcessBase(DhtImpl *pImpl, DhtProcessManager &dpm
+	, const DhtID &target2, int target2_len, time_t startTime
+	, const CallBackPointers &consumerCallbacks)
+	: callbackPointers(consumerCallbacks)
+	, target(target2)
+	, target_len(target2_len)
+	, impl(pImpl)
+	, start_time(startTime)
+	, processManager(dpm)
+{
+	// let the DHT know there is an active process
+	impl->_dht_busy++;
+};
+
+DhtProcessBase::~DhtProcessBase()
+{
+	impl->_dht_busy--;
+}
+ 
+//*****************************************************************************
+//
+// DhtLookupScheduler
+//
+//*****************************************************************************
+
+DhtLookupScheduler::DhtLookupScheduler(DhtImpl* pDhtImpl
+	, DhtProcessManager &dpm, const DhtID &target2, int target2_len
+	, time_t startTime, const CallBackPointers &consumerCallbacks
+	, int maxOutstanding)
+	: DhtProcessBase(pDhtImpl, dpm, target2, target2_len
+		, startTime,consumerCallbacks), maxOutstandingLookupQueries(maxOutstanding)
+		, numNonSlowRequestsOutstanding(0), totalOutstandingRequests(0)
+{
+	assert(maxOutstandingLookupQueries > 0);
+#if g_log_dht
+	dht_log("DhtLookupScheduler,instantiated,id,%d,time,%d\n", target.id[0]
+		, get_microseconds());
+#endif
+}
 
 //*****************************************************************************
 //
@@ -3410,11 +3477,12 @@ void DhtLookupScheduler::Schedule()
 	// if the first 4 (default value) good nodes in the list do not yet have queries out to them - continue making queries
 	// if the number of uncompromised outstanding queries is less than max outstanding allowed - continue making queries
 	while (nodeIndex < processManager.size()
-		  && nodeIndex < K
-		  && (numOutstandingRequestsToClosestNodes < maxOutstandingLookupQueries
-		      || numNonSlowRequestsOutstanding < maxOutstandingLookupQueries
-			 )
-		  ) {
+		&& nodeIndex < K
+		&& (numOutstandingRequestsToClosestNodes < maxOutstandingLookupQueries
+			|| numNonSlowRequestsOutstanding < maxOutstandingLookupQueries
+			)
+		) {
+
 		switch (processManager[nodeIndex].queried){
 			case QUERIED_NO: {
 				IssueQuery(nodeIndex);
@@ -3480,7 +3548,8 @@ void DhtLookupScheduler::IssueQuery(int nodeIndex)
 	totalOutstandingRequests++;
 }
 
-void DhtLookupScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags)
+void DhtLookupScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id
+	, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags)
 {
 #if g_log_dht
 	assert(req->origin >= 0);
@@ -3767,7 +3836,8 @@ void DhtBroadcastScheduler::Schedule()
 /**
 Let slow peers continue until they either respond or timeout.
 */
-void DhtBroadcastScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags)
+void DhtBroadcastScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id
+	, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags)
 {
 #if g_log_dht
 	assert(req->origin >= 0);
@@ -3810,7 +3880,21 @@ void DhtBroadcastScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id, D
 //
 //*****************************************************************************
 
-void FindNodeDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
+FindNodeDhtProcess::FindNodeDhtProcess(DhtImpl* pDhtImpl
+	, DhtProcessManager &dpm, const DhtID &target2
+	, int target2_len, time_t startTime
+	, const CallBackPointers &consumerCallbacks, int maxOutstanding)
+	: DhtLookupScheduler(pDhtImpl,dpm,target2,target2_len,startTime
+		,consumerCallbacks,maxOutstanding)
+{
+	DhtIDToBytes(target_bytes, target);
+#if g_log_dht
+	dht_log("FindNodeDhtProcess,instantiated,id,%d,time,%d\n", target.id[0], get_microseconds());
+#endif
+}
+
+void FindNodeDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
+	, const unsigned int transactionID)
 {
 	unsigned char buf[1500];
 	smart_buffer sb(buf, sizeof(buf));
@@ -3881,6 +3965,21 @@ const char* const GetPeersDhtProcess::ArgsNamesStr[] =
 	"4:vote"
 };
 
+void GetPeersDhtProcess::CompleteThisProcess()
+{
+#if g_log_dht
+	dht_log("GetPeersDhtProcess,completed,id,%d,time,%d\n", target.id[0], get_microseconds());
+#endif
+
+	processManager.CompactList();
+	DhtProcessBase::CompleteThisProcess();
+}
+
+GetPeersDhtProcess::~GetPeersDhtProcess()
+{
+	delete gpArgumenterPtr;
+}
+
 GetPeersDhtProcess::GetPeersDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 	, const DhtID &target2, int target2_len, time_t startTime
 	, const CallBackPointers &consumerCallbacks, int maxOutstanding)
@@ -3935,7 +4034,8 @@ DhtProcessBase* GetPeersDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager 
 	return process;
 }
 
-void GetPeersDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
+void GetPeersDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
+	, const unsigned int transactionID)
 {
 	static const int bufLen = 1500;
 	char rpcArgsBuf[bufLen];
@@ -4031,6 +4131,20 @@ AnnounceDhtProcess::AnnounceDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 	announceArgumenterPtr->enabled[a_implied_port] = true;
 }
 
+void AnnounceDhtProcess::Start()
+{
+#if g_log_dht
+	dht_log("AnnounceDhtProcess,start_announce,id,%d,time,%d\n", target.id[0], get_microseconds());
+#endif
+	processManager.SetAllQueriedStatus(QUERIED_NO);
+	DhtProcessBase::Start();
+}
+
+AnnounceDhtProcess::~AnnounceDhtProcess()
+{
+	delete announceArgumenterPtr;
+}
+
 DhtProcessBase* AnnounceDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
 	const DhtID &target2, int target2_len,
 	CallBackPointers &cbPointers,
@@ -4054,7 +4168,8 @@ DhtProcessBase* AnnounceDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager 
 	return process;
 }
 
-void AnnounceDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
+void AnnounceDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
+	, const unsigned int transactionID)
 {
 	static const int bufLen = 1500;
 	char rpcArgsBuf[bufLen];
@@ -4175,6 +4290,16 @@ void GetDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 	impl->SendTo(nodeInfo.id, buf, sb.length());
 }
 
+void GetDhtProcess::CompleteThisProcess()
+{
+#if g_log_dht
+	dht_log("GetDhtProcess,completed,id,%d,time,%d\n", target.id[0], get_microseconds());
+#endif
+
+	processManager.CompactList();
+	DhtProcessBase::CompleteThisProcess();
+}
+
 //*****************************************************************************
 //
 // PutDhtProcess			put
@@ -4214,6 +4339,19 @@ DhtProcessBase* PutDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
 	return process;
 }
 
+void PutDhtProcess::Start()
+{
+#if g_log_dht
+	dht_log("PutDhtProcess,start_announce,id,%d,time,%d\n", target.id[0], get_microseconds());
+#endif
+	processManager.SetAllQueriedStatus(QUERIED_NO);
+	DhtProcessBase::Start();
+}
+ 
+PutDhtProcess::~PutDhtProcess()
+{
+}
+ 
 bool PutDhtProcess::Filter(DhtFindNodeEntry const& e)
 {
 	// uTorrent builds older than 31395 do not support the DHT put/get feature
@@ -4257,9 +4395,9 @@ bool DhtImpl::Verify(byte const * signature, byte const * message, int message_l
 	return _ed25519_verify_callback(signature, buf, message_length + index, pkey);
 }
 
-void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
+void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
+	, const unsigned int transactionID)
 {
-
 	int64 seq = processManager.seq() + 1;
 	// note that blk is returned by reference
 	// we want a copy that the put callback can modify
@@ -4373,15 +4511,27 @@ void ScrapeDhtProcess::ImplementationSpecificReplyProcess(void *userdata, const 
 	downloadersBF.b = (byte*)message.replyDict->GetString("BFpe", &downloadersBF.len);
 
 	if(seedsBF.len == 256) {
-		seeds->set_union(seedsBF.b);
+		seeds.set_union(seedsBF.b);
 	}
 	if (downloadersBF.len == 256) {
-		downloaders->set_union(downloadersBF.b);
+		downloaders.set_union(downloadersBF.b);
 	}
 
 	// now do the parent class's reply process
 	GetPeersDhtProcess::ImplementationSpecificReplyProcess(userdata, peer_id, message, flags);
 }
+
+ScrapeDhtProcess::ScrapeDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
+	, const DhtID &target2, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks, int maxOutstanding)
+	: GetPeersDhtProcess(pDhtImpl, dpm, target2, target2_len, startTime
+		, consumerCallbacks, maxOutstanding)
+	, seeds(2048, 2)
+	, downloaders(2048, 2)
+{
+	gpArgumenterPtr->enabled[a_scrape] = true;
+}
+
+ScrapeDhtProcess::~ScrapeDhtProcess() {}
 
 void ScrapeDhtProcess::CompleteThisProcess()
 {
@@ -4389,7 +4539,8 @@ void ScrapeDhtProcess::CompleteThisProcess()
 	DhtIDToBytes(target_bytes, target);
 
 	if(callbackPointers.scrapeCallback){
-		callbackPointers.scrapeCallback(callbackPointers.callbackContext, target_bytes, downloaders->estimate_count(), seeds->estimate_count());
+		callbackPointers.scrapeCallback(callbackPointers.callbackContext
+			, target_bytes, downloaders.estimate_count(), seeds.estimate_count());
 	}
 
 	DhtProcessBase::CompleteThisProcess();
@@ -4411,7 +4562,8 @@ DhtProcessBase* ScrapeDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &d
 //
 //*****************************************************************************
 
-void VoteDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
+void VoteDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
+	, const unsigned int transactionID)
 {
 	unsigned char buf[1500];
 	byte target_bytes[DHT_ID_SIZE];
@@ -4435,6 +4587,26 @@ void VoteDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned
 		return;
 	}
 	impl->SendTo(nodeInfo.id, buf, sb.length());
+}
+
+VoteDhtProcess::VoteDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
+	, const DhtID &target2, int target2_len, time_t startTime
+	, const CallBackPointers &consumerCallbacks)
+	: DhtBroadcastScheduler(pDhtImpl,dpm,target2,target2_len,startTime,consumerCallbacks)
+	, voteValue(0)
+{
+}
+
+void VoteDhtProcess::SetVoteValue(int value)
+{
+	assert(value >= 0 && value <= 5);
+	voteValue = value;
+}
+
+void VoteDhtProcess::Start()
+{
+	processManager.SetAllQueriedStatus(QUERIED_NO);
+	DhtProcessBase::Start();
 }
 
 /**
