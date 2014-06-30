@@ -90,7 +90,6 @@ public:
 
 	virtual void AnnounceInfoHash(
 		const byte *info_hash,
-		int info_hash_len,
 		DhtPartialHashCompletedCallback *partial_callback,
 		DhtAddNodesCallback *addnodes_callback,
 		DhtPortCallback* pcb,

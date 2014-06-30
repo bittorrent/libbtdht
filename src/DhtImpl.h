@@ -1134,7 +1134,6 @@ class DhtProcessBase
 	protected:
 		CallBackPointers callbackPointers;
 		DhtID target;
-		int target_len;
 		smart_ptr<DhtImpl> impl;
 		time_t start_time;
 		DhtProcessManager &processManager;
@@ -1156,7 +1155,7 @@ class DhtProcessBase
 		static DHTMessage dummyMessage;
 
 		DhtProcessBase(DhtImpl *pImpl, DhtProcessManager &dpm
-			, const DhtID &target2, int target2_len, time_t startTime
+			, const DhtID &target2, time_t startTime
 			, const CallBackPointers &consumerCallbacks);
 		virtual ~DhtProcessBase();
 		virtual void Start();
@@ -1214,7 +1213,7 @@ class DhtLookupScheduler : public DhtProcessBase
 			, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags);
 
 		DhtLookupScheduler(DhtImpl* pDhtImpl, DhtProcessManager &dpm
-			, const DhtID &target2, int target2_len, time_t startTime
+			, const DhtID &target2, time_t startTime
 			, const CallBackPointers &consumerCallbacks, int maxOutstanding);
 };
 
@@ -1241,9 +1240,9 @@ class DhtBroadcastScheduler : public DhtProcessBase
 			, DHTMessage &message, DhtProcessFlags flags);
 
 		DhtBroadcastScheduler(DhtImpl* pDhtImpl, DhtProcessManager &dpm
-			, const DhtID &target2, int target2_len, time_t startTime
+			, const DhtID &target2, time_t startTime
 			, const CallBackPointers &consumerCallbacks)
-			: DhtProcessBase(pDhtImpl, dpm, target2, target2_len, startTime
+			: DhtProcessBase(pDhtImpl, dpm, target2, startTime
 			, consumerCallbacks), outstanding(0), aborted(false) {}
 
 		virtual void Abort() { aborted = true; }
@@ -1266,11 +1265,11 @@ class FindNodeDhtProcess : public DhtLookupScheduler //public DhtProcessBase
 	public:
 
 		FindNodeDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2
-			, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks
+			, time_t startTime, const CallBackPointers &consumerCallbacks
 			, int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING);
 
 		static DhtProcessBase* Create(DhtImpl* pImpl, DhtProcessManager &dpm,
-			const DhtID &target2, int target2_len,
+			const DhtID &target2,
 			CallBackPointers &cbPointers,
 			int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING);
 };
@@ -1437,11 +1436,11 @@ class GetPeersDhtProcess : public DhtLookupScheduler
 	public:
 
 		GetPeersDhtProcess(DhtImpl *pDhtImpl, DhtProcessManager &dpm, const DhtID &target2
-			, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks
+			, time_t startTime, const CallBackPointers &consumerCallbacks
 			, int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING);
 		~GetPeersDhtProcess();
 		static DhtProcessBase* Create(DhtImpl* pImpl, DhtProcessManager &dpm,
-			const DhtID &target2, int target2_len,
+			const DhtID &target2,
 			CallBackPointers &cbPointers,
 			int flags = 0,
 			int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING);
@@ -1480,12 +1479,12 @@ class AnnounceDhtProcess : public DhtBroadcastScheduler
 
 	public:
 		AnnounceDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2
-			, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks);
+			, time_t startTime, const CallBackPointers &consumerCallbacks);
 		~AnnounceDhtProcess();
 		virtual void Start();
 
 		static DhtProcessBase* Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
-			const DhtID &target2, int target2_len,
+			const DhtID &target2,
 			CallBackPointers &cbPointers,
 			cstr file_name,
 			int flags);
@@ -1509,13 +1508,13 @@ class GetDhtProcess : public DhtLookupScheduler
 		byte _id[DHT_ID_SIZE];
 
 		GetDhtProcess(DhtImpl *pDhtImpl, DhtProcessManager &dpm, const DhtID& target2
-			, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks
+			, time_t startTime, const CallBackPointers &consumerCallbacks
 			, int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING, bool with_cas = false);
 
 		virtual bool Filter(DhtFindNodeEntry const& e);
 
 		static DhtProcessBase* Create(DhtImpl* pImpl, DhtProcessManager &dpm,
-			const DhtID &target2, int target2_len,
+			const DhtID &target2,
 			CallBackPointers &cbPointers,
 			int flags = 0,
 			int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING);
@@ -1576,11 +1575,11 @@ class ScrapeDhtProcess : public GetPeersDhtProcess
 		virtual void CompleteThisProcess();
 
 	public:
-		ScrapeDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks, int maxOutstanding);
+		ScrapeDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2, time_t startTime, const CallBackPointers &consumerCallbacks, int maxOutstanding);
 		virtual ~ScrapeDhtProcess();
 
 		static DhtProcessBase* Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
-			const DhtID &target2, int target2_len,
+			const DhtID &target2,
 			CallBackPointers &cbPointers,
 			int maxOutstanding);
 };
@@ -1601,13 +1600,13 @@ protected:
 
 public:
 
-	VoteDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks);
+	VoteDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2, time_t startTime, const CallBackPointers &consumerCallbacks);
 	virtual ~VoteDhtProcess(){}
 	void SetVoteValue(int value);
 	virtual void Start();
 
 	static DhtProcessBase* Create(DhtImpl* pImpl, DhtProcessManager &dpm
-		, const DhtID &target2, int target2_len
+		, const DhtID &target2
 		, CallBackPointers &cbPointers, int voteValue);
 };
 
@@ -1652,7 +1651,7 @@ public:
 	void Put( const byte * pkey, const byte * skey, DhtPutCallback * put_callback,
 		void *ctx, int flags = 0, int64 seq = 0);
 
-	void AnnounceInfoHash(const byte *info_hash, int info_hash_len,
+	void AnnounceInfoHash(const byte *info_hash,
 		DhtPartialHashCompletedCallback *partial_callback,
 		DhtAddNodesCallback *addnodes_callback, DhtPortCallback* pcb, cstr file_name,
 		void *ctx, int flags);
@@ -1981,7 +1980,7 @@ public:
 	void GenRandomIDInBucket(DhtID &target, DhtBucket &bucket);
 	void GetStalestPeerInBucket(DhtPeer **ppeerFound, DhtBucket &bucket);
 
-	void DoFindNodes(DhtID &target, int target_len, IDhtProcessCallbackListener *process_callback = NULL, bool performLessAgressiveSearch = true);
+	void DoFindNodes(DhtID &target, IDhtProcessCallbackListener *process_callback = NULL, bool performLessAgressiveSearch = true);
 
 #ifdef DHT_SEARCH_TEST
 	void RunSearches();
@@ -1994,7 +1993,6 @@ public:
 	void ResolveName(DhtID const& target, DhtHashFileNameCallback* callb, void *ctx, int flags = 0);
 
 	void DoAnnounce(const DhtID &target,
-		int target_len,
 		DhtPartialHashCompletedCallback *pcallb,
 		DhtAddNodesCallback *callb,
 		DhtPortCallback *pcb,
