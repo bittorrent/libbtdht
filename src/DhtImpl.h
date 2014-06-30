@@ -743,7 +743,12 @@ protected:
 
 enum KademliaConstants
 {
+	// the default number of nodes to find in searches (for
+	// PUTs, we need to find at least as many nodes as we're
+	// PUTting to).
 	KADEMLIA_K = 8,
+
+	// the default number of nodes to announce and put to
 	KADEMLIA_K_ANNOUNCE = 8,
 
 	// MUST be a power of 2 for routing table optimization; see
@@ -1131,16 +1136,15 @@ inline unsigned int DhtProcessManager::AddDhtProcess(DhtProcessBase *process)
 */
 class DhtProcessBase
 {
+	private:
+		DhtProcessBase(DhtProcessManager& dpm);
+
 	protected:
 		CallBackPointers callbackPointers;
 		DhtID target;
 		smart_ptr<DhtImpl> impl;
 		time_t start_time;
 		DhtProcessManager &processManager;
-
-		// this constructor should never be used.
-		DhtProcessBase(DhtProcessManager& dpm): processManager(dpm)
-		{ assert(false); }
 
 		virtual void DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 			, const unsigned int transactionID) = 0;
@@ -1191,15 +1195,17 @@ class DhtProcessBase
 */
 class DhtLookupScheduler : public DhtProcessBase
 {
+	private:
+		DhtLookupScheduler(DhtProcessManager &dpm);
+
 	protected:
+		// the number of closest nodes to find
+		int num_targets;
 		int maxOutstandingLookupQueries;
 
 		int numNonSlowRequestsOutstanding;
 		int totalOutstandingRequests;
 
-		DhtLookupScheduler(DhtProcessManager &dpm)
-			: DhtProcessBase(dpm)
-		{ assert(false); }
 		virtual void Schedule();
 		virtual void ImplementationSpecificReplyProcess(void *userdata
 			, const DhtPeerID &peer_id, DHTMessage &message, uint flags);
@@ -1214,7 +1220,8 @@ class DhtLookupScheduler : public DhtProcessBase
 
 		DhtLookupScheduler(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 			, const DhtID &target2, time_t startTime
-			, const CallBackPointers &consumerCallbacks, int maxOutstanding);
+			, const CallBackPointers &consumerCallbacks, int maxOutstanding
+			, int targets = KADEMLIA_K);
 };
 
 //*****************************************************************************
@@ -1227,12 +1234,17 @@ class DhtLookupScheduler : public DhtProcessBase
 */
 class DhtBroadcastScheduler : public DhtProcessBase
 {
+	private:
+		DhtBroadcastScheduler(DhtProcessManager &dpm);
+
 	protected:
+		// the number of nodes to announce/put to
+		int num_targets;
+
+		// the number of outstanding announces/puts to keep at any given time
 		int outstanding;
 		bool aborted;
 
-		DhtBroadcastScheduler(DhtProcessManager &dpm)
-			: DhtProcessBase(dpm), outstanding(0) { assert(false); }
 		virtual void Schedule();
 
 	public:
@@ -1241,9 +1253,11 @@ class DhtBroadcastScheduler : public DhtProcessBase
 
 		DhtBroadcastScheduler(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 			, const DhtID &target2, time_t startTime
-			, const CallBackPointers &consumerCallbacks)
+			, const CallBackPointers &consumerCallbacks
+			, int targets = KADEMLIA_K_ANNOUNCE)
 			: DhtProcessBase(pDhtImpl, dpm, target2, startTime
-			, consumerCallbacks), outstanding(0), aborted(false) {}
+			, consumerCallbacks), num_targets(targets), outstanding(0)
+			, aborted(false) {}
 
 		virtual void Abort() { aborted = true; }
 };
@@ -1257,6 +1271,7 @@ class DhtBroadcastScheduler : public DhtProcessBase
 class FindNodeDhtProcess : public DhtLookupScheduler //public DhtProcessBase
 {
 	protected:
+
 		byte target_bytes[DHT_ID_SIZE]; // used to store the bytes of the target DhtID
 
 		virtual void DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID);

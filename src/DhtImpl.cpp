@@ -3464,10 +3464,13 @@ DhtProcessBase::~DhtProcessBase()
 DhtLookupScheduler::DhtLookupScheduler(DhtImpl* pDhtImpl
 	, DhtProcessManager &dpm, const DhtID &target2
 	, time_t startTime, const CallBackPointers &consumerCallbacks
-	, int maxOutstanding)
+	, int maxOutstanding, int targets)
 	: DhtProcessBase(pDhtImpl, dpm, target2
-		, startTime,consumerCallbacks), maxOutstandingLookupQueries(maxOutstanding)
-		, numNonSlowRequestsOutstanding(0), totalOutstandingRequests(0)
+		, startTime,consumerCallbacks)
+	, num_targets(targets)
+	, maxOutstandingLookupQueries(maxOutstanding)
+	, numNonSlowRequestsOutstanding(0)
+	, totalOutstandingRequests(0)
 {
 	assert(maxOutstandingLookupQueries > 0);
 #if g_log_dht
@@ -3488,7 +3491,7 @@ DhtLookupScheduler::DhtLookupScheduler(DhtImpl* pDhtImpl
 void DhtLookupScheduler::Schedule()
 {
 	int numOutstandingRequestsToClosestNodes = 0;
-	int K = KADEMLIA_K;
+	int K = num_targets;
 	int nodeIndex=0;
 
 	// so long as the index is still within the size of the nodes array
@@ -3867,7 +3870,7 @@ void DhtBroadcastScheduler::Schedule()
 	int numReplies = 0, index = 0;
 	while(index < processManager.size()
 		&& outstanding < KADEMLIA_BROADCAST_OUTSTANDING
-		&& (outstanding + numReplies) < KADEMLIA_K_ANNOUNCE)
+		&& (outstanding + numReplies) < num_targets)
 	{
 		switch(processManager[index].queried){
 			case QUERIED_NO:
@@ -4185,7 +4188,8 @@ const char* const AnnounceDhtProcess::ArgsNamesStr[] =
 	"5:token",
 };
 
-AnnounceDhtProcess::AnnounceDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2, time_t startTime, const CallBackPointers &consumerCallbacks)
+AnnounceDhtProcess::AnnounceDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
+	, const DhtID &target2, time_t startTime, const CallBackPointers &consumerCallbacks)
 	: DhtBroadcastScheduler(pDhtImpl,dpm,target2,startTime,consumerCallbacks)
 {
 	byte infoHashBytes[DHT_ID_SIZE];
@@ -4340,7 +4344,7 @@ GetDhtProcess::GetDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 	, const CallBackPointers &consumerCallbacks, int maxOutstanding
 	, bool with_cas)
 	: DhtLookupScheduler(pDhtImpl, dpm, target_2, startTime
-		, consumerCallbacks, maxOutstanding)
+		, consumerCallbacks, maxOutstanding, 12) // <-- find 12 nodes, not 8!
 	, _with_cas(with_cas)
 {
 	
@@ -4463,7 +4467,7 @@ PutDhtProcess::PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 	, const byte * pkey, const byte * skey, time_t startTime
 	, const CallBackPointers &consumerCallbacks, int flags)
 	: DhtBroadcastScheduler(pDhtImpl, dpm, target
-		, startTime, consumerCallbacks)
+		, startTime, consumerCallbacks, 12) // <- put to 12 nodes instead of 8!
 	, _with_cas(flags & IDht::with_cas)
 	, getProc(NULL)
 {
