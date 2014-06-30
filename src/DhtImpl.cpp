@@ -2588,7 +2588,9 @@ void DhtImpl::Vote(void *ctx_ptr, const sha1_hash* info_hash, int vote, DhtVoteC
 }
 
 void DhtImpl::Put(const byte * pkey, const byte * skey,
-		DhtPutCallback * put_callback, void *ctx, int flags, int64 seq)
+		DhtPutCallback * put_callback,
+		DhtPutCompletedCallback * put_completed_callback, void *ctx, int flags,
+		int64 seq)
 {
 	int maxOutstanding = (flags & announce_non_aggressive)
 		? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA
@@ -2604,12 +2606,13 @@ void DhtImpl::Put(const byte * pkey, const byte * skey,
 	DhtProcessManager *dpm = new DhtProcessManager(ids, num, target);
 	dpm->set_seq(seq);
 
-	CallBackPointers cbPtrs;
-	cbPtrs.putCallback = put_callback;
-	cbPtrs.callbackContext = ctx;
+	CallBackPointers callbacks;
+	callbacks.putCallback = put_callback;
+	callbacks.callbackContext = ctx;
+	callbacks.putCompletedCallback = put_completed_callback;
 
 	DhtProcessBase* getProc = GetDhtProcess::Create(this, *dpm, target
-		, cbPtrs, flags, maxOutstanding);
+		, callbacks, flags, maxOutstanding);
 	// processes will be exercised in the order they are added
 	dpm->AddDhtProcess(getProc); // add get_peers first
 
@@ -2618,7 +2621,7 @@ void DhtImpl::Put(const byte * pkey, const byte * skey,
 	// below
 	if ((flags & announce_only_get) == 0) {
 	DhtProcessBase* putProc = PutDhtProcess::Create(this, *dpm, pkey, skey,
-		cbPtrs, flags);
+		callbacks, flags);
 		dpm->AddDhtProcess(putProc); // add announce second
 	}
 	dpm->Start();
@@ -4619,6 +4622,7 @@ void PutDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 		Abort();
 		impl->Put(_pkey, _skey
 			, callbackPointers.putCallback
+			, callbackPointers.putCompletedCallback
 			, callbackPointers.callbackContext
 			, _with_cas ? IDht::with_cas : 0, processManager.seq());
 	}
@@ -4645,6 +4649,9 @@ void PutDhtProcess::CompleteThisProcess()
 	dht_log("PutDhtProcess,complete_announce,id,%d,time,%d\n", target.id[0]
 		, get_milliseconds());
 #endif
+
+	if (callbackPointers.putCompletedCallback)
+		callbackPointers.putCompletedCallback(callbackPointers.callbackContext);
 	DhtProcessBase::CompleteThisProcess();
 }
 

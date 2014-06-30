@@ -933,9 +933,10 @@ class CallBackPointers
 		DhtHashFileNameCallback *filenameCallback;
 		DhtPortCallback *portCallback;
 		DhtPutCallback * putCallback;
+		DhtPutCompletedCallback * putCompletedCallback;
 };
 
-inline CallBackPointers::CallBackPointers():callbackContext(NULL),
+inline CallBackPointers::CallBackPointers() : callbackContext(NULL),
 	processListener(NULL),
 	partialCallback(NULL),
 	addnodesCallback(NULL),
@@ -943,7 +944,8 @@ inline CallBackPointers::CallBackPointers():callbackContext(NULL),
 	voteCallback(NULL),
 	filenameCallback(NULL),
 	portCallback(NULL),
-	putCallback(NULL)
+	putCallback(NULL),
+	putCompletedCallback(NULL)
 {}
 
 //*****************************************************************************
@@ -1663,8 +1665,9 @@ public:
 
 	void SetId(byte new_id_bytes[DHT_ID_SIZE]);
 
-	void Put( const byte * pkey, const byte * skey, DhtPutCallback * put_callback,
-		void *ctx, int flags = 0, int64 seq = 0);
+	void Put(const byte * pkey, const byte * skey, DhtPutCallback * put_callback,
+		DhtPutCompletedCallback * put_completed_callback, void *ctx, int flags = 0,
+		int64 seq = 0);
 
 	void AnnounceInfoHash(const byte *info_hash,
 		DhtPartialHashCompletedCallback *partial_callback,
