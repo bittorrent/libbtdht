@@ -1148,6 +1148,10 @@ class DhtProcessBase
 		virtual void Schedule() = 0;
 		virtual void CompleteThisProcess();
 
+#if defined(_DEBUG_DHT_VERBOSE)
+		unsigned int process_id() const;
+#endif
+
 	public:
 		static DHTMessage dummyMessage;
 
@@ -1160,8 +1164,17 @@ class DhtProcessBase
 			, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags) = 0;
 		virtual void ImplementationSpecificReplyProcess(void *userdata
 			, const DhtPeerID &peer_id, DHTMessage &message, uint flags) {}
-};
 
+		// return true if we should not send an RPC to this node. This is
+		// used to not send put messages to nodes we know don't support it
+		// For lookups this has slightly different semantics. For a lookup
+		// it means whether or not it will be filtered in a store operation
+		// (i.e. put or announce_peer). nodes that will be filtered
+		// don't count when we try to get a response from K nodes,
+		// to try to get more responses if nodes are filtered
+		// The behavior is implemented in the two Schedule() functions
+		virtual bool Filter(DhtFindNodeEntry const& e) { return false; }
+};
 
 //*****************************************************************************
 //
@@ -1222,10 +1235,6 @@ class DhtBroadcastScheduler : public DhtProcessBase
 		DhtBroadcastScheduler(DhtProcessManager &dpm)
 			: DhtProcessBase(dpm), outstanding(0) { assert(false); }
 		virtual void Schedule();
-
-		// return true if we should not send an RPC to this node. This is
-		// used to not send put messages to nodes we know don't support it
-		virtual bool Filter(DhtFindNodeEntry const& e) { return false; }
 
 	public:
 		void OnReply(void*& userdata, const DhtPeerID &peer_id, DhtRequest *req
@@ -1502,6 +1511,9 @@ class GetDhtProcess : public DhtLookupScheduler
 		GetDhtProcess(DhtImpl *pDhtImpl, DhtProcessManager &dpm, const DhtID& target2
 			, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks
 			, int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING, bool with_cas = false);
+
+		virtual bool Filter(DhtFindNodeEntry const& e);
+
 		static DhtProcessBase* Create(DhtImpl* pImpl, DhtProcessManager &dpm,
 			const DhtID &target2, int target2_len,
 			CallBackPointers &cbPointers,
@@ -1918,8 +1930,6 @@ public:
 		PACKET_ANNOUNCE_PEER,
 		PACKET_VOTE
 	};
-
-	char *hexify(byte *b);
 
 	bool ParseIncomingICMP(BencEntity &benc, const SockAddr& addr);
 

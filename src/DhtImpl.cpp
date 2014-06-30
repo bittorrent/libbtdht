@@ -20,6 +20,10 @@
 #include <math.h>
 #include <stdarg.h>
 
+#if defined(_DEBUG_DHT_VERBOSE) && !defined _DEBUG_DHT
+#define _DEBUG_DHT
+#endif
+
 #define lenof(x) (sizeof(x)/sizeof(x[0]))
 #define MUTABLE_PAYLOAD_FORMAT "3:seqi%" PRId64 "e1:v"
 
@@ -85,6 +89,28 @@ static void debug_log(char const* fmt, ...)
 	fprintf(stderr, "DHT: %s\n", buf);
 	va_end(args);
 	// TODO: call callback or something
+}
+
+char *hexify(byte *b)
+{
+	char const static hex[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+	static char buff[2*DHT_ID_SIZE+1];
+	for(int i=0; i!=DHT_ID_SIZE; i++) {
+		buff[i*2] = hex[b[i]>>4];
+		buff[i*2+1] = hex[b[i]&0xF];
+	}
+	buff[2*DHT_ID_SIZE] = 0;
+	return buff;
+}
+
+char const* print_version(char c[2], int version)
+{
+	static char buf[100];
+	if (c[0] == 0)
+		snprintf(buf, sizeof(buf), "unknown");
+	else
+		snprintf(buf, sizeof(buf), "%c%c-%d", c[0], c[1], version);
+	return buf;
 }
 #endif
 
@@ -1234,21 +1260,6 @@ void DhtImpl::RandomizeWriteToken()
 	_cur_token[1] = rand();
 }
 
-#if defined(_DEBUG_DHT)
-// packet handling
-char *DhtImpl::hexify(byte *b)
-{
-	char const static hex[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-	static char buff[2*DHT_ID_SIZE+1];
-	for(int i=0; i!=DHT_ID_SIZE; i++) {
-		buff[i*2] = hex[b[i]>>4];
-		buff[i*2+1] = hex[b[i]&0xF];
-	}
-	buff[2*DHT_ID_SIZE] = 0;
-	return buff;
-}
-#endif
-
 bool DhtImpl::ParseIncomingICMP(BencEntity &benc, const SockAddr& addr)
 {
 	BencodedDict *dict = BencodedDict::AsDict(&benc);
@@ -1699,7 +1710,7 @@ bool DhtImpl::ProcessQueryPut(DHTMessage &message, DhtPeerID &peerID,
 	// read the token
 	if (!message.token.len) {
 #if defined(_DEBUG_DHT)
-//		debug_log("Bad write token");
+		debug_log("Bad write token");
 #endif
 		Account(DHT_INVALID_PQ_BAD_WRITE_TOKEN, packetSize);
 		return false;
@@ -3398,8 +3409,25 @@ void DhtProcessManager::Next()
 //*****************************************************************************
 DHTMessage DhtProcessBase::dummyMessage;
 
+#if defined(_DEBUG_DHT_VERBOSE)
+unsigned int DhtProcessBase::process_id() const
+{
+	return uintptr_t(this) + start_time;
+}
+#endif
+
 void DhtProcessBase::CompleteThisProcess()
 {
+#if defined(_DEBUG_DHT_VERBOSE)
+	debug_log("[%u] COMPLETED total=%d", process_id()
+		, processManager.size());
+	for (int i = 0; i < processManager.size(); ++i) {
+		debug_log("[%u] [%d] queried=%s\t filtered=%d version=%s", process_id(), i
+			, _queried_str[processManager[i].queried], Filter(processManager[i])
+			, print_version(processManager[i].client, processManager[i].version));
+	}
+#endif
+
 	// let the process manager know that this phase of the dht process is complete
 	// and to start the next phase of the process (or terminate if all phases are
 	// complete).
@@ -3451,11 +3479,6 @@ DhtLookupScheduler::DhtLookupScheduler(DhtImpl* pDhtImpl
 #endif
 }
 
-//*****************************************************************************
-//
-// DhtLookupScheduler
-//
-//*****************************************************************************
 /**
 	The goal is to keep requests out to the first 4 nodes (which should be the closest
 	nodes in the list).  Initialy, the first 4 nodes in the list will be issued
@@ -3500,6 +3523,9 @@ void DhtLookupScheduler::Schedule()
 				break;
 			}
 			case QUERIED_REPLIED:{
+
+				// if this node is filtered, look further for more nodes
+				if (Filter(processManager[nodeIndex])) ++K;
 				break;
 			}
 			default: {
@@ -3509,6 +3535,22 @@ void DhtLookupScheduler::Schedule()
 		}
 		++nodeIndex;
 	}
+
+#if defined(_DEBUG_DHT_VERBOSE)
+	debug_log("[%u] SCHEDULE total=%d outstanding=%d K=%d", process_id()
+		, processManager.size(), totalOutstandingRequests, K);
+
+	for (int i = 0; i < processManager.size(); ++i) {
+		if (i == nodeIndex) {
+			debug_log(" ---- DhtProcess end ----");
+		}
+
+		debug_log("[%u] [%d] queried=%s\t filtered=%d\t version=%s", process_id(), i
+			, _queried_str[processManager[i].queried], Filter(processManager[i])
+			, print_version(processManager[i].client, processManager[i].version));
+	}
+#endif
+
 	// No outstanding requests. Means we're finished.
 	if (totalOutstandingRequests == 0){
 		CompleteThisProcess();
@@ -3563,6 +3605,9 @@ void DhtLookupScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id
 	// If a "slow" problem, mark the node as slow and see if another query can be issued.
 	if (flags & PROCESS_AS_SLOW){
 		--numNonSlowRequestsOutstanding;
+#if defined(_DEBUG_DHT_VERBOSE)
+		debug_log("[%u] *** 1ST-TIMEOUT tid=%d", process_id(), req->tid);
+#endif
 		DhtFindNodeEntry *dfnh = processManager.FindQueriedPeer(peer_id);
 		if (dfnh) dfnh->queried = QUERIED_SLOW;
 		// put another request in flight since this peer is slow to reply (and may time-out in the future)
@@ -3579,6 +3624,9 @@ void DhtLookupScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id
 		if (dfnh) dfnh->queried = QUERIED_ERROR;
 		impl->UpdateError(peer_id);
 
+#if defined(_DEBUG_DHT_VERBOSE)
+		debug_log("[%u] *** TIMEOUT tid=%d", process_id(), req->tid);
+#endif
 		// put another request in flight since this peer is dead from ICMP
 		// (a slow peer that times-out already had a replacement query launched)
 		if(flags & ICMP_ERROR){
@@ -3707,6 +3755,9 @@ DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(
 		if (nodes.b && nodes.len % 26 == 0) {
 			uint num_nodes = nodes.len / 26;
 			// Insert all peers into my internal list.
+#if defined(_DEBUG_DHT_VERBOSE)
+			debug_log("[%u] <-- adding %d new nodes", process_id(), num_nodes);
+#endif
 			while (num_nodes != 0) {
 				DhtPeerID peer;
 
@@ -3800,6 +3851,9 @@ void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 		dfnh->cas = impl->_sha_callback(to_hash, written + message.vBuf.len);
 	}
 
+#if defined(_DEBUG_DHT_VERBOSE)
+	debug_log("[%u] <-- GET tid=%d", process_id(), Read32(message.transactionID.b));
+#endif
 }
 
 //*****************************************************************************
@@ -3841,6 +3895,20 @@ void DhtBroadcastScheduler::Schedule()
 		}
 		++index;
 	}
+
+#if defined(_DEBUG_DHT_VERBOSE)
+	debug_log("[%u] SCHEDULE total=%d outstanding=%d replied=%d", process_id()
+		, processManager.size(), outstanding, numReplies);
+	for (int i = 0; i < processManager.size(); ++i) {
+		if (i == index) {
+			debug_log("  ---- DhtProcess end ----");
+		}
+		debug_log("[%u] [%d] queried=%s\t filtered=%d\t version=%s", process_id(), i
+			, _queried_str[processManager[i].queried], Filter(processManager[i])
+			, print_version(processManager[i].client, processManager[i].version));
+	}
+#endif
+
 	// No outstanding requests. Means we're finished.
 	if (outstanding == 0)
 		CompleteThisProcess();
@@ -3984,7 +4052,28 @@ void GetPeersDhtProcess::CompleteThisProcess()
 	dht_log("GetPeersDhtProcess,completed,id,%d,time,%d\n", target.id[0], get_microseconds());
 #endif
 
+#if defined(_DEBUG_DHT_VERBOSE)
+	debug_log("[%u] PRE-COMPACT total=%d", process_id()
+		, processManager.size());
+	for (int i = 0; i < processManager.size(); ++i) {
+		debug_log("[%u] [%d] queried=%s\t filtered=%d version=%s", process_id(), i
+			, _queried_str[processManager[i].queried], Filter(processManager[i])
+			, print_version(processManager[i].client, processManager[i].version));
+	}
+#endif
+
 	processManager.CompactList();
+
+#if defined(_DEBUG_DHT_VERBOSE)
+	debug_log("[%u] COMPACT total=%d", process_id()
+		, processManager.size());
+	for (int i = 0; i < processManager.size(); ++i) {
+		debug_log("[%u] [%d] queried=%s\t filtered=%d\t version=%s", process_id(), i
+			, _queried_str[processManager[i].queried], Filter(processManager[i])
+			, print_version(processManager[i].client, processManager[i].version));
+	}
+#endif
+
 	DhtProcessBase::CompleteThisProcess();
 }
 
@@ -4261,6 +4350,11 @@ GetDhtProcess::GetDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 	char* buf = (char*)this->_id;
 	memcpy(buf, pDhtImpl->_my_id_bytes, DHT_ID_SIZE);
 
+#if defined(_DEBUG_DHT_VERBOSE)
+	debug_log("[%u] NEW GET process", process_id());
+	debug_log("[%u] maxOutstandingLookupQueries=%d", process_id()
+		, maxOutstandingLookupQueries);
+#endif
 
 #if g_log_dht
 	dht_log("GetDhtProcess,instantiated,id,%d,time,%d\n", target.id[0], get_milliseconds());
@@ -4277,7 +4371,30 @@ DhtProcessBase* GetDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
 	return process;
 }
 
-void GetDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID)
+// returns false if the node doesn't support Put and Get
+bool no_put_support(DhtFindNodeEntry const& e)
+{
+	// uTorrent builds older than 31395 do not support the DHT put/get feature
+	if (memcmp(e.client, "UT", 2) == 0 && e.version < 31395) {
+		return true;
+	}
+
+	// libtorrent versions less than 1.0 do not support the DHT put/get feature
+	if (memcmp(e.client, "LT", 2) == 0 && e.version < 0x100) {
+		return true;
+	}
+
+	// let everything else through
+	return false;
+}
+
+bool GetDhtProcess::Filter(DhtFindNodeEntry const& e)
+{
+	return no_put_support(e) || e.token.b == NULL;
+}
+
+void GetDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
+	, const unsigned int transactionID)
 {
 	static const int bufLen = 1500;
 	unsigned char buf[bufLen];
@@ -4300,6 +4417,10 @@ void GetDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned 
 		do_log("DhtSendRPC blob exceeds maximum size.");
 		return;
 	}
+#if defined(_DEBUG_DHT_VERBOSE)
+	debug_log("[%u] --> GET %s tid=%d", process_id()
+		, hexify(targetAsID), transactionID);
+#endif
 	impl->SendTo(nodeInfo.id, buf, sb.length());
 }
 
@@ -4309,9 +4430,31 @@ void GetDhtProcess::CompleteThisProcess()
 	dht_log("GetDhtProcess,completed,id,%d,time,%d\n", target.id[0], get_microseconds());
 #endif
 
+#if defined(_DEBUG_DHT_VERBOSE)
+	debug_log("[%u] PRE-COMPACT total=%d", process_id()
+		, processManager.size());
+	for (int i = 0; i < processManager.size(); ++i) {
+		debug_log("[%u] [%d] queried=%s\t filtered=%d\t version=%s", process_id(), i
+			, _queried_str[processManager[i].queried], Filter(processManager[i])
+			, print_version(processManager[i].client, processManager[i].version));
+	}
+#endif
+
 	processManager.CompactList();
+
+#if defined(_DEBUG_DHT_VERBOSE)
+	debug_log("[%u] COMPACT total=%d", process_id()
+		, processManager.size());
+	for (int i = 0; i < processManager.size(); ++i) {
+		debug_log("[%u] [%d] queried=%s\t filtered=%d version=%s", process_id(), i
+			, _queried_str[processManager[i].queried], Filter(processManager[i])
+			, print_version(processManager[i].client, processManager[i].version));
+	}
+#endif
+
 	DhtProcessBase::CompleteThisProcess();
 }
+
 
 //*****************************************************************************
 //
@@ -4326,7 +4469,6 @@ PutDhtProcess::PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 	, startTime, consumerCallbacks), _with_cas(flags & IDht::with_cas)
 	, getProc(NULL)
 {
-
 	signature.clear();
 	char* buf = (char*)this->_id;
 	memcpy(buf, pDhtImpl->_my_id_bytes, DHT_ID_SIZE);
@@ -4336,6 +4478,10 @@ PutDhtProcess::PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 
 	buf = (char*)this->_skey;
 	memcpy(buf, skey, 64);
+
+#if defined(_DEBUG_DHT_VERBOSE)
+	debug_log("[%u] NEW PUT process", process_id());
+#endif
 
 #if g_log_dht
 	dht_log("PutDhtProcess,instantiated,id,%d,time,%d\n", target.id[0], get_milliseconds());
@@ -4364,27 +4510,10 @@ void PutDhtProcess::Start()
 PutDhtProcess::~PutDhtProcess()
 {
 }
- 
+
 bool PutDhtProcess::Filter(DhtFindNodeEntry const& e)
 {
-	// uTorrent builds older than 31395 do not support the DHT put/get feature
-	if (memcmp(e.client, "UT", 2) == 0 && e.version < 31395) {
-#if defined(_DEBUG_DHT)
-		debug_log("    NOT sending PUT to %c%c %u", e.client[0], e.client[1], e.version);
-#endif
-		return true;
-	}
-
-	// libtorrent versions less than 1.0 do not support the DHT put/get feature
-	if (memcmp(e.client, "LT", 2) == 0 && e.version < 0x100) {
-#if defined(_DEBUG_DHT)
-		debug_log("    NOT sending PUT to %c%c %u", e.client[0], e.client[1], e.version);
-#endif
-		return true;
-	}
-
-	// let everything else through
-	return false;
+	return no_put_support(e) || e.token.b == NULL;
 }
 
 void PutDhtProcess::Sign(std::vector<char> &signature, std::vector<char> v, byte * skey, int64 seq) {
@@ -4468,6 +4597,10 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 				blk.size());
 		return;
 	}
+#if defined(_DEBUG_DHT_VERBOSE)
+	debug_log("[%u] --> PUT %s tid=%d", process_id()
+		, hexify(this->_id), transactionID);
+#endif
 	impl->SendTo(nodeInfo.id, buf, len);
 }
 
@@ -4487,6 +4620,10 @@ void PutDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 			, callbackPointers.callbackContext
 			, _with_cas ? IDht::with_cas : 0, processManager.seq());
 	}
+
+#if defined(_DEBUG_DHT_VERBOSE)
+	debug_log("[%u] <-- PUT tid=%d", process_id(), Read32(message.transactionID.b));
+#endif
 }
 
 void PutDhtProcess::CompleteThisProcess()
@@ -4952,6 +5089,9 @@ bool DhtBucket::InsertOrUpdateNode(DhtImpl* pDhtImpl, DhtPeer const& candidateNo
 		pDhtImpl->_dht_peers_count++;
 		bucketList.enqueue(peer);
 
+#if defined(_DEBUG_DHT)
+		debug_log("Routing table num_nodes=%d", pDhtImpl->_dht_peers_count);
+#endif
 		if (pout) *pout = peer;
 		return true;
 	}
