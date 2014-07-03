@@ -1890,7 +1890,8 @@ public:
 	uint32 _prev_token[2];
 	int _dht_bootstrap; // -1: bootstrap ping has replied
 						// -2: bootstrap find_nodes process has completed
-						// 1:  dht not bootstrapped (initial condition)
+						//  0: a vaild bootstrapping response from dht routers has been received
+						//  1: dht not bootstrapped (initial condition)
 						// >1: an error was received, _dth_bootstrap set with a large number of seconds for a count-down
 	int _dht_bootstrap_failed; // a counter used to compute the back-off time for bootstrap re-tries
 	int _dht_busy;
