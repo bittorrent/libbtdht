@@ -4549,7 +4549,9 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	// note that blk is returned by reference
 	// we want a copy that the put callback can modify
 	std::vector<char>& blk = processManager.get_data_blk();
-	if (signature.empty() || blk.empty()) {
+	if (callbackPointers.putCallback != NULL
+		&& (signature.empty() || blk.empty())) {
+
 		callbackPointers.putCallback(callbackPointers.callbackContext
 			, blk, seq);
 
@@ -4557,6 +4559,9 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 		// represented by "0:"
 		assert(blk.size() > 0);
 		assert(blk.size() <= 1024);
+
+		// only call this once
+		callbackPointers.putCallback = NULL;
 
 		// the callback must return either an empty buffer, or
 		// a valid bencoded structure
@@ -4652,6 +4657,9 @@ void PutDhtProcess::CompleteThisProcess()
 
 	if (callbackPointers.putCompletedCallback)
 		callbackPointers.putCompletedCallback(callbackPointers.callbackContext);
+
+	callbackPointers.callbackContext = NULL;
+
 	DhtProcessBase::CompleteThisProcess();
 }
 
