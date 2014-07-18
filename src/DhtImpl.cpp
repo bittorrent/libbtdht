@@ -2607,6 +2607,7 @@ void DhtImpl::Put(const byte * pkey, const byte * skey,
 	dpm->set_seq(seq);
 
 	CallBackPointers callbacks;
+	assert(put_callback);
 	callbacks.putCallback = put_callback;
 	callbacks.callbackContext = ctx;
 	callbacks.putCompletedCallback = put_completed_callback;
@@ -4562,21 +4563,25 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 
 		// only call this once
 		callbackPointers.putCallback = NULL;
+	}
 
-		// the callback must return either an empty buffer, or
-		// a valid bencoded structure
-		if (blk.empty()) {
-			char empty_string[] = "0:";
-			blk.insert(blk.begin(), empty_string, empty_string + 2);
-		}
+	// the callback must return either an empty buffer, or
+	// a valid bencoded structure
+	if (blk.empty()) {
+		char empty_string[] = "0:";
+		blk.insert(blk.begin(), empty_string, empty_string + 2);
+	}
 
+	if (signature.empty()) {
 		Sign(signature, blk, _skey, seq);
+		assert(signature.size() > 0);
 	}
 
 	// the buffer has to be greater than zero. The empty string must be
 	// represented by "0:"
 	assert(blk.size() > 0);
-	
+	assert(signature.size() > 0);
+
 	static const int buf_len = 1500;
 	unsigned char buf[buf_len];
 	smart_buffer sb(reinterpret_cast<unsigned char*>(buf), buf_len);
