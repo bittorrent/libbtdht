@@ -4550,6 +4550,8 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	// note that blk is returned by reference
 	// we want a copy that the put callback can modify
 	std::vector<char>& blk = processManager.get_data_blk();
+	assert(callbackPointers.putCallback);
+
 	if (callbackPointers.putCallback != NULL
 		&& (signature.empty() || blk.empty())) {
 
@@ -4560,9 +4562,6 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 		// represented by "0:"
 		assert(blk.size() > 0);
 		assert(blk.size() <= 1024);
-
-		// only call this once
-		callbackPointers.putCallback = NULL;
 	}
 
 	// the callback must return either an empty buffer, or
@@ -4635,6 +4634,11 @@ void PutDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 			, callbackPointers.putCompletedCallback
 			, callbackPointers.callbackContext
 			, _with_cas ? IDht::with_cas : 0, processManager.seq());
+
+		// don't call the completion callback twice. Since we just
+		// passed it into a new Put process, it will be called when
+		// it completes
+		callbackPointers.putCompletedCallback = NULL;
 	}
 
 #if defined(_DEBUG_DHT_VERBOSE)
@@ -4663,7 +4667,8 @@ void PutDhtProcess::CompleteThisProcess()
 	if (callbackPointers.putCompletedCallback)
 		callbackPointers.putCompletedCallback(callbackPointers.callbackContext);
 
-	callbackPointers.callbackContext = NULL;
+	// never call this twice
+	callbackPointers.putCompletedCallback = NULL;
 
 	DhtProcessBase::CompleteThisProcess();
 }
