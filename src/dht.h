@@ -26,6 +26,7 @@ typedef void DhtAddNodeResponseCallback(void*& userdata, bool is_response, SockA
 typedef void DhtScrapeCallback(void *ctx, const byte *target, int downloaders, int seeds);
 typedef void DhtPutCallback(void * ctx, std::vector<char>& buffer, int64 seq);
 typedef void DhtPutCompletedCallback(void * ctx);
+typedef void DhtLogCallback(char const* str);
 
 // asks the client to save the DHT state
 typedef void DhtSaveCallback(const byte* buf, int len);
@@ -166,6 +167,8 @@ public:
 
 smart_ptr<IDht> create_dht(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_socket_mgr
 	, DhtSaveCallback* save, DhtLoadCallback* load);
+
+void set_log_callback(DhtLogCallback* log);
 
 #endif //__DHT_H__
 

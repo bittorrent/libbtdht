@@ -42,6 +42,18 @@ int clamp(int v, int min, int max)
 	return v;
 }
 
+void log_to_stderr(char const* str)
+{
+	fprintf(stderr, "DHT: %s\n", str);
+}
+
+static DhtLogCallback* g_logger = &log_to_stderr;
+
+void set_log_callback(DhtLogCallback* log)
+{
+	g_logger = log;
+}
+
 #if g_log_dht
 
 uint prebitcmp(const uint32 *a, const uint32 *b, size_t size) { // Simple dirty "count bit prefix in common" function
@@ -74,8 +86,8 @@ static void do_log(char const* fmt, ...)
 	char buf[1000];
 	vsnprintf(buf, sizeof(buf), fmt, args);
 
-	fprintf(stderr, "DHT: %s\n", buf);
-	// TODO: call callback or something
+	(*g_logger)(buf);
+
 	va_end(args);
 }
 
@@ -86,7 +98,7 @@ static void debug_log(char const* fmt, ...)
 	va_start(args, fmt);
 	char buf[1000];
 	vsnprintf(buf, sizeof(buf), fmt, args);
-	fprintf(stderr, "DHT: %s\n", buf);
+	(*g_logger)(buf);
 	va_end(args);
 	// TODO: call callback or something
 }
