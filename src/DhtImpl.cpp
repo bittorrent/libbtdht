@@ -160,6 +160,10 @@ DhtImpl::DhtImpl(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_so
 
 	// zero-out _dht_account
 	memset(_dht_accounting, 0, sizeof(_dht_accounting));
+
+	_ed25519_sign_callback = NULL;
+	_ed25519_verify_callback = NULL;
+	_sha_callback = NULL;
 }
 
 DhtImpl::~DhtImpl()
@@ -4213,6 +4217,7 @@ void PutDhtProcess::Sign(std::vector<char> &signature, std::vector<char> v, byte
 
 	v.insert(v.begin(), buf, buf+index);	
 
+	assert(impl->_ed25519_sign_callback);
 	impl->_ed25519_sign_callback(sig, (unsigned char *)&v[0], v.size(), skey);
 
 	signature.assign(sig, sig+64);
@@ -4221,7 +4226,11 @@ void PutDhtProcess::Sign(std::vector<char> &signature, std::vector<char> v, byte
 bool DhtImpl::Verify(byte const * signature, byte const * message, int message_length, byte *pkey, int64 seq) {
 	unsigned char buf[1500];
 	int index = sprintf(reinterpret_cast<char*>(buf), MUTABLE_PAYLOAD_FORMAT, seq);
+	if (index + message_length >= sizeof(buf)) {
+		return false;
+	}
 	memcpy(buf + index, message, message_length);
+	assert(_ed25519_verify_callback);
 	return _ed25519_verify_callback(signature, buf, message_length + index, pkey);
 }
 
