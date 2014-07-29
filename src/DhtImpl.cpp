@@ -3226,16 +3226,22 @@ bool DhtImpl::ProcessIncoming(byte *buffer, size_t len, const SockAddr& addr)
 		return true;
 	}
 
-	if (ParseKnownPackets(addr, buffer, len)) {
+/*	if (ParseKnownPackets(addr, buffer, len)) {
 		Account(DHT_BW_IN_KNOWN, len);
 		return true;
 	}
-
+*/
 	DHTMessage message(buffer, len);
 	if(!message.ParseSuccessful()){
 		Account(DHT_INVALID_PI_NO_DICT, len);
 		return false;
 	}
+
+	// temporarily disable non chat peers
+	if (message.version.b == NULL || message.version.len != 4
+		|| memcmp(message.version.b, "ct", 2) != 0)
+		return false;
+
 #if defined(_DEBUG_DHT)
 	if (message.version.len == 4) {
 		debug_log(" [%d.%d.%d.%d:%u] client version: %c%c %u"
