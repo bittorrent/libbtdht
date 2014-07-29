@@ -333,7 +333,7 @@ void DhtImpl::ForceRefresh()
  */
 bool DhtImpl::CanAnnounce()
 {
-	if (_dht_bootstrap != -2  || !_allow_new_job)
+	if (_dht_bootstrap != -2  || !_allow_new_job || _dht_peers_count < 32)
 		return false;
 	return true;
 }
@@ -2446,11 +2446,20 @@ uint DhtImpl::PingStalestInBucket(uint buck)
 // Bootstrap complete.
 void DhtImpl::ProcessCallback()
 {
-	_dht_bootstrap = -2;
-	_dht_bootstrap_failed = 0;
-	_refresh_bucket = 0;
-	_refresh_buckets_counter = 0; // start forced bucket refresh
-	_refresh_bucket_force = true;
+	// We need to make sure we do have more than 2 connected DHT nodes before finishing the bootstrapping.
+	// That was due to the timeout error happened in the first DHT nodes lookup, which means we only
+	// connected to the inital DHT routers but none of them replied in 4 seconds. If we failed to get enough
+	// nodes in the first attempt, we will redo the bootstrapping again in 15 seconds.
+	if (_dht_peers_count >= 8) {
+		_dht_bootstrap = -2;
+		_dht_bootstrap_failed = 0;
+		_refresh_bucket = 0;
+		_refresh_buckets_counter = 0; // start forced bucket refresh
+		_refresh_bucket_force = true;
+	} else {
+		_dht_bootstrap = 15;
+		_dht_bootstrap_failed = 0;
+	}
 }
 
 void DhtImpl::SetExternalIPCounter(ExternalIPCounter* ip)
@@ -2510,8 +2519,8 @@ void DhtImpl::OnBootStrapPingReply(void* &userdata, const DhtPeerID &peer_id, Dh
 
 	if (_dht_bootstrap >= 0) {
 		if (message.dhtMessageType == DHT_RESPONSE && _dht_peers_count != 0) {
-			_dht_bootstrap = -1;
 
+			_dht_bootstrap = 0;
 			// refresh buckets in 30 seconds....
 //			_refresh_buckets_counter = 30;
 //			_refresh_bucket_force = true;
@@ -2730,7 +2739,7 @@ void DhtImpl::Tick()
 		_5min_counter = 0;
 		RandomizeWriteToken();
 		ExpirePeersFromStore(time(NULL) - 30 * 60);
-		if (_dht_peers_count == 0)
+		if (_dht_peers_count < 8)
 			_dht_bootstrap = 1;
 		_immutablePutStore.UpdateUsage(time(NULL));
 		_mutablePutStore.UpdateUsage(time(NULL));
