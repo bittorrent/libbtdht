@@ -1684,7 +1684,7 @@ void DhtImpl::send_put_response(smart_buffer& sb, Buffer& transaction_id,
 		int packetSize, const DhtPeerID &peerID, unsigned int error_code,
 		char const* error_message) {
 	assert(error_message != NULL);
-	sb("d1:eli%ue%zu:%se", error_code, strlen(error_message), error_message);
+	sb("d1:eli%ue%u:%se", error_code, (unsigned int)strlen(error_message), error_message);
 	sb("1:rd2:id20:")(_my_id_bytes, DHT_ID_SIZE)("e");
 
 	put_transaction_id(sb, transaction_id);
