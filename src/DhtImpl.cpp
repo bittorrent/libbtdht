@@ -198,6 +198,10 @@ DhtImpl::DhtImpl(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_so
 
 	// zero-out _dht_account
 	memset(_dht_accounting, 0, sizeof(_dht_accounting));
+
+	_ed25519_sign_callback = NULL;
+	_ed25519_verify_callback = NULL;
+	_sha_callback = NULL;
 }
 
 DhtImpl::~DhtImpl()
@@ -1702,7 +1706,7 @@ void DhtImpl::send_put_response(smart_buffer& sb, Buffer& transaction_id,
 		int packetSize, const DhtPeerID &peerID, unsigned int error_code,
 		char const* error_message) {
 	assert(error_message != NULL);
-	sb("d1:eli%ue%zu:%se", error_code, strlen(error_message), error_message);
+	sb("d1:eli%ue%u:%se", error_code, (unsigned int)strlen(error_message), error_message);
 	sb("1:rd2:id20:")(_my_id_bytes, DHT_ID_SIZE)("e");
 
 	put_transaction_id(sb, transaction_id);
@@ -4558,6 +4562,7 @@ void PutDhtProcess::Sign(std::vector<char> &signature, std::vector<char> v, byte
 
 	v.insert(v.begin(), buf, buf+index);	
 
+	assert(impl->_ed25519_sign_callback);
 	impl->_ed25519_sign_callback(sig, (unsigned char *)&v[0], v.size(), skey);
 
 	signature.assign(sig, sig+64);
@@ -4566,7 +4571,11 @@ void PutDhtProcess::Sign(std::vector<char> &signature, std::vector<char> v, byte
 bool DhtImpl::Verify(byte const * signature, byte const * message, int message_length, byte *pkey, int64 seq) {
 	unsigned char buf[1500];
 	int index = sprintf(reinterpret_cast<char*>(buf), MUTABLE_PAYLOAD_FORMAT, seq);
+	if (index + message_length >= sizeof(buf)) {
+		return false;
+	}
 	memcpy(buf + index, message, message_length);
+	assert(_ed25519_verify_callback);
 	return _ed25519_verify_callback(signature, buf, message_length + index, pkey);
 }
 
