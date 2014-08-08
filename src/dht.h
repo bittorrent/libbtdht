@@ -51,6 +51,8 @@ typedef void Ed25519SignCallback(unsigned char *signature,
 		const unsigned char *message, unsigned long long message_len,
 		const unsigned char *key);
 
+typedef int Ed25519KeySignCallback(unsigned char* pk, unsigned char* sk);
+
 /**
  * DHT public interface
  */

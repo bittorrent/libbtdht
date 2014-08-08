@@ -30,6 +30,7 @@ public:
 	bool GetIPv6( SockAddr& addr ) const;
 
 	void SetHeatStarted(time_t t) { _HeatStarted = t; }
+	time_t GetHeatStarted() {return _HeatStarted;}
 
 	void Reset();
 
