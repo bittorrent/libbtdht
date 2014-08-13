@@ -2892,7 +2892,7 @@ void DhtImpl::Restart() {
 *
 **/
 	bool old_g_dht_enabled = _dht_enabled;
-	Enable(0,0); // Stop Dht...this also enables the bootstrap process
+	Enable(0,_dht_rate); // Stop Dht...this also enables the bootstrap process
 
 	// this is called from GenerateID, which gets called when we initialize
 	// the DHT. The problem of setting _dht_peer_count to zero is that
@@ -3151,7 +3151,7 @@ void DhtImpl::LoadState()
 
 	BencodedDict *dict = base.AsDict(&base);
 	if (dict) {
-		if ((uint)(time(NULL) - dict->GetInt("age", 0)) < 2 * 60 * 60) {
+		if ((uint)(time(NULL) - dict->GetInt("age", 0)) < 24 * 60 * 60) {
 			// Load the ID
 			byte* id = (byte*)dict->GetString("id", DHT_ID_SIZE);
 			if (id) {
