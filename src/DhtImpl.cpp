@@ -202,6 +202,10 @@ DhtImpl::DhtImpl(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_so
 	_ed25519_sign_callback = NULL;
 	_ed25519_verify_callback = NULL;
 	_sha_callback = NULL;
+
+#ifdef _DEBUG_DHT
+	debug_log("DhtImpl() [bootstrap=%d]", _dht_bootstrap);
+#endif
 }
 
 DhtImpl::~DhtImpl()
@@ -312,6 +316,10 @@ void DhtImpl::Enable(bool enabled, int rate)
 		_dht_enabled = enabled;
 		_dht_bootstrap = 1;
 	}
+
+#ifdef _DEBUG_DHT
+	debug_log("Enable(enabled=%d, rate=%d) [bootstrap=%d]", enabled, rate, _dht_bootstrap);
+#endif
 }
 
 
@@ -337,6 +345,11 @@ void DhtImpl::ForceRefresh()
  */
 bool DhtImpl::CanAnnounce()
 {
+#ifdef _DEBUG_DHT
+	debug_log("CanAnnounce() [bootstrap=%d] = %d", _dht_bootstrap
+		, !(_dht_bootstrap != -2  || !_allow_new_job || _dht_peers_count < 32));
+#endif
+
 	if (_dht_bootstrap != -2  || !_allow_new_job || _dht_peers_count < 32)
 		return false;
 	return true;
@@ -2464,6 +2477,9 @@ void DhtImpl::ProcessCallback()
 		_dht_bootstrap = 15;
 		_dht_bootstrap_failed = 0;
 	}
+#ifdef _DEBUG_DHT
+	debug_log("ProcessCallback() [bootstrap=%d]", _dht_bootstrap);
+#endif
 }
 
 void DhtImpl::SetExternalIPCounter(ExternalIPCounter* ip)
@@ -2533,6 +2549,9 @@ void DhtImpl::OnBootStrapPingReply(void* &userdata, const DhtPeerID &peer_id, Dh
 			DhtID target = _my_id;
 			target.id[4] ^= 1;
 
+#ifdef _DEBUG_DHT
+			debug_log("OnBootstrapPingReply() [ bootstrap done (%d)]", _dht_bootstrap);
+#endif
 			// Here, "this" is an IDhtProcessCallbackListener*, which leads
 			// to DhtImpl::ProcessCallback(), necessary to complete bootstrapping
 			DoFindNodes(target, this, false); // use the agressive search for the first dht lookup
@@ -2551,7 +2570,10 @@ void DhtImpl::OnBootStrapPingReply(void* &userdata, const DhtPeerID &peer_id, Dh
 			} else
 				_dht_bootstrap = 60 * 60 * 24;
 		}
-	} else if (_dht_bootstrap == -2){
+#ifdef _DEBUG_DHT
+		debug_log("OnBootstrapPingReply() [ bootstrap failed (%d)]", _dht_bootstrap);
+#endif
+	} else if (_dht_bootstrap == -2) {
 		// If we are here after bootstrap has completed, then this is a
 		// NICE ping reply - we are just refreshing the table.
 		// We need to handle the error case here.
@@ -2559,6 +2581,10 @@ void DhtImpl::OnBootStrapPingReply(void* &userdata, const DhtPeerID &peer_id, Dh
 			// Mark that the peer errored
 			UpdateError(peer_id);
 		}
+
+#ifdef _DEBUG_DHT
+		debug_log("OnBootstrapPingReply() [ bootstrap error (%d)]", _dht_bootstrap);
+#endif
 	}
 }
 
@@ -2743,8 +2769,13 @@ void DhtImpl::Tick()
 		_5min_counter = 0;
 		RandomizeWriteToken();
 		ExpirePeersFromStore(time(NULL) - 30 * 60);
-		if (_dht_peers_count < 8)
+		if (_dht_peers_count < 8) {
 			_dht_bootstrap = 1;
+#ifdef _DEBUG_DHT
+			debug_log("5 minute counter, %d peers [bootstrap=%d]"
+				, _dht_peers_count, _dht_bootstrap);
+#endif
+		}
 		_immutablePutStore.UpdateUsage(time(NULL));
 		_mutablePutStore.UpdateUsage(time(NULL));
 	}
@@ -2759,6 +2790,11 @@ void DhtImpl::Tick()
 			{
 				AddNode(*i, NULL, IDht::DHT_ORIGIN_INITIAL);
 			}
+
+#ifdef _DEBUG_DHT
+			debug_log("Added %d bootstrap nodes [bootstrap=%d]"
+				, _bootstrap_routers.size(), _dht_bootstrap);
+#endif
 		}
 
 	} else if (_dht_bootstrap < -1 ){
@@ -3111,6 +3147,8 @@ void DhtImpl::LoadState()
 
 	_load_callback(&base);
 
+	int num_loaded = 0;
+
 	BencodedDict *dict = base.AsDict(&base);
 	if (dict) {
 		if ((uint)(time(NULL) - dict->GetInt("age", 0)) < 2 * 60 * 60) {
@@ -3133,10 +3171,15 @@ void DhtImpl::LoadState()
 					nodes += sizeof(PackedDhtPeer);
 					nodes_len -= sizeof(PackedDhtPeer);
 					Update(peer, IDht::DHT_ORIGIN_UNKNOWN, false);
+					++num_loaded;
 				}
 			}
 		}
 	}
+
+#if defined(_DEBUG_DHT)
+	debug_log("Loaded %d nodes from disk", num_loaded);
+#endif
 }
 
 int DhtImpl::GetNumPutItems()
@@ -4410,8 +4453,8 @@ DhtProcessBase* GetDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
 // returns false if the node doesn't support Put and Get
 bool no_put_support(DhtFindNodeEntry const& e)
 {
-	// uTorrent builds older than 31395 do not support the DHT put/get feature
-	if (memcmp(e.client, "UT", 2) == 0 && e.version < 31395) {
+	// uTorrent builds older than 32891 do not support the DHT put/get feature
+	if (memcmp(e.client, "UT", 2) == 0 && e.version < 32891) {
 		return true;
 	}
 
