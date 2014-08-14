@@ -883,18 +883,22 @@ int DhtImpl::AssembleNodeList(const DhtID &target, DhtPeerID** ids, int numwant)
 	num += FindNodes(target, ids + num, numwant - num, 0, 0);
 	assert(num <= numwant);
 	if (num < numwant) {
+
+		// if we don't have enough nodes in our routing table, fill in with
+		// bootstrap nodes.
 		_temp_nodes.resize(numwant - num);
 
 		int c = 0;
 		for (std::vector<SockAddr>::iterator i = _bootstrap_routers.begin()
 			, end(_bootstrap_routers.end()); i != end && num < numwant; ++i, ++c)
 		{
+			// just fake the id to match the target, so this is at the top
+			// of the list
 			_temp_nodes[c].id = target;
 			_temp_nodes[c].addr = *i;
 			ids[num] = &_temp_nodes[c];
 			++num;
 		}
-		// try again
 		assert(num <= numwant);
 		// And 8 definitely good ones.
 		num += FindNodes(target, ids + num, numwant - num, 0, 0);
@@ -2023,7 +2027,7 @@ bool DhtImpl::ProcessResponse(DhtPeerID& peerID, DHTMessage &message, int pkt_si
 		}
 
 //		When sending requests to bootstrap nodes (whose ID we don't know)
-//		we fill in an somewhat arbitrary ID. That causes this test to fail.
+//		we fill in a somewhat arbitrary ID. That causes this test to fail.
 //		This test doesn't seem terribly important anyway
 
 //		if (req->has_id && !(req->peer.id == peerID.id)) {
@@ -2083,7 +2087,6 @@ bool DhtImpl::ProcessResponse(DhtPeerID& peerID, DHTMessage &message, int pkt_si
 	// Call the completion callback
 	req->_pListener->Callback(req->peer, req, message, (DhtProcessFlags)NORMAL_RESPONSE);
 	delete req->_pListener;
-
 	// Cleanup
 	delete req;
 	return true;
@@ -2492,7 +2495,7 @@ void DhtImpl::OnAddNodeReply(void* &userdata, const DhtPeerID &peer_id
 void DhtImpl::OnPingReply(void* &userdata, const DhtPeerID &peer_id
 	, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags)
 {
-	// if this is a reply on bhalf of a slow peer, do nothing
+	// if this is a reply on behalf of a slow peer, do nothing
 	if (flags == PROCESS_AS_SLOW)
 		return;
 

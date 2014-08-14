@@ -1974,7 +1974,7 @@ public:
 	SockAddr _lastLeadingAddress;	// For tracking external voting of our ip
 	std::vector<SockAddr> _bootstrap_routers;
 
-	// this is used temporarily when assembling the peer list. If we need to
+	// this is used temporarily when assembling the node list. If we need to
 	// add bootstrap routers to the list, they need to be allocated somewhere
 	// temporarily. This is where we put them.
 	std::vector<DhtPeerID> _temp_nodes;
