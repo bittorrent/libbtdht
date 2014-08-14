@@ -1747,7 +1747,9 @@ class DhtImpl : public IDht, public IDhtProcessCallbackListener
 {
 public:
 	DhtImpl(UDPSocketInterface *_udp_socket_mgr, UDPSocketInterface *_udp6_socket_mgr
-		, DhtSaveCallback* save = 0, DhtLoadCallback* load = 0);
+		, DhtSaveCallback* save = NULL
+		, DhtLoadCallback* load = NULL
+		, ExternalIPCounter* eip = NULL);
 	~DhtImpl();
 	REFBASE;
 
