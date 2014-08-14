@@ -910,7 +910,8 @@ void FindNClosestToTarget( DhtPeerID *src[], uint srcCount, DhtPeerID *dest[], u
 		dest[i] = sorted_list[i];
 }
 
-int DhtImpl::AssembleNodeList(const DhtID &target, DhtPeerID** ids, int numwant)
+int DhtImpl::AssembleNodeList(const DhtID &target, DhtPeerID** ids
+	, int numwant, bool bootstrap)
 {
 	// Find 8 good ones or bad ones (in case there are no good ones)
 	int num = FindNodes(target, ids, (std::min)(8, numwant), (std::min)(8, numwant), 0);
@@ -918,7 +919,14 @@ int DhtImpl::AssembleNodeList(const DhtID &target, DhtPeerID** ids, int numwant)
 	// And 8 definitely good ones.
 	num += FindNodes(target, ids + num, numwant - num, 0, 0);
 	assert(num <= numwant);
-	if (num < numwant) {
+	if (num < numwant || bootstrap) {
+
+		// if bootstrap is true, bootstrap routers take precedence over
+		// the other nodes
+		if (bootstrap && _bootstrap_routers.size() > numwant - num) {
+			num = numwant - _bootstrap_routers.size();
+			if (num < 0) num = 0;
+		}
 
 		// if we don't have enough nodes in our routing table, fill in with
 		// bootstrap nodes.
@@ -2235,6 +2243,29 @@ void DhtImpl::GetStalestPeerInBucket(DhtPeer **ppeerFound, DhtBucket &bucket)
 	}
 }
 
+void DhtImpl::DoBootstrap(DhtID &target, int target_len
+	, IDhtProcessCallbackListener *process_listener)
+{
+	DhtPeerID *ids[32];
+	int num = AssembleNodeList(target, ids, sizeof(ids)/sizeof(ids[0]), true);
+
+	DhtProcessManager *dpm = new DhtProcessManager(ids, num, target);
+
+#if defined(_DEBUG_DHT)
+//	debug_log("DoFindNodes: %s",format_dht_id(target));
+//	for(uint i=0; i!=num; i++)
+//		debug_log(" %A", &ids[i]->addr);
+#endif
+
+	CallBackPointers cbPtrs;
+	cbPtrs.processListener = process_listener;
+	// get peers in those nodes
+	DhtProcessBase* p = FindNodeDhtProcess::Create(this, *dpm, target, target_len, cbPtrs
+		, KADEMLIA_LOOKUP_OUTSTANDING);
+	dpm->AddDhtProcess(p);
+	dpm->Start();
+}
+
 void DhtImpl::DoFindNodes(DhtID &target, int target_len
 	, IDhtProcessCallbackListener *process_listener
 	, bool performLessAgressiveSearch)
@@ -2735,7 +2766,7 @@ void DhtImpl::Tick()
 			target.id[4] ^= 1;
 			// Here, "this" is an IDhtProcessCallbackListener*, which leads
 			// to DhtImpl::ProcessCallback(), necessary to complete bootstrapping
-			DoFindNodes(target, DHT_ID_SIZE, this, false); // use the agressive search for the first dht lookup
+			DoBootstrap(target, DHT_ID_SIZE, this);
 		}
 
 	} else if (_dht_bootstrap < -1 ){
@@ -3117,9 +3148,8 @@ void DhtImpl::LoadState()
 #if defined(_DEBUG_DHT)
 				SockAddr tmp;
 				_ip_counter->GetIP(tmp);
-				debug_log("Loaded possible external IP \"%s\" (%p:%s)"
-					, print_sockaddr(addr).c_str()
-					, _ip_counter, print_sockaddr(tmp).c_str());
+				debug_log("Loaded possible external IP \"%s\""
+					, print_sockaddr(addr).c_str());
 #endif
 			}
 		}
@@ -3167,9 +3197,9 @@ void DhtImpl::CountExternalIPReport(const SockAddr& addr, const SockAddr& voter 
 	if (_ip_counter->GetIP(tempWinner) && !tempWinner.ip_eq(_lastLeadingAddress)) {
 
 #if defined(_DEBUG_DHT)
-		debug_log("External IP changed from: \"%s\" to %p:\"%s\""
+		debug_log("External IP changed from: \"%s\" to \"%s\""
 			, print_sockaddr(_lastLeadingAddress).c_str()
-			, _ip_counter, print_sockaddr(tempWinner).c_str());
+			, print_sockaddr(tempWinner).c_str());
 #endif
 		_lastLeadingAddress = tempWinner;
 

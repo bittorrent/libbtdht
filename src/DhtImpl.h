@@ -2019,7 +2019,7 @@ public:
 	uint FindNodes(const DhtID &target, DhtPeerID **list, uint numwant, int wantfail, time_t min_age);
 
 	// uses FindNodes to assemble a list of nodes
-	int AssembleNodeList(const DhtID &target, DhtPeerID** ids, int numwant);
+	int AssembleNodeList(const DhtID &target, DhtPeerID** ids, int numwant, bool force_bootstrap = false);
 
 #ifdef _DEBUG_MEM_LEAK
 	int clean_up_dht_request();
@@ -2114,7 +2114,12 @@ public:
 	void GenRandomIDInBucket(DhtID &target, DhtBucket &bucket);
 	void GetStalestPeerInBucket(DhtPeer **ppeerFound, DhtBucket &bucket);
 
-	void DoFindNodes(DhtID &target, int target_len, IDhtProcessCallbackListener *process_callback = NULL, bool performLessAgressiveSearch = true);
+	void DoFindNodes(DhtID &target, int target_len
+		, IDhtProcessCallbackListener *process_callback = NULL
+		, bool performLessAgressiveSearch = true);
+
+	void DoBootstrap(DhtID &target, int target_len
+		, IDhtProcessCallbackListener *process_listener);
 
 #ifdef DHT_SEARCH_TEST
 	void RunSearches();
