@@ -2297,7 +2297,7 @@ void DhtImpl::DoBootstrap(DhtID &target
 	CallBackPointers cbPtrs;
 	cbPtrs.processListener = process_listener;
 	// get peers in those nodes
-	DhtProcessBase* p = FindNodeDhtProcess::Create(this, *dpm, target, target_len, cbPtrs
+	DhtProcessBase* p = FindNodeDhtProcess::Create(this, *dpm, target, cbPtrs
 		, KADEMLIA_LOOKUP_OUTSTANDING);
 	dpm->AddDhtProcess(p);
 	dpm->Start();
@@ -2818,7 +2818,7 @@ void DhtImpl::Tick()
 			target.id[4] ^= 1;
 			// Here, "this" is an IDhtProcessCallbackListener*, which leads
 			// to DhtImpl::ProcessCallback(), necessary to complete bootstrapping
-			DoBootstrap(target, DHT_ID_SIZE, this);
+			DoBootstrap(target, this);
 		}
 
 	} else if (_dht_bootstrap < -1 ){
