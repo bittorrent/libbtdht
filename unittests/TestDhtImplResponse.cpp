@@ -364,8 +364,8 @@ TEST_F(dht_impl_response_test, TestSendPings) {
 
 	// Now, ping the same peer, but pretend it is slow and/or doesn't answer
 	DhtRequest *req = impl->SendPing(peer_id);
-	req->_pListener = new DhtRequestListener<DhtImpl>(impl.get(),
-			&DhtImpl::OnBootStrapPingReply);
+	req->_pListener = new DhtRequestListener<DhtImpl>(impl.get()
+			, &DhtImpl::OnPingReply);
 	req->time -= 1100;
 	impl->Tick();
 	// Between 1 and 5 second is considered slow, not yet an error
@@ -381,7 +381,7 @@ TEST_F(dht_impl_response_test, TestSendPings) {
 	// Next, after the second failure (FAIL_THRES), the node gets removed.
 	req = impl->SendPing(peer_id);
 	req->_pListener = new DhtRequestListener<DhtImpl>(impl.get(),
-			&DhtImpl::OnBootStrapPingReply);
+			&DhtImpl::OnPingReply);
 	req->time -= 5100;
 	impl->Tick();
 
@@ -1475,7 +1475,7 @@ TEST_F(dht_impl_response_test, TestResponseToPing) {
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
 
-	// invoke AddNode to emit a bootstrap ping message
+	// invoke AddNode to emit a ping message
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	impl->AddNode(peer_id.addr, NULL, 0);
 	// grab from the socket the emitted message and extract the transaction ID
@@ -1496,20 +1496,6 @@ TEST_F(dht_impl_response_test, TestResponseToPing) {
 		.e() ();
 	socket4.Reset();
 	impl->ProcessIncoming(message, len, peer_id.addr);
-	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
-	ASSERT_NO_FATAL_FAILURE(fetch_dict());
-	ASSERT_NO_FATAL_FAILURE(expect_query_type());
-	ASSERT_NO_FATAL_FAILURE(expect_command("find_node"));
-	tid.b = (byte*)dict->GetString("t" , &tid.len);
-	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
-	DhtRequest* req;
-	req = impl->LookupRequest(Read32(tid.b));
-	ASSERT_TRUE(req) << "The outstanding transaction id does not exist";
-	expect_reply_id("vvvvvvvvvvvvvvvvvvvv");
-	// the dht xor's the last word of its id with 0x00000001,
-	// so the last letter changes from 'v' to 'w' for the target
-	ASSERT_NO_FATAL_FAILURE(expect_target("vvvvvvvvvvvvvvvvvvvw"));
-	EXPECT_TRUE(impl->IsBusy()) << "The dht should still be busy";
 }
 
 TEST_F(dht_impl_response_test, TestResponseToPing_ReplyWith_ICMP) {
