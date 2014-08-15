@@ -74,6 +74,29 @@ void dht_log(char const* fmt, ...)
 	// TODO: log to a file or something
 }
 
+std::string print_sockaddr(SockAddr const& addr)
+{
+	char buf[256];
+	if (addr.isv6()) {
+		in6_addr a = addr.get_addr6();
+		int offset = 0;
+		buf[offset++] = '[';
+		for (int i = 0; i < 16; ++i)
+			offset += snprintf(buf + offset, sizeof(buf) - offset
+				, ":%02x" + (i == 0), a.s6_addr[i]);
+		snprintf(buf + offset, sizeof(buf) - offset, "]:%u", addr.get_port());
+	} else {
+		uint a = addr.get_addr4();
+		snprintf(buf, sizeof(buf), "%u.%u.%u.%u:%u"
+			, (a >> 24) & 0xff
+			, (a >> 16) & 0xff
+			, (a >> 8) & 0xff
+			, a & 0xff
+			, addr.get_port());
+	}
+	return buf;
+}
+
 #endif // g_log_dht
 
 static void do_log(char const* fmt, ...)
@@ -140,9 +163,9 @@ const char *format_dht_id(const DhtID &id)
 //--------------------------------------------------------------------------------
 
 DhtImpl::DhtImpl(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_socket_mgr
-	, DhtSaveCallback* save, DhtLoadCallback* load)
+	, DhtSaveCallback* save, DhtLoadCallback* load, ExternalIPCounter* eip)
 {
-	_ip_counter = NULL;
+	_ip_counter = eip;
 	_add_node_callback = NULL;
 	_save_callback = save;
 	_load_callback = load;
@@ -288,6 +311,9 @@ void DhtImpl::Initialize(UDPSocketInterface *udp_socket_mgr
 
 	// Load the DHT state
 	LoadState();
+
+	// initialize _lastLeadingAddress
+	if (_ip_counter) _ip_counter->GetIP(_lastLeadingAddress);
 }
 
 /**
@@ -376,11 +402,21 @@ void DhtImpl::GenerateId()
 
 	if(_ip_counter && _ip_counter->GetIP(externIp)){
 		DhtCalculateHardenedID(externIp, id_bytes);
+
+#if defined(_DEBUG_DHT)
+		debug_log("Generating a hardened node ID: \"%s\""
+			, hexify(_my_id_bytes));
+#endif
 	} else {
 		uint32 *pTemp = (uint32 *) id_bytes;
 		// Generate a random ID
 		for(uint i=0; i<5; i++)
 			*pTemp++ = rand();
+
+#if defined(_DEBUG_DHT)
+		debug_log("Generating a random node ID: \"%s\""
+			, hexify(_my_id_bytes));
+#endif
 	}
 	SetId(id_bytes);
 }
@@ -925,7 +961,8 @@ void FindNClosestToTarget( DhtPeerID *src[], uint srcCount, DhtPeerID *dest[], u
 		dest[i] = sorted_list[i];
 }
 
-int DhtImpl::AssembleNodeList(const DhtID &target, DhtPeerID** ids, int numwant)
+int DhtImpl::AssembleNodeList(const DhtID &target, DhtPeerID** ids
+	, int numwant, bool bootstrap)
 {
 	// Find 8 good ones or bad ones (in case there are no good ones)
 	int num = FindNodes(target, ids, (std::min)(8, numwant), (std::min)(8, numwant), 0);
@@ -933,7 +970,14 @@ int DhtImpl::AssembleNodeList(const DhtID &target, DhtPeerID** ids, int numwant)
 	// And 8 definitely good ones.
 	num += FindNodes(target, ids + num, numwant - num, 0, 0);
 	assert(num <= numwant);
-	if (num < numwant) {
+	if (num < numwant || bootstrap) {
+
+		// if bootstrap is true, bootstrap routers take precedence over
+		// the other nodes
+		if (bootstrap && _bootstrap_routers.size() > numwant - num) {
+			num = numwant - _bootstrap_routers.size();
+			if (num < 0) num = 0;
+		}
 
 		// if we don't have enough nodes in our routing table, fill in with
 		// bootstrap nodes.
@@ -2236,6 +2280,29 @@ void DhtImpl::GetStalestPeerInBucket(DhtPeer **ppeerFound, DhtBucket &bucket)
 	}
 }
 
+void DhtImpl::DoBootstrap(DhtID &target
+	, IDhtProcessCallbackListener *process_listener)
+{
+	DhtPeerID *ids[32];
+	int num = AssembleNodeList(target, ids, sizeof(ids)/sizeof(ids[0]), true);
+
+	DhtProcessManager *dpm = new DhtProcessManager(ids, num, target);
+
+#if defined(_DEBUG_DHT)
+//	debug_log("DoFindNodes: %s",format_dht_id(target));
+//	for(uint i=0; i!=num; i++)
+//		debug_log(" %A", &ids[i]->addr);
+#endif
+
+	CallBackPointers cbPtrs;
+	cbPtrs.processListener = process_listener;
+	// get peers in those nodes
+	DhtProcessBase* p = FindNodeDhtProcess::Create(this, *dpm, target, target_len, cbPtrs
+		, KADEMLIA_LOOKUP_OUTSTANDING);
+	dpm->AddDhtProcess(p);
+	dpm->Start();
+}
+
 void DhtImpl::DoFindNodes(DhtID &target
 	, IDhtProcessCallbackListener *process_listener
 	, bool performLessAgressiveSearch)
@@ -2751,7 +2818,7 @@ void DhtImpl::Tick()
 			target.id[4] ^= 1;
 			// Here, "this" is an IDhtProcessCallbackListener*, which leads
 			// to DhtImpl::ProcessCallback(), necessary to complete bootstrapping
-			DoFindNodes(target, this, false); // use the agressive search for the first dht lookup
+			DoBootstrap(target, DHT_ID_SIZE, this);
 		}
 
 	} else if (_dht_bootstrap < -1 ){
@@ -3067,6 +3134,18 @@ void DhtImpl::SaveState()
 	BencEntityMem beMemId(_my_id_bytes, DHT_ID_SIZE);
 	dict->Insert("id", beMemId);
 
+	if (_ip_counter) {
+		byte buf[256];
+		// we found a potential external IP for us. Place
+			// one vote for this IP, just to seed it with something
+
+		SockAddr addr;
+		_ip_counter->GetIP(addr);
+		size_t iplen = addr.compact(buf, false);
+		BencEntityMem beMemIP(buf, iplen);
+		dict->Insert("ip", beMemIP);
+	}
+
 	std::vector<PackedDhtPeer> peer_list(0);
 
 	for(uint i=0; i<_buckets.size(); i++) {
@@ -3106,14 +3185,34 @@ void DhtImpl::LoadState()
 
 	BencodedDict *dict = base.AsDict(&base);
 	if (dict) {
-		if ((uint)(time(NULL) - dict->GetInt("age", 0)) < 24 * 60 * 60) {
-			// Load the ID
-			byte* id = (byte*)dict->GetString("id", DHT_ID_SIZE);
-			if (id) {
-				CopyBytesToDhtID(_my_id, id);
-				DhtIDToBytes(_my_id_bytes, _my_id);
-			}
 
+		// Load the ID
+		byte* id = (byte*)dict->GetString("id", DHT_ID_SIZE);
+		if (id) {
+			CopyBytesToDhtID(_my_id, id);
+			DhtIDToBytes(_my_id_bytes, _my_id);
+		}
+
+		size_t ip_len = 0;
+		byte* ip = (byte*)dict->GetString("ip", &ip_len);
+
+		if (ip && _ip_counter) {
+			// we found a potential external IP for us. Place
+			// one vote for this IP, just to seed it with something
+			SockAddr addr;
+			if (addr.from_compact(ip, ip_len)) {
+				_ip_counter->CountIP(addr);
+				
+#if defined(_DEBUG_DHT)
+				SockAddr tmp;
+				_ip_counter->GetIP(tmp);
+				debug_log("Loaded possible external IP \"%s\""
+					, print_sockaddr(addr).c_str());
+#endif
+			}
+		}
+
+		if ((uint)(time(NULL) - dict->GetInt("age", 0)) < 24 * 60 * 60) {
 			// Load nodes...
 			size_t nodes_len;
 			byte *nodes = (byte*)dict->GetString("nodes", &nodes_len);
@@ -3133,7 +3232,8 @@ void DhtImpl::LoadState()
 	}
 
 #if defined(_DEBUG_DHT)
-	debug_log("Loaded %d nodes from disk", num_loaded);
+	debug_log("Loaded %d nodes and ID \"%s\" from disk"
+		, num_loaded, hexify(_my_id_bytes));
 #endif
 }
 
@@ -3145,13 +3245,22 @@ int DhtImpl::GetNumPutItems()
 // TODO: The external IP reports from non-DHT sources don't
 // pass through here.  They are counted, but they just won't
 // pass through here
-void DhtImpl::CountExternalIPReport( const SockAddr& addr, const SockAddr& voter ){
+void DhtImpl::CountExternalIPReport(const SockAddr& addr, const SockAddr& voter )
+{
 	if (_ip_counter == NULL) return;
 
 	SockAddr tempWinner;
 	_ip_counter->CountIP(addr, voter);
-	if(_ip_counter->GetIP(tempWinner) && !tempWinner.ip_eq(_lastLeadingAddress)) {
+
+	if (_ip_counter->GetIP(tempWinner) && !tempWinner.ip_eq(_lastLeadingAddress)) {
+
+#if defined(_DEBUG_DHT)
+		debug_log("External IP changed from: \"%s\" to \"%s\""
+			, print_sockaddr(_lastLeadingAddress).c_str()
+			, print_sockaddr(tempWinner).c_str());
+#endif
 		_lastLeadingAddress = tempWinner;
+
 		GenerateId();
 		Restart();
 	}
