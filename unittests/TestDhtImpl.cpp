@@ -2,7 +2,7 @@
 #include "utypes.h"
 #include "TestDhtImpl.h"
 
-void put_callback(void* ctx, std::vector<char>& buffer, int64 seq) {
+void put_callback(void* ctx, std::vector<char>& buffer, int64 seq, SockAddr src) {
 	if (ctx != NULL) {
 		*(reinterpret_cast<int64*>(ctx)) = seq;
 	}
