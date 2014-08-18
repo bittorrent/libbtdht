@@ -939,6 +939,10 @@ int DhtImpl::AssembleNodeList(const DhtID &target, DhtPeerID** ids
 			// just fake the id to match the target, so this is at the top
 			// of the list
 			_temp_nodes[c].id = target;
+			// randomize the low 4 bytes to make the IDs be different. Later in
+			// the lookup process we weed out duplicates, this prevents the
+			// bootstrap nodes from beeing removed.
+			_temp_nodes[c].id.id[4] = rand();
 			_temp_nodes[c].addr = *i;
 			ids[num] = &_temp_nodes[c];
 			++num;
