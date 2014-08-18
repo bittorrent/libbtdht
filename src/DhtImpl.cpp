@@ -405,7 +405,7 @@ void DhtImpl::GenerateId()
 
 #if defined(_DEBUG_DHT)
 		debug_log("Generating a hardened node ID: \"%s\""
-			, hexify(_my_id_bytes));
+			, hexify(id_bytes));
 #endif
 	} else {
 		uint32 *pTemp = (uint32 *) id_bytes;
@@ -415,7 +415,7 @@ void DhtImpl::GenerateId()
 
 #if defined(_DEBUG_DHT)
 		debug_log("Generating a random node ID: \"%s\""
-			, hexify(_my_id_bytes));
+			, hexify(id_bytes));
 #endif
 	}
 	SetId(id_bytes);
