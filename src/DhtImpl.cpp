@@ -74,6 +74,9 @@ void dht_log(char const* fmt, ...)
 	// TODO: log to a file or something
 }
 
+#endif // g_log_dht
+
+// TODO: factor this into ut_utils sockaddr
 std::string print_sockaddr(SockAddr const& addr)
 {
 	char buf[256];
@@ -96,8 +99,6 @@ std::string print_sockaddr(SockAddr const& addr)
 	}
 	return buf;
 }
-
-#endif // g_log_dht
 
 static void do_log(char const* fmt, ...)
 {
@@ -3508,9 +3509,10 @@ void DhtLookupNodeList::SetNodeIds(DhtPeerID** ids, unsigned int numId, const Dh
 		InsertPeer(*ids[x], target);
 }
 
-void DhtLookupNodeList::set_data_blk(byte * v, int v_len)
+void DhtLookupNodeList::set_data_blk(byte * v, int v_len, SockAddr src)
 {
 	data_blk.assign(v, v + v_len);
+	src_ip = src;
 }
 
 //*****************************************************************************
@@ -3977,7 +3979,7 @@ void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 			, message.vBuf.len, message.key.b, message.sequenceNum)) {
 		// The maximum seq and the vBuf are saved by the
 		// processManager and will be used in creating Put messages.
-		processManager.set_data_blk(message.vBuf.b, message.vBuf.len);
+		processManager.set_data_blk(message.vBuf.b, message.vBuf.len, peer_id.addr);
 		processManager.set_seq(message.sequenceNum);
 	}
 
@@ -4697,7 +4699,7 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 		&& (signature.empty() || blk.empty())) {
 
 		callbackPointers.putCallback(callbackPointers.callbackContext
-			, blk, seq);
+			, blk, seq, processManager.data_blk_source());
 
 		// the buffer has to be greater than zero. The empty string must be
 		// represented by "0:"

@@ -24,7 +24,7 @@ typedef void DhtHashFileNameCallback(void *ctx, const byte *info_hash, const byt
 typedef void DhtAddNodesCallback(void *ctx, const byte *info_hash, const byte *peers, uint num_peers);
 typedef void DhtAddNodeResponseCallback(void*& userdata, bool is_response, SockAddr const& addr);
 typedef void DhtScrapeCallback(void *ctx, const byte *target, int downloaders, int seeds);
-typedef void DhtPutCallback(void * ctx, std::vector<char>& buffer, int64 seq);
+typedef void DhtPutCallback(void * ctx, std::vector<char>& buffer, int64 seq, SockAddr src);
 typedef void DhtPutCompletedCallback(void * ctx);
 typedef void DhtLogCallback(char const* str);
 

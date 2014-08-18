@@ -971,6 +971,7 @@ class DhtLookupNodeList
 	protected:
 		unsigned int seq_max;
 		std::vector<char> data_blk;
+		SockAddr src_ip;
 
 	public:
 		DhtLookupNodeList();
@@ -978,17 +979,18 @@ class DhtLookupNodeList
 		virtual ~DhtLookupNodeList();
 		DhtFindNodeEntry* FindQueriedPeer(const DhtPeerID &id);
 		virtual void InsertPeer(const DhtPeerID &id, const DhtID &target);
-		int size(){return numNodes;}
+		int size() { return numNodes; }
 		DhtFindNodeEntry& operator[](const unsigned int index);
 		void SetQueriedStatus(unsigned int index, QueriedStatus status);
 		void SetAllQueriedStatus(QueriedStatus status);
 		void SetNodeIds(DhtPeerID** ids, unsigned int numId, const DhtID &target);
 		void CompactList();
-		int64 seq(){return seq_max;}
-		void set_seq(int64 sq){seq_max = sq;}
-		void set_data_blk(byte * v, int v_len);
-		std::vector<char> &get_data_blk(){return data_blk;}
-		char * get_data_blk(size_t & len){len = data_blk.size(); return &data_blk[0];}	
+		int64 seq() { return seq_max; }
+		void set_seq(int64 sq) {seq_max = sq;}
+		void set_data_blk(byte * v, int v_len, SockAddr src);
+		std::vector<char> &get_data_blk() { return data_blk; }
+		char * get_data_blk(size_t & len) { len = data_blk.size(); return &data_blk[0]; }	
+		SockAddr data_blk_source() const { return src_ip; }
 };
 
 inline DhtLookupNodeList::DhtLookupNodeList():numNodes(0), seq_max(0)
