@@ -4515,8 +4515,8 @@ DhtProcessBase* GetDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
 // returns false if the node doesn't support Put and Get
 bool no_put_support(DhtFindNodeEntry const& e)
 {
-	// uTorrent builds older than 32891 do not support the DHT put/get feature
-	if (memcmp(e.client, "UT", 2) == 0 && e.version < 32891) {
+	// uTorrent builds older than 31395 do not support the DHT put/get feature
+	if (memcmp(e.client, "UT", 2) == 0 && e.version < 31395) {
 		return true;
 	}
 
