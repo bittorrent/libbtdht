@@ -645,23 +645,26 @@ void DhtImpl::DumpAccountingInfo()
 {
 	DhtAccounting *acct = _dht_accounting;
 
-	do_log("Received: %Lu requests (%#Z), %Lu replies (%#Z), %Lu no quota (%#Z), %Lu invalid (%#Z)",
-		 acct[DHT_BW_IN_REQ].count,
-		 acct[DHT_BW_IN_REQ].size,
-		 acct[DHT_BW_IN_REPL].count,
-		 acct[DHT_BW_IN_REPL].size,
-		 acct[DHT_BW_IN_NO_QUOTA].count,
-		 acct[DHT_BW_IN_NO_QUOTA].size,
-		 acct[DHT_BW_IN_TOTAL].count-acct[DHT_BW_IN_REQ].count-acct[DHT_BW_IN_REPL].count,
-		 acct[DHT_BW_IN_TOTAL].size-acct[DHT_BW_IN_REQ].size-acct[DHT_BW_IN_REPL].size);
+	do_log("Received: %u requests (%u), %u replies (%u), %u no quota (%u), %u invalid (%u)",
+		 uint(acct[DHT_BW_IN_REQ].count),
+		 uint(acct[DHT_BW_IN_REQ].size),
+		 uint(acct[DHT_BW_IN_REPL].count),
+		 uint(acct[DHT_BW_IN_REPL].size),
+		 uint(acct[DHT_BW_IN_NO_QUOTA].count),
+		 uint(acct[DHT_BW_IN_NO_QUOTA].size),
+		 uint(acct[DHT_BW_IN_TOTAL].count-acct[DHT_BW_IN_REQ].count-acct[DHT_BW_IN_REPL].count),
+		 uint(acct[DHT_BW_IN_TOTAL].size-acct[DHT_BW_IN_REQ].size-acct[DHT_BW_IN_REPL].size));
 
-	do_log("Sent: %Lu requests (%#Z), %Lu replies (%#Z)",
-		acct[DHT_BW_OUT_TOTAL].count-acct[DHT_BW_OUT_REPL].count,acct[DHT_BW_OUT_TOTAL].size-acct[DHT_BW_OUT_REPL].size,
-		acct[DHT_BW_OUT_REPL].count,acct[DHT_BW_OUT_REPL].size);
+	do_log("Sent: %u requests (%u), %u replies (%u)",
+		uint(acct[DHT_BW_OUT_TOTAL].count-acct[DHT_BW_OUT_REPL].count),
+		uint(acct[DHT_BW_OUT_TOTAL].size-acct[DHT_BW_OUT_REPL].size),
+		uint(acct[DHT_BW_OUT_REPL].count),
+		uint(acct[DHT_BW_OUT_REPL].size));
 
 #if defined(_DEBUG_DHT)
 	for (int i = DHT_INVALID_BASE+1; i < DHT_INVALID_END; i++) {
-		do_log("Invalid type %d: %Lu occurances (%#Z)", i, acct[i].count, acct[i].size);
+		do_log("Invalid type %d: %u occurances (%u)"
+			, uint(i), uint(acct[i].count), uint(acct[i].size));
 	}
 #endif
 }
