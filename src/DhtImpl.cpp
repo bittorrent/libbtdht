@@ -645,7 +645,7 @@ void DhtImpl::DumpAccountingInfo()
 {
 	DhtAccounting *acct = _dht_accounting;
 
-	do_log("Received: %u requests (%u), %u replies (%u), %u no quota (%u), %u invalid (%u)",
+	do_log("Received: %u requests (%u B), %u replies (%u B), %u no quota (%u B), %u invalid (%u B)",
 		 uint(acct[DHT_BW_IN_REQ].count),
 		 uint(acct[DHT_BW_IN_REQ].size),
 		 uint(acct[DHT_BW_IN_REPL].count),
