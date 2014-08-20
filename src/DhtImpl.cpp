@@ -551,11 +551,11 @@ bool DhtImpl::AccountAndSend(const DhtPeerID &peer, const void *data, int len,
 		return false;
 	}
 	Account(DHT_BW_OUT_REPL, len);
-	SendTo(peer, data, len);
+	SendTo(peer.addr, data, len);
 	return true;
 }
 
-void DhtImpl::SendTo(const DhtPeerID &peer, const void *data, uint len)
+void DhtImpl::SendTo(SockAddr const& peer, const void *data, uint len)
 {
 	if (!_dht_enabled) return;
 
@@ -569,10 +569,10 @@ void DhtImpl::SendTo(const DhtPeerID &peer, const void *data, uint len)
 	_dht_quota -= len;
 
 	//Need replace by the new WinRT udp socket implementation
-	UDPSocketInterface *socketMgr = (peer.addr.isv4())?_udp_socket_mgr:
+	UDPSocketInterface *socketMgr = (peer.isv4())?_udp_socket_mgr:
 		_udp6_socket_mgr;
 	assert(socketMgr);
-	socketMgr->Send(peer.addr, (byte*)data, len);
+	socketMgr->Send(peer, (byte*)data, len);
 }
 
 void CopyBytesToDhtID(DhtID &id, const byte *b)
@@ -846,6 +846,31 @@ DhtRequest *DhtImpl::AllocateRequest(const DhtPeerID &peer_id)
 	return req;
 }
 
+// send a request to dst to ping punchee, in order for it to
+// open a pinhole.
+void DhtImpl::SendPunch(SockAddr const& dst, SockAddr const& punchee)
+{
+	unsigned char buf[120];
+	smart_buffer sb(buf, sizeof(buf));
+
+#ifdef _DEBUG_DHT
+	debug_log("SEND PUNCH REQUEST TO: %s -> %s"
+		, print_sockaddr(dst).c_str()
+		, print_sockaddr(punchee).c_str());
+#endif
+
+	unsigned char target_ip[20];
+	int len = punchee.compact(target_ip, true);
+	assert(len == 6);
+	sb("d1:ad2:id20:")(_my_id_bytes, DHT_ID_SIZE)
+		("2:ip6:")(target_ip, 6)("e1:q5:punch1:t4:....");
+	put_version(sb);
+	sb("1:y1:qe");
+	assert(sb.length() >= 0);
+	
+	SendTo(dst, buf, sb.length());
+}
+
 DhtRequest *DhtImpl::SendPing(const DhtPeerID &peer_id) {
 	unsigned char buf[120];
 	smart_buffer sb(buf, sizeof(buf));
@@ -853,7 +878,8 @@ DhtRequest *DhtImpl::SendPing(const DhtPeerID &peer_id) {
 	DhtRequest *req = AllocateRequest(peer_id);
 
 #ifdef _DEBUG_DHT
-	debug_log("SEND PING(%d): %A", req->tid, &peer_id.addr);
+	debug_log("SEND PING(%d): %s", req->tid
+		, print_sockaddr(peer_id.addr).c_str());
 #endif
 
 	sb("d1:ad2:id20:")(_my_id_bytes, DHT_ID_SIZE)("e1:q4:ping");
@@ -866,7 +892,7 @@ DhtRequest *DhtImpl::SendPing(const DhtPeerID &peer_id) {
 		do_log("SendPing blob exceeds maximum size.");
 		return NULL;
 	}
-	SendTo(peer_id, buf, sb.length());
+	SendTo(peer_id.addr, buf, sb.length());
 	return req;
 }
 
@@ -1053,7 +1079,8 @@ uint DhtImpl::FindNodes(const DhtID &target, DhtPeerID **list, uint numwant, int
 // d( "a"= d("id" = <hash>, "target" = <hash>), "q"="find_node", "t" = 0, "y" = "q")
 // d( "r" = d( "id" = <hash>, "nodes" = <208 byte string>), "t" = 1, "y" = "r")
 
-int DhtImpl::BuildFindNodesPacket(smart_buffer &sb, DhtID &target_id, int size)
+int DhtImpl::BuildFindNodesPacket(smart_buffer &sb, DhtID &target_id, int size
+	, SockAddr const& requestor, bool send_punches)
 {
 	DhtPeerID *list[KADEMLIA_K];
 	uint n = FindNodes(target_id, list, sizeof(list)/sizeof(list[0]), 0, CROSBY_E);
@@ -1074,6 +1101,7 @@ int DhtImpl::BuildFindNodesPacket(smart_buffer &sb, DhtID &target_id, int size)
 	sb("5:nodes%d:", n * 26);
 	for(uint i=0; i!=n; i++) {
 		sb(list[i]->id)(list[i]->addr);
+		if (send_punches) SendPunch(list[i]->addr, requestor);
 	}
 	assert(sb.length() >= 0);
 	return n;
@@ -1641,7 +1669,7 @@ bool DhtImpl::ProcessQueryGetPeers(DHTMessage &message, DhtPeerID &peerID,
 	const uint16 mtu = GetUDP_MTU(peerID.addr);
 	assert(size <= mtu);
 
-	BuildFindNodesPacket(sb, info_hash_id, mtu - size);
+	BuildFindNodesPacket(sb, info_hash_id, mtu - size, peerID.addr);
 	sb("5:token20:")(ttoken.value, DHT_ID_SIZE);
 
 #if defined(_DEBUG_DHT)
@@ -1701,7 +1729,7 @@ bool DhtImpl::ProcessQueryFindNode(DHTMessage &message, DhtPeerID &peerID,
 #if defined(_DEBUG_DHT)
 	uint n =
 #endif
-		BuildFindNodesPacket(sb, target_id, mtu - size);
+		BuildFindNodesPacket(sb, target_id, mtu - size, peerID.addr);
 
 #if defined(_DEBUG_DHT)
 	debug_log("FIND_NODE: %s. Found %d peers."
@@ -1953,7 +1981,10 @@ bool DhtImpl::ProcessQueryGet(DHTMessage &message, DhtPeerID &peerID,
 		sb("1:k%d:", int(keyToReturn.len))(keyToReturn);
 	}
 
-	BuildFindNodesPacket(sb, targetId, mtu - size);
+	// the last argument specifies that we should use the holepunch feature
+	// to improve the chances of the node performing the lookup being able
+	// to reach the next level of nodes
+	BuildFindNodesPacket(sb, targetId, mtu - size, peerID.addr, true);
 
 	sb("3:seqi%" PRId64 "e", sequenceNum);
 
@@ -2051,6 +2082,48 @@ bool DhtImpl::ProcessQueryPing(DHTMessage &message, DhtPeerID &peerID,
 	return AccountAndSend(peerID, sb.begin(), sb.length(), packetSize);
 }
 
+// when we get a punch request, send a tiny message to the specified
+// IP:port, in the hopes that our NAT will open up a pinhole to it
+bool DhtImpl::ProcessQueryPunch(DHTMessage &message, DhtPeerID &peerID
+	, int packetSize)
+{
+	if (!_dht_enabled) return false;
+
+	SockAddr dst;
+	bool ok = dst.from_compact(message.external_ip.b
+		, message.external_ip.len);
+
+	if (!ok) return false;
+
+#if defined(_DEBUG_DHT)
+	debug_log("PUNCHING %s", print_sockaddr(dst).c_str());
+#endif
+
+	unsigned char buf[5];
+	smart_buffer sb(buf, sizeof(buf));
+
+	sb("de");
+	int len = sb.length();
+	assert(len >= 0);
+
+	assert(ValidateEncoding(buf, len));
+	Account(DHT_BW_OUT_TOTAL, len);
+
+	if (_packet_callback) {
+		_packet_callback(buf, len, false);
+	}
+
+	_dht_quota -= len;
+
+	UDPSocketInterface *socketMgr = (dst.isv4())
+		? _udp_socket_mgr
+		: _udp6_socket_mgr;
+
+	assert(socketMgr);
+	socketMgr->Send(dst, buf, sb.length());
+	return true;
+}
+
 bool DhtImpl::ProcessQuery(DhtPeerID& peerID, DHTMessage &message, int packetSize) {
 
 	if(!message.id) {
@@ -2080,6 +2153,7 @@ bool DhtImpl::ProcessQuery(DhtPeerID& peerID, DHTMessage &message, int packetSiz
 		case DHT_QUERY_VOTE: return ProcessQueryVote(message, peerID, packetSize);
 		case DHT_QUERY_PUT: return ProcessQueryPut(message, peerID, packetSize);
 		case DHT_QUERY_GET: return ProcessQueryGet(message, peerID, packetSize);
+		case DHT_QUERY_PUNCH: return ProcessQueryPunch(message, peerID, packetSize);
 		case DHT_QUERY_UNDEFINED: return false;
 	}
 
@@ -4138,7 +4212,7 @@ void FindNodeDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 		do_log("DhtSendRPC blob exceeds maximum size.");
 		return;
 	}
-	impl->SendTo(nodeInfo.id, buf, sb.length());
+	impl->SendTo(nodeInfo.id.addr, buf, sb.length());
 }
 
 /**
@@ -4305,7 +4379,7 @@ void GetPeersDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 		do_log("DhtSendRPC blob exceeds maximum size");
 		return;
 	}
-	impl->SendTo(nodeInfo.id, buf, sb.length());
+	impl->SendTo(nodeInfo.id.addr, buf, sb.length());
 }
 
 
@@ -4449,7 +4523,7 @@ void AnnounceDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 		do_log("DhtSendRPC blob exceeds maximum size.");
 		return;
 	}
-	impl->SendTo(nodeInfo.id, buf, sb.length());
+	impl->SendTo(nodeInfo.id.addr, buf, sb.length());
 }
 
 void AnnounceDhtProcess::ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags)
@@ -4567,7 +4641,7 @@ void GetDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	debug_log("[%u] --> GET %s tid=%d", process_id()
 		, hexify(targetAsID), transactionID);
 #endif
-	impl->SendTo(nodeInfo.id, buf, sb.length());
+	impl->SendTo(nodeInfo.id.addr, buf, sb.length());
 }
 
 void GetDhtProcess::CompleteThisProcess()
@@ -4766,7 +4840,7 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	debug_log("[%u] --> PUT %s tid=%d", process_id()
 		, hexify(this->_id), transactionID);
 #endif
-	impl->SendTo(nodeInfo.id, buf, len);
+	impl->SendTo(nodeInfo.id.addr, buf, len);
 }
 
 void PutDhtProcess::ImplementationSpecificReplyProcess(void *userdata
@@ -4914,7 +4988,7 @@ void VoteDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 		do_log("DhSendRPC blob exceeds maximum size");
 		return;
 	}
-	impl->SendTo(nodeInfo.id, buf, sb.length());
+	impl->SendTo(nodeInfo.id.addr, buf, sb.length());
 }
 
 VoteDhtProcess::VoteDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm

@@ -24,7 +24,8 @@ enum DHTCommands
 	DHT_QUERY_ANNOUNCE_PEER,
 	DHT_QUERY_VOTE,
 	DHT_QUERY_GET,
-	DHT_QUERY_PUT
+	DHT_QUERY_PUT,
+	DHT_QUERY_PUNCH
 };
 
 class BencodedDict;
@@ -128,6 +129,9 @@ public:
 	// a bencstring is parsed.  It is assigned the region's values when it is
 	// determined that a "put" request was made.  Otherwise it is unassigned.
 	Buffer vBuf;
+
+	// this is the target IP address to punch a hole to for punch requests
+	Buffer target_ip;
 
 	// reply specific components
 	BencodedDict* replyDict;

@@ -1894,7 +1894,7 @@ public:
 
 	bool AccountAndSend(const DhtPeerID &peer, const void *data, int len,
 			int packetSize);
-	void SendTo(const DhtPeerID &peer, const void *data, uint len);
+	void SendTo(SockAddr const& peer, const void *data, uint len);
 
 	// determine which bucket an id belongs to
 	int GetBucket(const DhtID &id);
@@ -1908,6 +1908,8 @@ public:
 	DhtRequest *AllocateRequest(const DhtPeerID &peer_id);
 
 	DhtRequest *SendPing(const DhtPeerID &peer_id);
+
+	void SendPunch(SockAddr const& dst, SockAddr const& punchee);
 
 	// Update the internal DHT tables with an id.
 	DhtPeer *Update(const DhtPeerID &id, uint origin, bool seen = false, int rtt = INT_MAX);
@@ -1928,7 +1930,8 @@ public:
 	int clean_up_dht_request();
 #endif
 
-	int BuildFindNodesPacket(smart_buffer &sb, DhtID &target_id, int size);
+	int BuildFindNodesPacket(smart_buffer &sb, DhtID &target_id, int size
+		, SockAddr const& requestor, bool send_punches = false);
 
 	// Get the storage container associated with a info_hash
 	std::vector<VoteContainer>::iterator GetVoteStorageForID(DhtID const& key);
@@ -1946,16 +1949,13 @@ public:
 	void AddVoteToStore(smart_buffer& sb, DhtID& target
 		, SockAddr const& addr, int vote);
 
-
 	void AddPeerToStore(const DhtID &info_hash, cstr file_name, const SockAddr& addr, bool seed);
 
 	void ExpirePeersFromStore(time_t expire_before);
 
-
 	void GenerateWriteToken(sha1_hash *token, const DhtPeerID &peer_id);
 	bool ValidateWriteToken(const DhtPeerID &peer_id, const byte *token);
 	void RandomizeWriteToken();
-
 
 	enum {
 		PACKET_PING,
@@ -2008,6 +2008,8 @@ public:
 			DhtRequest *req);
 	bool ProcessError(DhtPeerID& peerID, DHTMessage &message, int pkt_size,
 			DhtRequest *req);
+	bool ProcessQueryPunch(DHTMessage &message, DhtPeerID &peerID
+		, int packetSize);
 
 
 	bool InterpretMessage(DHTMessage &message, const SockAddr& addr, int pkt_size);

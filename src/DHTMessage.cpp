@@ -175,12 +175,12 @@ void DHTMessage::DecodeQuery(BencodedDict &bDict)
 		vote = args->GetInt("vote", 0);
 		filename.b = (byte*)args->GetString("name", &filename.len);
 	}
-	else if(strcmp(command,"get") == 0){
+	else if (strcmp(command,"get") == 0) {
 		dhtCommand = DHT_QUERY_GET;
 		target.b = (byte*)args->GetString("target", &target.len);
 		if (target.len != 20) _argumentsAreValid = false;
 	}
-	else if(strcmp(command,"put") == 0){
+	else if (strcmp(command,"put") == 0) {
 		dhtCommand = DHT_QUERY_PUT;
 		token.b = (byte*)args->GetString("token", &token.len);
 		vBuf.len = region.second - region.first;
@@ -192,8 +192,14 @@ void DHTMessage::DecodeQuery(BencodedDict &bDict)
 		sequenceNum = args->GetInt("seq", 0);
 		cas = reinterpret_cast<const byte*>(args->GetString("cas", 20));
 	}
-	else if(strcmp(command,"ping") == 0){
+	else if (strcmp(command,"ping") == 0) {
 		dhtCommand = DHT_QUERY_PING;
+	}
+	else if (strcmp(command, "punch") == 0) {
+		dhtCommand = DHT_QUERY_PUNCH;
+		target_ip.b = (byte*)args->GetString("ip", &target_ip.len);
+		if (target_ip.b == NULL || target_ip.len != 6)
+			_argumentsAreValid = false;
 	}
 	else {
 		// unknown messages with either a 'target'
