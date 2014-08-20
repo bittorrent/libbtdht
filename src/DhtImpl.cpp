@@ -4720,6 +4720,11 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	if (signature.empty()) {
 		Sign(signature, blk, _skey, seq);
 		assert(signature.size() > 0);
+
+#ifdef _DEBUG_DHT
+		assert(impl->Verify((unsigned char*)&signature[0], (unsigned char*)&blk[0]
+			, blk.size(), _pkey, seq));
+#endif
 	}
 
 	// the buffer has to be greater than zero. The empty string must be
