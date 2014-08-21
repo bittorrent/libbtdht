@@ -80,7 +80,7 @@ TEST_F(dht_impl_test, TestSendTo) {
 
 	impl->Enable(true, 0);
 
-	impl->SendTo(peer_id,
+	impl->SendTo(peer_id.addr,
 			(const unsigned char*)(testData.c_str()), testData.size());
 	EXPECT_TRUE(socket4.GetSentDataAsString() == testData);
 }
