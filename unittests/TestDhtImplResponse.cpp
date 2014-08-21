@@ -97,20 +97,19 @@ class dht_impl_response_test : public dht_impl_test {
 
 			impl->DoAnnounce(target, NULL, &AddNodesCallbackDummy::Callback, NULL,
 					filename.c_str(), NULL, 0);
-			std::string out = socket4.GetSentDataAsString();
 
 			// see how many strings went out.
 			// expect 106 characters output for each peer in the dht's list
 			// for example:
 			// "d1:ad2:id20:AAAABBBBCCCCDDDDEEEE9:info_hash20:FFFFGGGGHHHHIIII0000e
 			// 1:q9:get_peers1:t4:köÇn1:v4:UTê`1:y1:qe"
-			unsigned int response_strings_count = out.size() / bytes_per_peer;
-			ASSERT_NE(0, response_strings_count);
-			ASSERT_TRUE(out.size() % bytes_per_peer == 0);
-			for(unsigned int x = 0; x < response_strings_count; ++x) {
-				unsigned int offset = x * bytes_per_peer;
-				BencEntity::Parse((const byte *)out.c_str() + offset, output,
-						(const byte *)(out.c_str() + offset + bytes_per_peer));
+
+			int packets = socket4.numPackets();
+			for (int i = 0; i < packets; ++i) {
+				std::string out = socket4.GetSentDataAsString(i);
+
+				BencEntity::Parse((const byte *)out.c_str(), output,
+						(const byte *)(out.c_str()) + out.size());
 				ASSERT_EQ(BENC_DICT, output.bencType);
 				dict = BencodedDict::AsDict(&output);
 				ASSERT_TRUE(dict);
@@ -1163,7 +1162,6 @@ TEST_F(dht_impl_response_test, DoFindNodes_ReplyWith_ICMP) {
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	FindNodeCallbackDummy CallbackObj;
 	impl->DoFindNodes(target, &CallbackObj);
-	std::string doFindNodesOutput = socket4.GetSentDataAsString();
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
 
 	// *****************************************************
@@ -2287,6 +2285,7 @@ TEST_F(dht_impl_response_test, AnnounceWithMultiplePeers_ReplyWithSinglePeer) {
 		ASSERT_NO_FATAL_FAILURE(fetch_announce(targets[x], filenamesTxt[x],
 					transactionIDs));
 	}
+	ASSERT_GT(transactionIDs.size(), 1);
 
 	// *****************************************************
 	// now fabricate response messages using the
@@ -2319,6 +2318,7 @@ TEST_F(dht_impl_response_test, AnnounceWithMultiplePeers_ReplyWithSinglePeer) {
 	ASSERT_NO_FATAL_FAILURE(fetch_peers_reply(peer_id, response_tokens[0],
 				values, transactionIDs[0], tidout, false));
 	announceString += socket4.GetSentDataAsString();
+
 	ASSERT_NO_FATAL_FAILURE(fetch_peers_reply(peer_id_2, response_tokens[1],
 				values, transactionIDs[1], tidout));
 	announceString += socket4.GetSentDataAsString();
@@ -2326,7 +2326,7 @@ TEST_F(dht_impl_response_test, AnnounceWithMultiplePeers_ReplyWithSinglePeer) {
 	// look to see if the response tokens are in the sent data string
 	// ONCE AND ONLY ONCE.  If this is so, then assume the remainder of the output is good
 	for(unsigned int x = 0; x < transactionIDs.size(); ++x) {
-		size_t index = announceString.find(response_tokens[x]);
+		std::string::size_type index = announceString.find(response_tokens[x]);
 		ASSERT_NE(index, std::string::npos) << "response token '"
 			<< response_tokens[x]
 			<< "' was NOT found in the announce_peer output string";
@@ -2378,7 +2378,7 @@ TEST_F(dht_impl_response_test, DoFindNodesWithMultipleNodesInDHT) {
 	std::vector<std::vector<byte> > transactionIDs;
 	ASSERT_TRUE(extract_transaction_ids(doFindNodesOutput,
 			transactionIDs)) << "There was a problem extracting transaction ID's";
-	ASSERT_TRUE(transactionIDs.size() != 0) <<
+	ASSERT_GT(transactionIDs.size(), 1) <<
 			"No transaction IDs were emitted, test can not continue.";
 
 	// send the same node info back from both queried nodes
@@ -2832,8 +2832,6 @@ TEST_F(dht_impl_response_test, Announce_Slow_ReplyWithPeers) {
 	DhtRequest* req2 = impl->LookupRequest(Read32(tid.b));
 	EXPECT_FALSE(req2) <<
 			"The outstanding transaction id was not removed by the response";
-
-	EXPECT_FALSE(impl->IsBusy()) << "The dht should no longer be busy";
 }
 
 
@@ -2901,7 +2899,6 @@ TEST_F(dht_impl_response_test, Announce_Slow_ReplyWithMultipleNodes) {
 	// *****************************************************
 	// make the dht emit an announce message (the get_peers rpc)
 	// *****************************************************
-	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	impl->DoAnnounce(target, NULL, &AddNodesCallbackDummy::Callback, NULL,
 			"filename.txt", NULL, IDht::announce_non_aggressive);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
@@ -3124,7 +3121,6 @@ TEST_F(dht_impl_response_test, Announce_TimeOut_ReplyWithMultipleNodes) {
 	// *****************************************************
 	// make the dht emit an announce message (the get_peers rpc)
 	// *****************************************************
-	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	impl->DoAnnounce(target, NULL, &AddNodesCallbackDummy::Callback, NULL,
 			"filename.txt", NULL, 0);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
@@ -3340,7 +3336,6 @@ TEST_F(dht_impl_response_test, Announce_ICMPerror_ReplyWithMultipleNodes) {
 	// *****************************************************
 	// make the dht emit an announce message (the get_peers rpc)
 	// *****************************************************
-	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	impl->DoAnnounce(target, NULL, &AddNodesCallbackDummy::Callback, NULL,
 			"filename.txt", NULL, 0);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";

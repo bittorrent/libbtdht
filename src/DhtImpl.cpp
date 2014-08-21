@@ -3433,7 +3433,7 @@ DhtPeer* DhtImpl::Update(const DhtPeerID &id, uint origin, bool seen, int rtt)
 	DhtBucket &bucket = *_buckets[bucket_id];
 
 #if defined(_DEBUG_DHT)
-	debug_log("Update: %s.", format_dht_id(id.id));
+//	debug_log("Update: %s.", format_dht_id(id.id));
 #endif
 
 	assert(bucket.TestForMatchingPrefix(id.id));

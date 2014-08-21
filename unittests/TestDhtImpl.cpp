@@ -60,7 +60,6 @@ TEST_F(dht_impl_test, TestTheUnitTestUDPSocketClass) {
 	// be careful with test data containing '\0' in the middle of the string.
 	std::string testData("abcdefghijklmnopqrstuvwxyz\t1234567890\xf1\x04");
 	std::string additionalData("More Data");
-	std::string totalData = testData + additionalData;
 
 	// "send" some data
 	TestSocket.Send(DummySockAddr, "", (const unsigned char*)(testData.c_str()),
@@ -69,8 +68,12 @@ TEST_F(dht_impl_test, TestTheUnitTestUDPSocketClass) {
 			(const unsigned char*)(additionalData.c_str()), additionalData.size());
 
 	// see that the test socket faithfully represents the data.
-	resultData = TestSocket.GetSentDataAsString();
-	EXPECT_TRUE(resultData == totalData);
+	resultData = TestSocket.GetSentDataAsString(1);
+	EXPECT_EQ(additionalData, resultData);
+	TestSocket.popPacket();
+
+	resultData = TestSocket.GetSentDataAsString(0);
+	EXPECT_EQ(testData, resultData);
 }
 
 TEST_F(dht_impl_test, TestSendTo) {
@@ -910,7 +913,12 @@ TEST_F(dht_impl_test, TestImmutableGetRPC_ipv4) {
 	// parse and send the message constructed above
 	socket4.Reset();
 	impl->ProcessIncoming(message, len, bind_addr);
-	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+
+	do {
+		ASSERT_NO_FATAL_FAILURE(fetch_dict());
+		socket4.popPacket();
+	} while (!test_transaction_id("aa", 2));
+
 	ASSERT_NO_FATAL_FAILURE(expect_response_type());
 	expect_transaction_id("aa", 2);
 	expect_reply_id();

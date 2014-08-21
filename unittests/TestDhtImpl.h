@@ -43,6 +43,13 @@ inline void ed25519_callback(unsigned char * sig, const unsigned char * v,
 	}
 }
 
+inline bool ed25519_verify(const unsigned char *signature,
+		const unsigned char *message, unsigned long long message_len,
+		const unsigned char *key)
+{
+	return true;
+}
+
 class dht_impl_test : public dht_test {
 	protected:
 		SockAddr bind_addr;
@@ -75,6 +82,7 @@ class dht_impl_test : public dht_test {
 			impl = new DhtImpl(&socket4, &socket6);
 			impl->SetSHACallback(&sha1_callback);
 			impl->SetEd25519SignCallback(&ed25519_callback);
+			impl->SetEd25519VerifyCallback(&ed25519_verify);
 
 			peer_id.id.id[0] = '1111'; // 1111
 			peer_id.id.id[1] = 'BBBB'; // BBBB
@@ -124,7 +132,7 @@ class dht_impl_test : public dht_test {
 		}
 
 		void fetch_dict() {
-			std::string benc_message = socket4.GetSentDataAsString();
+			std::string benc_message = socket4.GetSentDataAsString(socket4.numPackets()-1);
 			// should not store expected dict in a BencodedDict because if the output
 			// is somehow not a dict that will trigger a non-unittest assert, and we
 			// wish to handle that case ourselves
@@ -192,6 +200,15 @@ class dht_impl_test : public dht_test {
 			ASSERT_NO_FATAL_FAILURE(fetch_dict());
 			ASSERT_NO_FATAL_FAILURE(expect_response_type());
 			ASSERT_NO_FATAL_FAILURE(expect_ip());
+		}
+
+		bool test_transaction_id(const char* id, int id_len) {
+			Buffer tid;
+			tid.b = (unsigned char*)dict->GetString("t", &tid.len);
+			if (tid.b == NULL) return false;
+			if (id_len != tid.len) return false;
+
+			return memcmp((const void*)tid.b, (const void *)id, id_len) == 0;
 		}
 
 		void expect_transaction_id(const char* id, int id_len) {
