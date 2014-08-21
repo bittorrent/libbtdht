@@ -113,7 +113,14 @@ void ExternalIPCounter::CountIP( const SockAddr& addr, const SockAddr& voter, in
 
 bool ExternalIPCounter::GetIP(SockAddr &addr) const {
 
-	//first check for current winner
+	if (_last_votes4 >= _last_votes6 && _last_votes4 > 0) {
+		addr = _last_winner4;
+		return true;
+	} else if (_last_votes6 > _last_votes4 && _last_votes6 > 0) {
+		addr = _last_winner6;
+		return true;
+	}
+
 	if (_winnerV4 != _map.end()) {
 		if(_winnerV6 != _map.end() && _winnerV6->second > _winnerV4->second) {
 			addr = _winnerV6->first;
@@ -124,17 +131,6 @@ bool ExternalIPCounter::GetIP(SockAddr &addr) const {
 	}
 	if (_winnerV6 != _map.end()) {
 		addr = _winnerV6->first;
-		return true;
-	}
-
-	// Only if there is no current winner do we check for last winner
-	// When rollover happens, all votes are cleared, but _last_winner[4|6] is not
-	// See EXTERNAL_IP_HEAT_MAX_VOTES & EXTERNAL_IP_HEAT_DURATION
-	if (_last_votes4 >= _last_votes6 && _last_votes4 > 0) {
-		addr = _last_winner4;
-		return true;
-	} else if (_last_votes6 > _last_votes4 && _last_votes6 > 0) {
-		addr = _last_winner6;
 		return true;
 	}
 	return false;
