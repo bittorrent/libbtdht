@@ -853,6 +853,24 @@ void DhtImpl::SendPunch(SockAddr const& dst, SockAddr const& punchee)
 	unsigned char buf[120];
 	smart_buffer sb(buf, sizeof(buf));
 
+	// see if we have this pair of nodes in the bloom filter
+	// already. If we do, we've already sent a punch request recently,
+	// and we should skip it this time.
+	byte record[12];
+	dst.compact(record, true);
+	punchee.compact(record + 6, true);
+	sha1_hash h = _sha_callback(record, 12);
+	if (_recent_punch_requests.test(h)) {
+#ifdef _DEBUG_DHT
+		debug_log("SUPPRESSED PUNCH REQUEST TO: %s -> %s"
+			, print_sockaddr(dst).c_str()
+			, print_sockaddr(punchee).c_str());
+#endif
+		return;
+	}
+
+	_recent_punch_requests.add(h);
+
 #ifdef _DEBUG_DHT
 	debug_log("SEND PUNCH REQUEST TO: %s -> %s"
 		, print_sockaddr(dst).c_str()
@@ -2090,10 +2108,21 @@ bool DhtImpl::ProcessQueryPunch(DHTMessage &message, DhtPeerID &peerID
 	if (!_dht_enabled) return false;
 
 	SockAddr dst;
-	bool ok = dst.from_compact(message.external_ip.b
-		, message.external_ip.len);
-
+	bool ok = dst.from_compact(message.target_ip.b
+		, message.target_ip.len);
 	if (!ok) return false;
+
+	byte record[6];
+	dst.compact(record, true);
+	sha1_hash h = _sha_callback(record, 6);
+	if (_recent_punches.test(h)) {
+#ifdef _DEBUG_DHT
+		debug_log("SUPPRESSED PUNCH: %s"
+			, print_sockaddr(dst).c_str());
+#endif
+		return true;
+	}
+	_recent_punches.add(h);
 
 #if defined(_DEBUG_DHT)
 	debug_log("PUNCHING %s", print_sockaddr(dst).c_str());
@@ -2883,6 +2912,9 @@ void DhtImpl::Tick()
 		}
 		_immutablePutStore.UpdateUsage(time(NULL));
 		_mutablePutStore.UpdateUsage(time(NULL));
+
+		_recent_punch_requests.clear();
+		_recent_punches.clear();
 	}
 
 	if (_dht_bootstrap > 0) {

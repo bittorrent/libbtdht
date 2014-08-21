@@ -1796,6 +1796,15 @@ public:
 	// stores votes for keys
 	std::vector<VoteContainer> _vote_store;
 
+	// recent punch requests we've sent. Don't send duplicates within
+	// short periods of time. This bloom filter is cleared every 5 minutes
+	// or so
+	bloom_filter _recent_punch_requests;
+
+	// recent punches we've sent (this is the small packet meant to open the
+	// pinhole, sent in response to a punch request).
+	bloom_filter _recent_punches;
+
 #define MAX_PEERS (4*1000*1000)
 	int _peers_tracked;
 
