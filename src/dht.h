@@ -25,6 +25,7 @@ typedef void DhtAddNodesCallback(void *ctx, const byte *info_hash, const byte *p
 typedef void DhtAddNodeResponseCallback(void*& userdata, bool is_response, SockAddr const& addr);
 typedef void DhtScrapeCallback(void *ctx, const byte *target, int downloaders, int seeds);
 typedef void DhtPutCallback(void * ctx, std::vector<char>& buffer, int64 seq, SockAddr src);
+typedef void DhtPutDataCallback(void * ctx, std::vector<char> const& buffer, int64 seq, SockAddr src);
 typedef void DhtPutCompletedCallback(void * ctx);
 typedef void DhtLogCallback(char const* str);
 
@@ -85,6 +86,11 @@ public:
 		DhtPutCallback * put_callback,
 		//called in CompleteThisProcess
 		DhtPutCompletedCallback * put_completed_callback,
+		// called every time we receive a blob from a node. This cannot be
+		// used to modify and write back the data, this is just a sneak-peek
+		// of what's likely to be in the final blob that's passed to
+		// put_callback
+		DhtPutDataCallback* put_data_callback,
 		void *ctx,
 		int flags = 0,
 		// seq is an optional provided monotonically increasing sequence number to be

@@ -2796,10 +2796,12 @@ void DhtImpl::Vote(void *ctx_ptr, const sha1_hash* info_hash, int vote, DhtVoteC
 	_allow_new_job = false;
 }
 
-void DhtImpl::Put(const byte * pkey, const byte * skey,
-		DhtPutCallback * put_callback,
-		DhtPutCompletedCallback * put_completed_callback, void *ctx, int flags,
-		int64 seq)
+void DhtImpl::Put(const byte * pkey, const byte * skey
+		, DhtPutCallback* put_callback
+		, DhtPutCompletedCallback* put_completed_callback
+		, DhtPutDataCallback* put_data_callback
+		, void *ctx, int flags
+		, int64 seq)
 {
 	int maxOutstanding = (flags & announce_non_aggressive)
 		? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA
@@ -2820,6 +2822,7 @@ void DhtImpl::Put(const byte * pkey, const byte * skey,
 	callbacks.putCallback = put_callback;
 	callbacks.callbackContext = ctx;
 	callbacks.putCompletedCallback = put_completed_callback;
+	callbacks.putDataCallback = put_data_callback;
 
 	DhtProcessBase* getProc = GetDhtProcess::Create(this, *dpm, target
 		, callbacks, flags, maxOutstanding);
@@ -4155,9 +4158,17 @@ void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 		processManager.set_seq(message.sequenceNum);
 
 #ifdef _DEBUG_DHT
-		fprintf(impl->_lookup_log, "[%u] [%u] [%s]: BLOB (seq: %d)\n"
+		fprintf(impl->_lookup_log, "[%u] [%u] [%s]: BLOB (seq: %" PRId64 ")\n"
 			, uint(get_milliseconds()), process_id(), name(), message.sequenceNum);
 #endif
+
+		if (callbackPointers.putDataCallback) {
+			std::vector<char> blk((char*)message.vBuf.b
+				, (char*)message.vBuf.b + message.vBuf.len);
+
+			callbackPointers.putDataCallback(callbackPointers.callbackContext
+				, blk, message.sequenceNum, peer_id.addr);
+		}
 	}
 
 	if (_with_cas) {
@@ -4987,6 +4998,7 @@ void PutDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 		impl->Put(_pkey, _skey
 			, callbackPointers.putCallback
 			, callbackPointers.putCompletedCallback
+			, callbackPointers.putDataCallback
 			, callbackPointers.callbackContext
 			, _with_cas ? IDht::with_cas : 0, processManager.seq());
 
