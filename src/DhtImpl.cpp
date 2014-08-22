@@ -4147,6 +4147,11 @@ void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 		// processManager and will be used in creating Put messages.
 		processManager.set_data_blk(message.vBuf.b, message.vBuf.len, peer_id.addr);
 		processManager.set_seq(message.sequenceNum);
+
+#ifdef _DEBUG_DHT
+		fprintf(impl->_lookup_log, "[%u] [%u] [%s]: BLOB (seq: %d)\n"
+			, uint(get_milliseconds()), process_id(), name(), message.sequenceNum);
+#endif
 	}
 
 	if (_with_cas) {
