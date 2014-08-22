@@ -704,7 +704,7 @@ enum DhtProcessFlags
 struct DhtRequest;
 
 /**
- This is used by DhtProcess type callbacks stored in the DhtImpl's request table and
+ This is used by DhtProcessBase type callbacks stored in the DhtImpl's request table and
  tied to a transaction ID
 
  Typically used with OnReply()
@@ -1060,6 +1060,7 @@ class DhtProcessManager : public DhtLookupNodeList
 		{}
 		~DhtProcessManager();
 		unsigned int AddDhtProcess(DhtProcessBase *process);
+
 		void Start();
 		void Next();
 };
@@ -1157,11 +1158,13 @@ class DhtProcessBase
 		virtual void Schedule() = 0;
 		virtual void CompleteThisProcess();
 
-#if defined(_DEBUG_DHT_VERBOSE)
+	public:
+
+#ifdef _DEBUG_DHT
 		unsigned int process_id() const;
+		virtual char const* name() const = 0;
 #endif
 
-	public:
 		static DHTMessage dummyMessage;
 
 		DhtProcessBase(DhtImpl *pImpl, DhtProcessManager &dpm
@@ -1228,6 +1231,10 @@ class DhtLookupScheduler : public DhtProcessBase
 			, const DhtID &target2, time_t startTime
 			, const CallBackPointers &consumerCallbacks, int maxOutstanding
 			, int targets = KADEMLIA_K);
+
+#ifdef _DEBUG_DHT
+		virtual char const* name() const { return "Lookup"; }
+#endif
 };
 
 //*****************************************************************************
@@ -1266,6 +1273,10 @@ class DhtBroadcastScheduler : public DhtProcessBase
 			, aborted(false) {}
 
 		virtual void Abort() { aborted = true; }
+
+#ifdef _DEBUG_DHT
+		virtual char const* name() const { return "Broadcast"; }
+#endif
 };
 
 
@@ -1293,6 +1304,10 @@ class FindNodeDhtProcess : public DhtLookupScheduler //public DhtProcessBase
 			const DhtID &target2,
 			CallBackPointers &cbPointers,
 			int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING);
+
+#ifdef _DEBUG_DHT
+		virtual char const* name() const { return "FindNode"; }
+#endif
 };
 
 
@@ -1465,6 +1480,10 @@ class GetPeersDhtProcess : public DhtLookupScheduler
 			CallBackPointers &cbPointers,
 			int flags = 0,
 			int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING);
+
+#ifdef _DEBUG_DHT
+		virtual char const* name() const { return "GetPeers"; }
+#endif
 };
 
 //*****************************************************************************
@@ -1509,6 +1528,10 @@ class AnnounceDhtProcess : public DhtBroadcastScheduler
 			CallBackPointers &cbPointers,
 			cstr file_name,
 			int flags);
+
+#ifdef _DEBUG_DHT
+		virtual char const* name() const { return "Announce"; }
+#endif
 };
 
 //*****************************************************************************
@@ -1539,6 +1562,10 @@ class GetDhtProcess : public DhtLookupScheduler
 			CallBackPointers &cbPointers,
 			int flags = 0,
 			int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING);
+
+#ifdef _DEBUG_DHT
+		virtual char const* name() const { return "Get"; }
+#endif
 };
 
 //*****************************************************************************
@@ -1575,6 +1602,9 @@ class PutDhtProcess : public DhtBroadcastScheduler
 			CallBackPointers &cbPointers,
 			int flags);
 
+#ifdef _DEBUG_DHT
+		virtual char const* name() const { return "Put"; }
+#endif
 	protected:
 		bool _with_cas;
 };
@@ -1603,6 +1633,10 @@ class ScrapeDhtProcess : public GetPeersDhtProcess
 			const DhtID &target2,
 			CallBackPointers &cbPointers,
 			int maxOutstanding);
+
+#ifdef _DEBUG_DHT
+		virtual char const* name() const { return "Scrape"; }
+#endif
 };
 
 //*****************************************************************************
@@ -1629,6 +1663,10 @@ public:
 	static DhtProcessBase* Create(DhtImpl* pImpl, DhtProcessManager &dpm
 		, const DhtID &target2
 		, CallBackPointers &cbPointers, int voteValue);
+
+#ifdef _DEBUG_DHT
+		virtual char const* name() const { return "Vote"; }
+#endif
 };
 
 #if !STABLE_VERSION || defined _DEBUG || defined BRANDED_MAC
@@ -1650,6 +1688,14 @@ public:
 		, ExternalIPCounter* eip = NULL);
 	~DhtImpl();
 	REFBASE;
+
+#ifdef _DEBUG_DHT
+	FILE* _lookup_log;
+
+	FILE* _bootstrap_log;
+	// timestamp of when we started bootstrap
+	uint _bootstrap_start;
+#endif
 
 private:
 	void Initialize(UDPSocketInterface *_udp_socket_mgr, UDPSocketInterface *_udp6_socket_mgr );
@@ -1717,16 +1763,6 @@ public:
 #define NUM_SEARCHES 10000
 	static bool search_running = false;
 #endif
-
-#ifdef _DEBUG_MEM_LEAK
-	std::vector<DhtProcess*> _dhtprocesses;
-	int _dhtprocesses_init;
-
-	void AddDhtProcess(DhtProcess *p);
-	void RemoveDhtProcess(DhtProcess *p);
-	int FreeRequests();
-#endif
-
 
 	DhtID _my_id;
 	byte _my_id_bytes[DHT_ID_SIZE];
