@@ -258,13 +258,11 @@ class dht_impl_test : public dht_test {
 			EXPECT_FALSE(memcmp(value, v_out.b, value_len)) << "ERROR: v is wrong";
 		}
 
-		void expect_cas(const unsigned char* cas) {
+		void expect_cas(uint64 expected_cas) {
 			ASSERT_NO_FATAL_FAILURE(get_reply());
-			Buffer cas_buf;
-			cas_buf.b = (unsigned char*)reply->GetString("cas", &cas_buf.len);
-			ASSERT_TRUE(cas_buf.b);
-			EXPECT_EQ(20, cas_buf.len);
-			EXPECT_FALSE(memcmp(cas, cas_buf.b, 20)) << "ERROR: wrong cas";
+			uint64 cas;
+			cas = reply->GetInt("cas", 0);
+			EXPECT_EQ(expected_cas, cas);
 		}
 
 		void expect_target() {

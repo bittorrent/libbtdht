@@ -619,8 +619,6 @@ struct MutableData
 	byte signature[64];
 	// ed25519 key
 	byte key[32];
-	sha1_hash cas; // hash of sequence number and value
-	bool cas_initialized;
 	std::vector<byte> v;
 };
 
@@ -889,7 +887,13 @@ struct DhtFindNodeEntry {
 	DhtPeerID id;
 	byte queried;
 	Buffer token;
-	sha1_hash cas; // hash of seq / value of node's data
+
+	// sequence number the data we got back from this node had. Or 0 if
+	// we did not receive data from this node. This is used to implement
+	// atomic writes. Once we have modified the blob we found on the DHT
+	// and are writing it back, we echo this sequence number back to make
+	// sure nonody else has writtent to it since we read it.
+	uint64 cas;
 
 	// the two letter client version from the DHT messages
 	char client[2];
@@ -967,7 +971,7 @@ class DhtLookupNodeList
 		static void FreeNodeEntry(DhtFindNodeEntry &ent) { if (ent.token.b) free(ent.token.b); }
 
 	protected:
-		unsigned int seq_max;
+		uint64 seq_max;
 		std::vector<char> data_blk;
 		SockAddr src_ip;
 
@@ -983,8 +987,8 @@ class DhtLookupNodeList
 		void SetAllQueriedStatus(QueriedStatus status);
 		void SetNodeIds(DhtPeerID** ids, unsigned int numId, const DhtID &target);
 		void CompactList();
-		int64 seq() { return seq_max; }
-		void set_seq(int64 sq) {seq_max = sq;}
+		uint64 seq() { return seq_max; }
+		void set_seq(uint64 sq) {seq_max = sq;}
 		void set_data_blk(byte * v, int v_len, SockAddr src);
 		std::vector<char> &get_data_blk() { return data_blk; }
 		char * get_data_blk(size_t & len) { len = data_blk.size(); return &data_blk[0]; }	

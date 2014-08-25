@@ -190,7 +190,7 @@ void DHTMessage::DecodeQuery(BencodedDict &bDict)
 		key.b = (byte*)args->GetString("k", &key.len); // 32 bytes
 		if (key.b && key.len != 32) _argumentsAreValid = false;
 		sequenceNum = args->GetInt("seq", 0);
-		cas = reinterpret_cast<const byte*>(args->GetString("cas", 20));
+		cas = args->GetInt("cas", 0);
 	}
 	else if (strcmp(command,"ping") == 0) {
 		dhtCommand = DHT_QUERY_PING;
@@ -263,6 +263,7 @@ void DHTMessage::CopyFrom(DHTMessage &src)
 	signature = src.signature;
 	region = src.region;
 	vBuf = src.vBuf;
+	target_ip = src.target_ip;
 	impliedPort = src.impliedPort;
 	cas = src.cas;
 

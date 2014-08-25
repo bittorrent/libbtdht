@@ -1883,8 +1883,6 @@ bool DhtImpl::ProcessQueryPut(DHTMessage &message, DhtPeerID &peerID,
 			assert((written + message.vBuf.len) <= 1040);
 			memcpy(to_hash + written, message.vBuf.b, message.vBuf.len);
 
-			//fprintf(stderr, "in put: %s\n", (char*)to_hash);
-			containerPtr->value.cas = _sha_callback(to_hash, written + message.vBuf.len);
 			// update the time
 			containerPtr->lastUse = time(NULL);
 		} else {
@@ -1892,11 +1890,14 @@ bool DhtImpl::ProcessQueryPut(DHTMessage &message, DhtPeerID &peerID,
 			// the store, and update 'v' bytes, sequence num, and signature
 			// No need to update the key here, we already have it and it is not changing.
 			if (message.sequenceNum >= containerPtr->value.sequenceNum) {
-				if (!(message.cas.is_all_zero()) &&
-						message.cas != containerPtr->value.cas) {
+
+				if (message.cas != 0
+					&& message.cas != containerPtr->value.sequenceNum) {
+
 					Account(DHT_INVALID_PQ_BAD_PUT_CAS, packetSize);
 					send_put_response(sb, message.transactionID, packetSize, peerID,
 							CAS_MISMATCH, "Invalid CAS.");
+
 					return true;
 				} else {
 					if (message.sequenceNum > containerPtr->value.sequenceNum) {
@@ -3621,7 +3622,7 @@ void DhtLookupNodeList::InsertPeer(const DhtPeerID &id, const DhtID &target)
 	ep->queried = QUERIED_NO;
 	ep->token.len = 0;
 	ep->token.b = NULL;
-	memset(ep->cas.value, 0, sizeof(ep->cas));
+	ep->cas = 0;
 	memset(ep->client, 0, sizeof(ep->client));
 	ep->version = 0;
 }
@@ -4172,13 +4173,9 @@ void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 	}
 
 	if (_with_cas) {
-		byte to_hash[1040];
-		int written = snprintf(reinterpret_cast<char*>(to_hash)
-			, 1040, MUTABLE_PAYLOAD_FORMAT, message.sequenceNum);
-		assert((written + message.vBuf.len) <= 1040);
-		memcpy(to_hash + written, message.vBuf.b, message.vBuf.len);
-		//fprintf(stderr, "in get: %s\n", (char*)to_hash);
-		dfnh->cas = impl->_sha_callback(to_hash, written + message.vBuf.len);
+		// record the sequence number to echo it back when writing.
+		// this allows us to do race-free writes
+		dfnh->cas = message.sequenceNum;
 	}
 
 #if defined(_DEBUG_DHT_VERBOSE)
@@ -4901,7 +4898,7 @@ bool DhtImpl::Verify(byte const * signature, byte const * message, int message_l
 void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	, const unsigned int transactionID)
 {
-	int64 seq = processManager.seq() + 1;
+	uint64 seq = processManager.seq() + 1;
 	// note that blk is returned by reference
 	// we want a copy that the put callback can modify
 	std::vector<char>& blk = processManager.get_data_blk();
@@ -4946,12 +4943,12 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	smart_buffer sb(reinterpret_cast<unsigned char*>(buf), buf_len);
 	sb("d1:ad");
 
-	if (!nodeInfo.cas.is_all_zero()) {
-		sb("3:cas20:")(nodeInfo.cas.value, 20);
+	if (_with_cas) {
+		sb("3:casi%" PRIu64 "e", nodeInfo.cas);
 	}
 	sb("2:id20:")((byte*)this->_id, DHT_ID_SIZE);
 	sb("1:k32:")((byte*)this->_pkey, 32);
-	sb("3:seqi%" PRId64 "e", seq);
+	sb("3:seqi%" PRIu64 "e", seq);
 	sb("3:sig64:")((byte*)&signature[0], 64);
 	sb("5:token")("%d:", int(nodeInfo.token.len));
 	sb(reinterpret_cast<unsigned char*>(nodeInfo.token.b),

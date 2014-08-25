@@ -248,7 +248,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_cas) {
 	target.id[4] = 'JJJJ'; // JJJJ
 
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
-	int64 seq = 2;
+	int64 seq = 1337;
 	impl->Put(pkey, skey, &put_callback, NULL, NULL, NULL, IDht::with_cas, seq);
 	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	ASSERT_NO_FATAL_FAILURE(expect_query_type());
@@ -264,22 +264,15 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_cas) {
 
 	const char* v = "sample";
 
-	unsigned char to_hash[800];
-	int written = snprintf(reinterpret_cast<char*>(to_hash), 800,
-			"3:seqi%de1:v%lu:", int(seq), strlen(v));
-	memcpy(to_hash + written, v, strlen(v));
-	sha1_hash cas = sha1_callback(to_hash, written + strlen(v));
-	Buffer cas_buf(cas.value, 20);
-
 	len = bencoder(message, 1024)
 		.d()
 			("ip")("abcdxy") ("r").d()
-				("cas")(cas_buf.b, cas_buf.len)
 				("id")((unsigned char*)&peer_id.id.id[0], 20) ("nodes")("")
 				("token")(response_token) ("seq")(seq) ("v")(v).e()
 			("t")(tid.b, tid.len) ("y")("r")
 		.e() ();
 
+	printf("ProcessIncoming: %s\n", message);
 	socket4.Reset();
 	impl->ProcessIncoming(message, len, peer_id.addr);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should still be busy";
@@ -289,7 +282,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_cas) {
 	ASSERT_NO_FATAL_FAILURE(expect_command("put"));
 	expect_transaction_id(NULL, 4);
 
-	expect_cas(cas.value);
+	expect_cas(seq);
 	expect_reply_id();
 	EXPECT_EQ(seq + 1, reply->GetInt("seq"));
 	expect_signature();
@@ -313,7 +306,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_seq_fail) {
 	target.id[4] = 'JJJJ'; // JJJJ
 
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
-	int64 seq = 2;
+	int64 seq = 42;
 	impl->Put(pkey, skey, &put_callback, NULL, NULL, NULL, IDht::with_cas, seq);
 	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	ASSERT_NO_FATAL_FAILURE(expect_query_type());
@@ -326,23 +319,15 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_seq_fail) {
 	expect_reply_id();
 	expect_target();
 
-
-	unsigned char to_hash[800];
-	int written = snprintf(reinterpret_cast<char*>(to_hash), 800,
-			"3:seqi%de1:v%lu:", int(seq), strlen(v));
-	memcpy(to_hash + written, v, strlen(v));
-	sha1_hash cas = sha1_callback(to_hash, written + strlen(v));
-	Buffer cas_buf(cas.value, 20);
-
 	len = bencoder(message, 1024)
 		.d()
 			("ip")("abcdxy") ("r").d()
-				("cas")(cas_buf.b, cas_buf.len)
 				("id")((unsigned char*)&peer_id.id.id[0], 20) ("nodes")("")
 				("token")(response_token) ("seq")(seq) ("v")(v).e()
 			("t")(tid.b, tid.len) ("y")("r")
 		.e() ();
 
+	printf("ProcessIncoming: %s\n", message);
 	socket4.Reset();
 	impl->ProcessIncoming(message, len, peer_id.addr);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should still be busy";
@@ -353,7 +338,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_seq_fail) {
 	tid.b = (unsigned char*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
 
-	expect_cas(cas.value);
+	expect_cas(seq);
 	expect_reply_id();
 	EXPECT_EQ(seq + 1, reply->GetInt("seq"));
 	expect_signature();
