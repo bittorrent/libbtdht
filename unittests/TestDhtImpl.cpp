@@ -188,7 +188,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4) {
 	// *****************************************************
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	int64 seq_result = 0;
-	impl->Put(pkey, skey, &put_callback, NULL, &seq_result, 0);
+	impl->Put(pkey, skey, &put_callback, NULL, NULL, &seq_result, 0);
 	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	ASSERT_NO_FATAL_FAILURE(expect_query_type());
 	ASSERT_NO_FATAL_FAILURE(expect_command("get"));
@@ -249,7 +249,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_cas) {
 
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	int64 seq = 2;
-	impl->Put(pkey, skey, &put_callback, NULL, NULL, IDht::with_cas, seq);
+	impl->Put(pkey, skey, &put_callback, NULL, NULL, NULL, IDht::with_cas, seq);
 	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	ASSERT_NO_FATAL_FAILURE(expect_query_type());
 	ASSERT_NO_FATAL_FAILURE(expect_command("get"));
@@ -314,7 +314,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_seq_fail) {
 
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	int64 seq = 2;
-	impl->Put(pkey, skey, &put_callback, NULL, NULL, IDht::with_cas, seq);
+	impl->Put(pkey, skey, &put_callback, NULL, NULL, NULL, IDht::with_cas, seq);
 	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	ASSERT_NO_FATAL_FAILURE(expect_query_type());
 	ASSERT_NO_FATAL_FAILURE(expect_command("get"));
