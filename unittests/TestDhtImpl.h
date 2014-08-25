@@ -132,7 +132,7 @@ class dht_impl_test : public dht_test {
 		}
 
 		void fetch_dict() {
-			std::string benc_message = socket4.GetSentDataAsString();
+			std::string benc_message = socket4.GetSentDataAsString(socket4.numPackets()-1);
 			// should not store expected dict in a BencodedDict because if the output
 			// is somehow not a dict that will trigger a non-unittest assert, and we
 			// wish to handle that case ourselves
