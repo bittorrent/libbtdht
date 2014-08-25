@@ -2658,17 +2658,17 @@ void DhtImpl::ProcessCallback()
 	} else {
 
 		// bootstrapping failed. retry again soon.
-		// 60s, 2m, 4m, 8m, 16m etc.
+		// 15s, 30s, 1m, 2m, 4m etc.
 		// never wait more than 24 hours - 60 * 24 = 1440
-		// so max for shift is 2 ^ 10 = 1024 or 1 << 10
-		// Could have made a static lookup table of 13 ints,
-		// but the conditional + shift code is probably smaller than that
-		assert(_dht_bootstrap_failed >= 0 && _dht_bootstrap_failed <= 11);
+		// so max for shift is 2 ^ 13 = 16384 or 1 << 14
+		assert(_dht_bootstrap_failed >= 0 && _dht_bootstrap_failed <= 14);
 		_dht_bootstrap_failed = (std::max)(0, _dht_bootstrap_failed);
-		if (_dht_bootstrap_failed < 11) {
-			_dht_bootstrap = 60 * (1 << _dht_bootstrap_failed);
+		if (_dht_bootstrap_failed < 14) {
+			_dht_bootstrap = 15 * (1 << _dht_bootstrap_failed);
 			++_dht_bootstrap_failed;
 		} else {
+			// if we've failed too many times, try once every 24 hours.
+			// this is the ceiling of our exponential back-off.
 			_dht_bootstrap = 60 * 60 * 24;
 		}
 
