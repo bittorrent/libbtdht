@@ -4944,11 +4944,11 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	sb("d1:ad");
 
 	if (_with_cas) {
-		sb("3:casi%" PRIu64 "e", nodeInfo.cas);
+		sb("3:casi%" PRId64 "e", nodeInfo.cas);
 	}
 	sb("2:id20:")((byte*)this->_id, DHT_ID_SIZE);
 	sb("1:k32:")((byte*)this->_pkey, 32);
-	sb("3:seqi%" PRIu64 "e", seq);
+	sb("3:seqi%" PRId64 "e", seq);
 	sb("3:sig64:")((byte*)&signature[0], 64);
 	sb("5:token")("%d:", int(nodeInfo.token.len));
 	sb(reinterpret_cast<unsigned char*>(nodeInfo.token.b),
