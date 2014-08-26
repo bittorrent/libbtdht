@@ -112,7 +112,7 @@ public:
 	int seed;
 	int noseed;
 	int scrape;
-	int64 sequenceNum;  // 'seq' for mutable put
+	uint64 sequenceNum;  // 'seq' for mutable put
 	int impliedPort;
 
 	// expected current sequence number for compare-and-swap operations

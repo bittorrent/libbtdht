@@ -25,7 +25,7 @@
 #endif
 
 #define lenof(x) (sizeof(x)/sizeof(x[0]))
-#define MUTABLE_PAYLOAD_FORMAT "3:seqi%" PRId64 "e1:v"
+#define MUTABLE_PAYLOAD_FORMAT "3:seqi%" PRIu64 "e1:v"
 
 #define MESSAGE_TOO_BIG 205
 #define INVALID_SIGNATURE 206
@@ -1949,7 +1949,7 @@ bool DhtImpl::ProcessQueryGet(DHTMessage &message, DhtPeerID &peerID,
 	Buffer signatureToReturn;
 	Buffer keyToReturn;
 	DataStore<DhtID, MutableData>::pair_iterator mutableStoreIterator;
-	int64 sequenceNum = 0;
+	uint64 sequenceNum = 0;
 	// if there is no target, there is nothing to do
 	if (message.target.len == 0){
 		Account(DHT_INVALID_PQ_BAD_GET_TARGET, packetSize);
@@ -2024,7 +2024,7 @@ bool DhtImpl::ProcessQueryGet(DHTMessage &message, DhtPeerID &peerID,
 	// to reach the next level of nodes
 	BuildFindNodesPacket(sb, targetId, mtu - size, peerID.addr, true);
 
-	sb("3:seqi%" PRId64 "e", sequenceNum);
+	sb("3:seqi%" PRIu64 "e", sequenceNum);
 
 	if (signatureToReturn.len) {
 		// add a "sig" field to the response, if there is one
@@ -4159,7 +4159,7 @@ void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 		processManager.set_seq(message.sequenceNum);
 
 #ifdef _DEBUG_DHT
-		fprintf(impl->_lookup_log, "[%u] [%u] [%s]: BLOB (seq: %" PRId64 ")\n"
+		fprintf(impl->_lookup_log, "[%u] [%u] [%s]: BLOB (seq: %" PRIu64 ")\n"
 			, uint(get_milliseconds()), process_id(), name(), message.sequenceNum);
 #endif
 
@@ -4944,11 +4944,11 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	sb("d1:ad");
 
 	if (_with_cas) {
-		sb("3:casi%" PRId64 "e", nodeInfo.cas);
+		sb("3:casi%" PRIu64 "e", nodeInfo.cas);
 	}
 	sb("2:id20:")((byte*)this->_id, DHT_ID_SIZE);
 	sb("1:k32:")((byte*)this->_pkey, 32);
-	sb("3:seqi%" PRId64 "e", seq);
+	sb("3:seqi%" PRIu64 "e", seq);
 	sb("3:sig64:")((byte*)&signature[0], 64);
 	sb("5:token")("%d:", int(nodeInfo.token.len));
 	sb(reinterpret_cast<unsigned char*>(nodeInfo.token.b),
