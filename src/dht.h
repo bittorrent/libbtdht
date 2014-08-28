@@ -165,7 +165,7 @@ public:
 };
 
 smart_ptr<IDht> create_dht(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_socket_mgr
-	, DhtSaveCallback* save, DhtLoadCallback* load);
+	, DhtSaveCallback* save, DhtLoadCallback* load, ExternalIPCounter* eip = NULL);
 
 #endif //__DHT_H__
 

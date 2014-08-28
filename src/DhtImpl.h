@@ -732,7 +732,8 @@ public:
 	DhtRequestListener(T * listener, ReplyCallback callback):_pListener(listener), _pCallback(callback), _userdata(NULL){}
 	DhtRequestListener(T * listener, ReplyCallback callback, void *userdata):_pListener(listener), _pCallback(callback), _userdata(userdata){}
 
-	virtual void Callback(const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags){
+	virtual void Callback(const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags)
+	{
 		(_pListener->* _pCallback)(_userdata, peer_id, req, message, flags);
 	}
 protected:
@@ -971,7 +972,8 @@ inline DhtLookupNodeList::DhtLookupNodeList():numNodes(0), seq_max(0)
 /**
 Initializes the node list with the provided list of nodes.
 */
-inline DhtLookupNodeList::DhtLookupNodeList(DhtPeerID** ids, unsigned int numId, const DhtID &target):numNodes(0), seq_max(0)
+inline DhtLookupNodeList::DhtLookupNodeList(DhtPeerID** ids, unsigned int numId
+	, const DhtID &target):numNodes(0), seq_max(0)
 {
 	memset(nodes, 0, sizeof(nodes));
 	SetNodeIds(ids, numId, target);
@@ -1745,7 +1747,9 @@ class DhtImpl : public IDht, public IDhtProcessCallbackListener
 {
 public:
 	DhtImpl(UDPSocketInterface *_udp_socket_mgr, UDPSocketInterface *_udp6_socket_mgr
-		, DhtSaveCallback* save = 0, DhtLoadCallback* load = 0);
+		, DhtSaveCallback* save = NULL
+		, DhtLoadCallback* load = NULL
+		, ExternalIPCounter* eip = NULL);
 	~DhtImpl();
 	REFBASE;
 
@@ -1972,6 +1976,11 @@ public:
 	SockAddr _lastLeadingAddress;	// For tracking external voting of our ip
 	std::vector<SockAddr> _bootstrap_routers;
 
+	// this is used temporarily when assembling the node list. If we need to
+	// add bootstrap routers to the list, they need to be allocated somewhere
+	// temporarily. This is where we put them.
+	std::vector<DhtPeerID> _temp_nodes;
+
 	void Account(int slot, int size);
 
 	void DumpAccountingInfo();
@@ -2010,8 +2019,7 @@ public:
 	uint FindNodes(const DhtID &target, DhtPeerID **list, uint numwant, int wantfail, time_t min_age);
 
 	// uses FindNodes to assemble a list of nodes
-	int AssembleNodeList(const DhtID &target, DhtPeerID** ids, int numwant);
-
+	int AssembleNodeList(const DhtID &target, DhtPeerID** ids, int numwant, bool force_bootstrap = false);
 
 #ifdef _DEBUG_MEM_LEAK
 	int clean_up_dht_request();
@@ -2106,7 +2114,12 @@ public:
 	void GenRandomIDInBucket(DhtID &target, DhtBucket &bucket);
 	void GetStalestPeerInBucket(DhtPeer **ppeerFound, DhtBucket &bucket);
 
-	void DoFindNodes(DhtID &target, int target_len, IDhtProcessCallbackListener *process_callback = NULL, bool performLessAgressiveSearch = true);
+	void DoFindNodes(DhtID &target, int target_len
+		, IDhtProcessCallbackListener *process_callback = NULL
+		, bool performLessAgressiveSearch = true);
+
+	void DoBootstrap(DhtID &target, int target_len
+		, IDhtProcessCallbackListener *process_listener);
 
 #ifdef DHT_SEARCH_TEST
 	void RunSearches();
@@ -2133,7 +2146,12 @@ public:
 	// Implement IDhtProcessCallback::ProcessCallback(), for bootstrap callback
 	void ProcessCallback();
 
-	void OnBootStrapPingReply(void*& userdata, const DhtPeerID &peer_id
+	// the response from a node passed to AddNode()
+	void OnAddNodeReply(void*& userdata, const DhtPeerID &peer_id
+		, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags);
+
+	// the respons from a NICE ping (part of bucket maintanence)
+	void OnPingReply(void*& userdata, const DhtPeerID &peer_id
 		, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags);
 
 	static void AddNodeCallback(void *userdata, void *data2, int error

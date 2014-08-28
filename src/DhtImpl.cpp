@@ -58,6 +58,29 @@ void dht_log(char const* fmt, ...)
 	// TODO: log to a file or something
 }
 
+std::string print_sockaddr(SockAddr const& addr)
+{
+	char buf[256];
+	if (addr.isv6()) {
+		in6_addr a = addr.get_addr6();
+		int offset = 0;
+		buf[offset++] = '[';
+		for (int i = 0; i < 16; ++i)
+			offset += snprintf(buf + offset, sizeof(buf) - offset
+				, ":%02x" + (i == 0), a.s6_addr[i]);
+		snprintf(buf + offset, sizeof(buf) - offset, "]:%u", addr.get_port());
+	} else {
+		uint a = addr.get_addr4();
+		snprintf(buf, sizeof(buf), "%u.%u.%u.%u:%u"
+			, (a >> 24) & 0xff
+			, (a >> 16) & 0xff
+			, (a >> 8) & 0xff
+			, a & 0xff
+			, addr.get_port());
+	}
+	return buf;
+}
+
 #endif // g_log_dht
 
 static void do_log(char const* fmt, ...)
@@ -102,9 +125,9 @@ const char *format_dht_id(const DhtID &id)
 //--------------------------------------------------------------------------------
 
 DhtImpl::DhtImpl(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_socket_mgr
-	, DhtSaveCallback* save, DhtLoadCallback* load)
+	, DhtSaveCallback* save, DhtLoadCallback* load, ExternalIPCounter* eip)
 {
-	_ip_counter = NULL;
+	_ip_counter = eip;
 	_add_node_callback = NULL;
 	_save_callback = save;
 	_load_callback = load;
@@ -245,9 +268,10 @@ void DhtImpl::Initialize(UDPSocketInterface *udp_socket_mgr
 	RandomizeWriteToken();
 
 	// Load the DHT state
-#ifndef _DEBUG_DHT
 	LoadState();
-#endif
+
+	// initialize _lastLeadingAddress
+	if (_ip_counter) _ip_counter->GetIP(_lastLeadingAddress);
 }
 
 /**
@@ -327,11 +351,21 @@ void DhtImpl::GenerateId()
 
 	if(_ip_counter && _ip_counter->GetIP(externIp)){
 		DhtCalculateHardenedID(externIp, id_bytes);
+
+#if defined(_DEBUG_DHT)
+		debug_log("Generating a hardened node ID: \"%s\""
+			, hexify(_my_id_bytes));
+#endif
 	} else {
 		uint32 *pTemp = (uint32 *) id_bytes;
 		// Generate a random ID
 		for(uint i=0; i<5; i++)
 			*pTemp++ = rand();
+
+#if defined(_DEBUG_DHT)
+		debug_log("Generating a random node ID: \"%s\""
+			, hexify(_my_id_bytes));
+#endif
 	}
 	SetId(id_bytes);
 }
@@ -876,7 +910,8 @@ void FindNClosestToTarget( DhtPeerID *src[], uint srcCount, DhtPeerID *dest[], u
 		dest[i] = sorted_list[i];
 }
 
-int DhtImpl::AssembleNodeList(const DhtID &target, DhtPeerID** ids, int numwant)
+int DhtImpl::AssembleNodeList(const DhtID &target, DhtPeerID** ids
+	, int numwant, bool bootstrap)
 {
 	// Find 8 good ones or bad ones (in case there are no good ones)
 	int num = FindNodes(target, ids, (std::min)(8, numwant), (std::min)(8, numwant), 0);
@@ -884,14 +919,34 @@ int DhtImpl::AssembleNodeList(const DhtID &target, DhtPeerID** ids, int numwant)
 	// And 8 definitely good ones.
 	num += FindNodes(target, ids + num, numwant - num, 0, 0);
 	assert(num <= numwant);
-	if (num == 0) {
-		for (std::vector<SockAddr>::iterator i = _bootstrap_routers.begin()
-			, end(_bootstrap_routers.end()); i != end; ++i)
-		{
-			AddNode(*i, NULL, IDht::DHT_ORIGIN_INITIAL);
+	if (num < numwant || bootstrap) {
+
+		// if bootstrap is true, bootstrap routers take precedence over
+		// the other nodes
+		if (bootstrap && _bootstrap_routers.size() > numwant - num) {
+			num = numwant - _bootstrap_routers.size();
+			if (num < 0) num = 0;
 		}
-		// try again
-		num = FindNodes(target, ids, (std::min)(8, numwant), (std::min)(8, numwant), 0);
+
+		// if we don't have enough nodes in our routing table, fill in with
+		// bootstrap nodes.
+		_temp_nodes.resize(numwant - num);
+
+		int c = 0;
+		for (std::vector<SockAddr>::iterator i = _bootstrap_routers.begin()
+			, end(_bootstrap_routers.end()); i != end && num < numwant; ++i, ++c)
+		{
+			// just fake the id to match the target, so this is at the top
+			// of the list
+			_temp_nodes[c].id = target;
+			// randomize the low 4 bytes to make the IDs be different. Later in
+			// the lookup process we weed out duplicates, this prevents the
+			// bootstrap nodes from beeing removed.
+			_temp_nodes[c].id.id[4] = rand();
+			_temp_nodes[c].addr = *i;
+			ids[num] = &_temp_nodes[c];
+			++num;
+		}
 		assert(num <= numwant);
 		// And 8 definitely good ones.
 		num += FindNodes(target, ids + num, numwant - num, 0, 0);
@@ -938,52 +993,7 @@ uint DhtImpl::FindNodes(const DhtID &target, DhtPeerID **list, uint numwant, int
 	return num;
 }
 
-#ifdef _DEBUG_MEM_LEAK
-// **** NOTE ****
-#error DhtProcess no longer exists and these functions were created to assist\
- an old memory leak tool not spam the developer with false positives.\
- If that tool is to be used again, these functions will need to be updated\
- to use the new DhtProcessBase.  Better still, is to use a more effective\
- modern memory leak detection tool.
-
-//void DhtImpl::AddDhtProcess(DhtProcess *p)
-//{
-//	if(0 == _dhtprocesses_init)
-//	{
-//		_dhtprocesses.Init();
-//		_dhtprocesses_init = 1;
-//	}
-//	_dhtprocesses.Append(p);
-//}
-//
-//void DhtImpl::RemoveDhtProcess(DhtProcess *p)
-//{
-//	size_t position = _dhtprocesses.LookupElement(p);
-//	_dhtprocesses.RemoveElement(position);
-//}
-//
-//int DhtImpl::FreeRequests()
-//{
-//	int i;
-//	_requests.clean_up();
-//	_requests.init();
-//	if(1 == _dhtprocesses_init)//dump it only if it is initialized
-//	{
-//		for(i = 0; i < _dhtprocesses.size(); i++)
-//		{
-//			delete (DhtProcess*)_dhtprocesses[i];
-//		}
-//		_dhtprocesses.Free();
-//	}
-//	_peer_store.clear();
-//	return 0;
-//}
-#endif
-
-
 //--------------------------------------------------------------------------------
-
-
 
 // d( "a"= d("id" = <hash>, "target" = <hash>), "q"="find_node", "t" = 0, "y" = "q")
 // d( "r" = d( "id" = <hash>, "nodes" = <208 byte string>), "t" = 1, "y" = "r")
@@ -1304,14 +1314,15 @@ bool DhtImpl::ParseIncomingICMP(BencEntity &benc, const SockAddr& addr)
 	UnlinkRequest(req);
 
 	if (!strcmp(command, "ping")
+		|| !strcmp(command, "get")
+		|| !strcmp(command, "put")
 		|| !strcmp(command, "find_node")
 		|| !strcmp(command, "get_peers")
 		|| !strcmp(command, "announce_peer")
-		|| !strcmp(command, "vote")
-		) {
+		|| !strcmp(command, "vote")) {
 
-		req->_pListener->Callback(req->peer, req, DhtProcessBase::dummyMessage,
-			(DhtProcessFlags)ICMP_ERROR);
+		req->_pListener->Callback(req->peer, req, DhtProcessBase::dummyMessage
+			, (DhtProcessFlags)ICMP_ERROR);
 		delete req->_pListener;
 	}
 
@@ -2063,10 +2074,14 @@ bool DhtImpl::ProcessResponse(DhtPeerID& peerID, DHTMessage &message, int pkt_si
 			return false; // bad/missing ID field
 		}
 
-		if (req->has_id && !(req->peer.id == peerID.id)) {
-			Account(DHT_INVALID_PR_PEER_ID_MISMATCH, pkt_size);
-			return false;
-		}
+//		When sending requests to bootstrap nodes (whose ID we don't know)
+//		we fill in a somewhat arbitrary ID. That causes this test to fail.
+//		This test doesn't seem terribly important anyway
+
+//		if (req->has_id && !(req->peer.id == peerID.id)) {
+//			Account(DHT_INVALID_PR_PEER_ID_MISMATCH, pkt_size);
+//			return false;
+//		}
 	} else {
 		// error messages do not have a peer id field, so have to infer from request
 		peerID.id = req->peer.id;
@@ -2232,9 +2247,37 @@ void DhtImpl::GetStalestPeerInBucket(DhtPeer **ppeerFound, DhtBucket &bucket)
 	}
 }
 
-void DhtImpl::DoFindNodes(DhtID &target, int target_len, IDhtProcessCallbackListener *process_listener, bool performLessAgressiveSearch)
+void DhtImpl::DoBootstrap(DhtID &target, int target_len
+	, IDhtProcessCallbackListener *process_listener)
 {
-	int maxOutstanding = (performLessAgressiveSearch) ? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA : KADEMLIA_LOOKUP_OUTSTANDING;
+	DhtPeerID *ids[32];
+	int num = AssembleNodeList(target, ids, sizeof(ids)/sizeof(ids[0]), true);
+
+	DhtProcessManager *dpm = new DhtProcessManager(ids, num, target);
+
+#if defined(_DEBUG_DHT)
+//	debug_log("DoFindNodes: %s",format_dht_id(target));
+//	for(uint i=0; i!=num; i++)
+//		debug_log(" %A", &ids[i]->addr);
+#endif
+
+	CallBackPointers cbPtrs;
+	cbPtrs.processListener = process_listener;
+	// get peers in those nodes
+	DhtProcessBase* p = FindNodeDhtProcess::Create(this, *dpm, target, target_len, cbPtrs
+		, KADEMLIA_LOOKUP_OUTSTANDING);
+	dpm->AddDhtProcess(p);
+	dpm->Start();
+}
+
+void DhtImpl::DoFindNodes(DhtID &target, int target_len
+	, IDhtProcessCallbackListener *process_listener
+	, bool performLessAgressiveSearch)
+{
+	int maxOutstanding = (performLessAgressiveSearch)
+		? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA
+		: KADEMLIA_LOOKUP_OUTSTANDING;
+
 	DhtPeerID *ids[32];
 	int num = AssembleNodeList(target, ids, sizeof(ids)/sizeof(ids[0]));
 
@@ -2416,9 +2459,10 @@ uint DhtImpl::PingStalestInBucket(uint buck)
 	debug_log("  target: %s", ptarget ? format_dht_id(ptarget->id.id) : "(none)");
 #endif
 
-	if(ptarget){
+	if (ptarget) {
 		DhtRequest *req = SendPing(ptarget->id);
-		req->_pListener = new DhtRequestListener<DhtImpl>(this, &DhtImpl::OnBootStrapPingReply);
+		req->_pListener = new DhtRequestListener<DhtImpl>(this
+			, &DhtImpl::OnPingReply);
 		return req->tid;
 	}
 	return 0;
@@ -2437,9 +2481,23 @@ void DhtImpl::ProcessCallback()
 		_refresh_bucket = 0;
 		_refresh_buckets_counter = 0; // start forced bucket refresh
 		_refresh_bucket_force = true;
+
 	} else {
-		_dht_bootstrap = 15;
-		_dht_bootstrap_failed = 0;
+
+		// bootstrapping failed. retry again soon.
+		// 60s, 2m, 4m, 8m, 16m etc.
+		// never wait more than 24 hours - 60 * 24 = 1440
+		// so max for shift is 2 ^ 10 = 1024 or 1 << 10
+		// Could have made a static lookup table of 13 ints,
+		// but the conditional + shift code is probably smaller than that
+		assert(_dht_bootstrap_failed >= 0 && _dht_bootstrap_failed <= 11);
+		_dht_bootstrap_failed = (std::max)(0, _dht_bootstrap_failed);
+		if (_dht_bootstrap_failed < 11) {
+			_dht_bootstrap = 60 * (1 << _dht_bootstrap_failed);
+			++_dht_bootstrap_failed;
+		} else {
+			_dht_bootstrap = 60 * 60 * 24;
+		}
 	}
 }
 
@@ -2486,82 +2544,55 @@ void DhtImpl::SetAddNodeResponseCallback(DhtAddNodeResponseCallback* cb)
 		TODO:  Correct the dht process to distinguish between these failure modes
 		       and respond accordingly.
 */
-void DhtImpl::OnBootStrapPingReply(void* &userdata, const DhtPeerID &peer_id, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags)
+void DhtImpl::OnAddNodeReply(void* &userdata, const DhtPeerID &peer_id
+	, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags)
 {
 	// if we are processing a reply to a non-slow peer (the "reply" could be in the
 	// form of an error - ICMP, Timeout, ...) then decrease the count of non-slow
 	// outstanding requests
-	if(!req->slow_peer && (flags & (NORMAL_RESPONSE | ANY_ERROR))){
+	if (!req->slow_peer && (flags & (NORMAL_RESPONSE | ANY_ERROR))) {
 		--_outstanding_add_node;
 	}
 
 	// if this is a reply on bhalf of a slow peer, do nothing
-	if(flags == PROCESS_AS_SLOW)
+	if (flags == PROCESS_AS_SLOW)
 		return;
 
-	if (_add_node_callback) {
+	if (_add_node_callback && (flags & (NORMAL_RESPONSE | ANY_ERROR))) {
 		_add_node_callback(userdata, message.dhtMessageType == DHT_RESPONSE, peer_id.addr);
-	}
-
-	if (_dht_bootstrap >= 0) {
-		if (message.dhtMessageType == DHT_RESPONSE && _dht_peers_count != 0) {
-
-			_dht_bootstrap = 0;
-			// refresh buckets in 30 seconds....
-//			_refresh_buckets_counter = 30;
-//			_refresh_bucket_force = true;
-
-			// bootstrap successful. start the find node operation.
-			DhtID target = _my_id;
-			target.id[4] ^= 1;
-
-			// Here, "this" is an IDhtProcessCallbackListener*, which leads
-			// to DhtImpl::ProcessCallback(), necessary to complete bootstrapping
-			DoFindNodes(target, DHT_ID_SIZE, this, false); // use the agressive search for the first dht lookup
-		} else {
-			// bootstrapping failed. retry again soon.
-			// 60s, 2m, 4m, 8m, 16m etc.
-			// never wait more than 24 hours - 60 * 24 = 1440
-			// so max for shift is 2 ^ 10 = 1024 or 1 << 10
-			// Could have made a static lookup table of 13 ints,
-			// but the conditional + shift code is probably smaller than that
-			assert(_dht_bootstrap_failed >= 0 && _dht_bootstrap_failed <= 11);
-			_dht_bootstrap_failed = (std::max)(0, _dht_bootstrap_failed);
-			if (_dht_bootstrap_failed < 11) {
-				_dht_bootstrap = 60 * (1 << _dht_bootstrap_failed);
-				++_dht_bootstrap_failed;
-			} else
-				_dht_bootstrap = 60 * 60 * 24;
-		}
-	} else if (_dht_bootstrap == -2){
-		// If we are here after bootstrap has completed, then this is a
-		// NICE ping reply - we are just refreshing the table.
-		// We need to handle the error case here.
-		if (message.dhtMessageType == DHT_UNDEFINED_MESSAGE || message.dhtMessageType == DHT_ERROR) {
-			// Mark that the peer errored
-			UpdateError(peer_id);
-		}
 	}
 }
 
+void DhtImpl::OnPingReply(void* &userdata, const DhtPeerID &peer_id
+	, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags)
+{
+	// if this is a reply on behalf of a slow peer, do nothing
+	if (flags == PROCESS_AS_SLOW)
+		return;
 
-/**
- *
- *
- * Do the bootstrapping...
- */
+	// This is a NICE ping reply - we are just refreshing the table.
+	// We need to handle the error case here.
+	if (message.dhtMessageType == DHT_UNDEFINED_MESSAGE || message.dhtMessageType == DHT_ERROR) {
+		// Mark that the peer errored
+		UpdateError(peer_id);
+	}
+}
+
 void DhtImpl::AddNode(const SockAddr& addr, void* userdata, uint origin)
 {
 	// TODO: remove the v6 check when uT supports v6 DHT
 	assert(!addr.isv6());
 
+	// we don't add nodes directly, we ping them, and if they respond
+	// we add them to the routing table
 	_outstanding_add_node++;
 
 	DhtPeerID peer_id;
 	peer_id.addr = addr;
 	DhtRequest *req = SendPing(peer_id);
 	req->has_id = false;
-	req->_pListener = new DhtRequestListener<DhtImpl>(this, &DhtImpl::OnBootStrapPingReply, userdata);
+	req->_pListener = new DhtRequestListener<DhtImpl>(this
+		, &DhtImpl::OnAddNodeReply, userdata);
 
 #if g_log_dht
 	assert(origin >= 0);
@@ -2575,9 +2606,6 @@ void DhtImpl::AddBootstrapNode(SockAddr const& addr)
 	_bootstrap_routers.push_back(addr);
 }
 
-/**
- *
- */
 void DhtImpl::Vote(void *ctx_ptr, const sha1_hash* info_hash, int vote, DhtVoteCallback* callb)
 {
 	assert(vote >= 0 && vote <= 5);
@@ -2692,7 +2720,6 @@ void DhtImpl::Tick()
 			// 4 seconds passed with no reply.
 			_requests.unlinknext(reqp);
 
-			//req->_pListener->Callback(req->peer, NULL,
 			req->_pListener->Callback(req->peer, req, DhtProcessBase::dummyMessage,
 				(DhtProcessFlags)TIMEOUT_ERROR);
 			delete req->_pListener;
@@ -2732,12 +2759,18 @@ void DhtImpl::Tick()
 		// Boot-strapping.
 		if (--_dht_bootstrap == 0) {
 
-			// add the bootstrap routers..
-			for (std::vector<SockAddr>::iterator i = _bootstrap_routers.begin()
-				, end(_bootstrap_routers.end()); i != end; ++i)
-			{
-				AddNode(*i, NULL, IDht::DHT_ORIGIN_INITIAL);
-			}
+			// This is where we kick off the actual bootstrapping. We launch
+			// Find Node on our own ID. keep in mind that if the routing
+			// table is empty, we add the bootstrap nodes (see AssembleNodeList).
+
+#ifdef _DEBUG_DHT
+			debug_log("start bootstrap");
+#endif
+			DhtID target = _my_id;
+			target.id[4] ^= 1;
+			// Here, "this" is an IDhtProcessCallbackListener*, which leads
+			// to DhtImpl::ProcessCallback(), necessary to complete bootstrapping
+			DoBootstrap(target, DHT_ID_SIZE, this);
 		}
 
 	} else if (_dht_bootstrap < -1 ){
@@ -2880,8 +2913,6 @@ void DhtImpl::Restart() {
 	_refresh_buckets_counter = 0;
 	_refresh_bucket = 0;
 	_dht_peers_count = 0;
-
-	_outstanding_add_node = 0;
 
 	// Initialize the buckets
 	for (int i = 0; i < 32; ++i) {
@@ -3049,6 +3080,18 @@ void DhtImpl::SaveState()
 	BencEntityMem beMemId(_my_id_bytes, DHT_ID_SIZE);
 	dict->Insert("id", beMemId);
 
+	if (_ip_counter) {
+		byte buf[256];
+		// we found a potential external IP for us. Place
+			// one vote for this IP, just to seed it with something
+
+		SockAddr addr;
+		_ip_counter->GetIP(addr);
+		size_t iplen = addr.compact(buf, false);
+		BencEntityMem beMemIP(buf, iplen);
+		dict->Insert("ip", beMemIP);
+	}
+
 	std::vector<PackedDhtPeer> peer_list(0);
 
 	for(uint i=0; i<_buckets.size(); i++) {
@@ -3084,16 +3127,38 @@ void DhtImpl::LoadState()
 
 	_load_callback(&base);
 
+	int num_loaded = 0;
+
 	BencodedDict *dict = base.AsDict(&base);
 	if (dict) {
-		if ((uint)(time(NULL) - dict->GetInt("age", 0)) < 2 * 60 * 60) {
-			// Load the ID
-			byte* id = (byte*)dict->GetString("id", DHT_ID_SIZE);
-			if (id) {
-				CopyBytesToDhtID(_my_id, id);
-				DhtIDToBytes(_my_id_bytes, _my_id);
-			}
 
+		// Load the ID
+		byte* id = (byte*)dict->GetString("id", DHT_ID_SIZE);
+		if (id) {
+			CopyBytesToDhtID(_my_id, id);
+			DhtIDToBytes(_my_id_bytes, _my_id);
+		}
+
+		size_t ip_len = 0;
+		byte* ip = (byte*)dict->GetString("ip", &ip_len);
+
+		if (ip && _ip_counter) {
+			// we found a potential external IP for us. Place
+			// one vote for this IP, just to seed it with something
+			SockAddr addr;
+			if (addr.from_compact(ip, ip_len)) {
+				_ip_counter->CountIP(addr);
+				
+#if defined(_DEBUG_DHT)
+				SockAddr tmp;
+				_ip_counter->GetIP(tmp);
+				debug_log("Loaded possible external IP \"%s\""
+					, print_sockaddr(addr).c_str());
+#endif
+			}
+		}
+
+		if ((uint)(time(NULL) - dict->GetInt("age", 0)) < 24 * 60 * 60) {
 			// Load nodes...
 			size_t nodes_len;
 			byte *nodes = (byte*)dict->GetString("nodes", &nodes_len);
@@ -3106,10 +3171,16 @@ void DhtImpl::LoadState()
 					nodes += sizeof(PackedDhtPeer);
 					nodes_len -= sizeof(PackedDhtPeer);
 					Update(peer, IDht::DHT_ORIGIN_UNKNOWN, false);
+					++num_loaded;
 				}
 			}
 		}
 	}
+
+#if defined(_DEBUG_DHT)
+	debug_log("Loaded %d nodes and ID \"%s\" from disk"
+		, num_loaded, hexify(_my_id_bytes));
+#endif
 }
 
 int DhtImpl::GetNumPutItems()
@@ -3120,13 +3191,22 @@ int DhtImpl::GetNumPutItems()
 // TODO: The external IP reports from non-DHT sources don't
 // pass through here.  They are counted, but they just won't
 // pass through here
-void DhtImpl::CountExternalIPReport( const SockAddr& addr, const SockAddr& voter ){
+void DhtImpl::CountExternalIPReport(const SockAddr& addr, const SockAddr& voter )
+{
 	if (_ip_counter == NULL) return;
 
 	SockAddr tempWinner;
 	_ip_counter->CountIP(addr, voter);
-	if(_ip_counter->GetIP(tempWinner) && !tempWinner.ip_eq(_lastLeadingAddress)) {
+
+	if (_ip_counter->GetIP(tempWinner) && !tempWinner.ip_eq(_lastLeadingAddress)) {
+
+#if defined(_DEBUG_DHT)
+		debug_log("External IP changed from: \"%s\" to \"%s\""
+			, print_sockaddr(_lastLeadingAddress).c_str()
+			, print_sockaddr(tempWinner).c_str());
+#endif
 		_lastLeadingAddress = tempWinner;
+
 		GenerateId();
 		Restart();
 	}
