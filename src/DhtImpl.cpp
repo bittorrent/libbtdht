@@ -236,8 +236,10 @@ DhtImpl::~DhtImpl()
 {
 
 #ifdef _DEBUG_DHT
-	fclose(_lookup_log);
-	fclose(_bootstrap_log);
+	if (_lookup_log)
+		fclose(_lookup_log);
+	if (_bootstrap_log)
+		fclose(_bootstrap_log);
 #endif
 
 	for(int i = 0; i < _buckets.size(); i++) {
@@ -952,7 +954,7 @@ void DhtImpl::UpdateError(const DhtPeerID &id)
 			assert(_dht_peers_count >= 0);
 
 #ifdef _DEBUG_DHT
-			if (_dht_bootstrap == 0) {
+			if (_dht_bootstrap == 0 && _bootstrap_log) {
 				fprintf(_bootstrap_log, "[%u] nodes: %u\n"
 					, uint(get_milliseconds() - _bootstrap_start), _dht_peers_count);
 			}
@@ -978,7 +980,7 @@ void DhtImpl::UpdateError(const DhtPeerID &id)
 			assert(_dht_peers_count >= 0);
 
 #ifdef _DEBUG_DHT
-			if (_dht_bootstrap == 0) {
+			if (_dht_bootstrap == 0 && _bootstrap_log) {
 				fprintf(_bootstrap_log, "[%u] nodes: %u\n"
 					, uint(get_milliseconds() - _bootstrap_start), _dht_peers_count);
 			}
@@ -2431,8 +2433,9 @@ void DhtImpl::DoBootstrap(DhtID &target
 	DhtProcessBase* p = FindNodeDhtProcess::Create(this, *dpm, target, cbPtrs
 		, KADEMLIA_LOOKUP_OUTSTANDING);
 #ifdef _DEBUG_DHT
-	fprintf(_lookup_log, "[%u] [%u] [%s]: START-BOOTSTRAP\n"
-		, uint(get_milliseconds()), p->process_id(), p->name());
+	if (_lookup_log)
+		fprintf(_lookup_log, "[%u] [%u] [%s]: START-BOOTSTRAP\n"
+			, uint(get_milliseconds()), p->process_id(), p->name());
 #endif
 	dpm->AddDhtProcess(p);
 	dpm->Start();
@@ -2652,8 +2655,9 @@ void DhtImpl::ProcessCallback()
 #ifdef _DEBUG_DHT
 		debug_log("DhtImpl::ProcessCallback() [ bootstrap done (%d)]", _dht_bootstrap);
 
-		fprintf(_bootstrap_log, "[%u] complete %u nodes\n\n\n"
-			, uint(get_milliseconds() - _bootstrap_start), _dht_peers_count);
+		if (_bootstrap_log)
+			fprintf(_bootstrap_log, "[%u] complete %u nodes\n\n\n"
+				, uint(get_milliseconds() - _bootstrap_start), _dht_peers_count);
 #endif
 
 	} else {
@@ -2675,8 +2679,9 @@ void DhtImpl::ProcessCallback()
 
 #ifdef _DEBUG_DHT
 		debug_log("DhtImpl::ProcessCallback() [ bootstrap failed (%d)]", _dht_bootstrap);
-		fprintf(_bootstrap_log, "[%u] failed %u nodes\n\n\n"
-			, uint(get_milliseconds() - _bootstrap_start), _dht_peers_count);
+		if (_bootstrap_log)
+			fprintf(_bootstrap_log, "[%u] failed %u nodes\n\n\n"
+				, uint(get_milliseconds() - _bootstrap_start), _dht_peers_count);
 #endif
 	}
 }
@@ -2956,9 +2961,11 @@ void DhtImpl::Tick()
 			debug_log("start bootstrap");
 
 			_bootstrap_start = get_milliseconds();
-			fprintf(_bootstrap_log, "[0] start\n");
-			fprintf(_bootstrap_log, "[%u] nodes: %u\n"
-				, uint(get_milliseconds() - _bootstrap_start), _dht_peers_count);
+			if (_bootstrap_log) {
+				fprintf(_bootstrap_log, "[0] start\n");
+				fprintf(_bootstrap_log, "[%u] nodes: %u\n"
+					, uint(get_milliseconds() - _bootstrap_start), _dht_peers_count);
+			}
 #endif
 			DhtID target = _my_id;
 			target.id[4] ^= 1;
@@ -3109,7 +3116,7 @@ void DhtImpl::Restart() {
 	_dht_peers_count = 0;
 
 #ifdef _DEBUG_DHT
-	if (_dht_bootstrap == 0) {
+	if (_dht_bootstrap == 0 && _bootstrap_log) {
 		fprintf(_bootstrap_log, "[%u] nodes: %u\n"
 			, uint(get_milliseconds() - _bootstrap_start), _dht_peers_count);
 	}
@@ -3713,8 +3720,9 @@ unsigned int DhtProcessBase::process_id() const
 void DhtProcessBase::CompleteThisProcess()
 {
 #ifdef _DEBUG_DHT
-	fprintf(impl->_lookup_log, "[%u] [%u] [%s]: COMPLETE\n"
-		, uint(get_milliseconds()), process_id(), name());
+	if (_lookup_log)
+		fprintf(impl->_lookup_log, "[%u] [%u] [%s]: COMPLETE\n"
+			, uint(get_milliseconds()), process_id(), name());
 #endif
 
 #if defined(_DEBUG_DHT_VERBOSE)
@@ -3910,8 +3918,9 @@ void DhtLookupScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id
 		debug_log("[%u] *** 1ST-TIMEOUT tid=%d", process_id(), req->tid);
 #endif
 #ifdef _DEBUG_DHT
-		fprintf(impl->_lookup_log, "[%u] [%u] [%s]: 1ST-TIMEOUT %s\n"
-			, uint(get_milliseconds()), process_id(), name(), print_sockaddr(peer_id.addr).c_str());
+		if (_lookup_log)
+			fprintf(impl->_lookup_log, "[%u] [%u] [%s]: 1ST-TIMEOUT %s\n"
+				, uint(get_milliseconds()), process_id(), name(), print_sockaddr(peer_id.addr).c_str());
 #endif
 		DhtFindNodeEntry *dfnh = processManager.FindQueriedPeer(peer_id);
 		if (dfnh) dfnh->queried = QUERIED_SLOW;
@@ -3933,8 +3942,9 @@ void DhtLookupScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id
 		debug_log("[%u] *** TIMEOUT tid=%d", process_id(), req->tid);
 #endif
 #ifdef _DEBUG_DHT
-		fprintf(impl->_lookup_log, "[%u] [%u] [%s]: TIMEOUT %s\n"
-			, uint(get_milliseconds()), process_id(), name(), print_sockaddr(peer_id.addr).c_str());
+		if (_lookup_log)
+			fprintf(impl->_lookup_log, "[%u] [%u] [%s]: TIMEOUT %s\n"
+				, uint(get_milliseconds()), process_id(), name(), print_sockaddr(peer_id.addr).c_str());
 #endif
 		// put another request in flight since this peer is dead from ICMP
 		// (a slow peer that times-out already had a replacement query launched)
@@ -3956,9 +3966,10 @@ void DhtLookupScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id
 #ifdef _DEBUG_DHT
 	int rtt = (std::max)(int(get_milliseconds() - req->time), 1);
 
-	fprintf(impl->_lookup_log, "[%u] [%u] [%s]: <- %s (rtt:%d ms)\n"
-		, uint(get_milliseconds()), process_id(), name()
-		, print_sockaddr(peer_id.addr).c_str(), rtt);
+	if (_lookup_log)
+		fprintf(impl->_lookup_log, "[%u] [%u] [%s]: <- %s (rtt:%d ms)\n"
+			, uint(get_milliseconds()), process_id(), name()
+			, print_sockaddr(peer_id.addr).c_str(), rtt);
 #endif
 
 	ImplementationSpecificReplyProcess(userdata, peer_id, message, flags);
@@ -4159,8 +4170,9 @@ void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 		processManager.set_seq(message.sequenceNum);
 
 #ifdef _DEBUG_DHT
-		fprintf(impl->_lookup_log, "[%u] [%u] [%s]: BLOB (seq: %" PRIu64 ")\n"
-			, uint(get_milliseconds()), process_id(), name(), message.sequenceNum);
+		if (_lookup_log)
+			fprintf(impl->_lookup_log, "[%u] [%u] [%s]: BLOB (seq: %" PRIu64 ")\n"
+				, uint(get_milliseconds()), process_id(), name(), message.sequenceNum);
 #endif
 
 		if (callbackPointers.putDataCallback) {
@@ -4322,8 +4334,9 @@ void FindNodeDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	}
 
 #ifdef _DEBUG_DHT
-	fprintf(impl->_lookup_log, "[%u] [%u] [%s]: FIND -> %s\n"
-		, uint(get_milliseconds()), process_id(), name(), print_sockaddr(nodeInfo.id.addr).c_str());
+	if (_lookup_log)
+		fprintf(impl->_lookup_log, "[%u] [%u] [%s]: FIND -> %s\n"
+			, uint(get_milliseconds()), process_id(), name(), print_sockaddr(nodeInfo.id.addr).c_str());
 #endif
 
 	impl->SendTo(nodeInfo.id.addr, buf, sb.length());
@@ -4495,8 +4508,9 @@ void GetPeersDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	}
 
 #ifdef _DEBUG_DHT
-	fprintf(impl->_lookup_log, "[%u] [%u] [%s]: GET-PEERS -> %s\n"
-		, uint(get_milliseconds()), process_id(), name(), print_sockaddr(nodeInfo.id.addr).c_str());
+	if (_lookup_log)
+		fprintf(impl->_lookup_log, "[%u] [%u] [%s]: GET-PEERS -> %s\n"
+			, uint(get_milliseconds()), process_id(), name(), print_sockaddr(nodeInfo.id.addr).c_str());
 #endif
 
 	impl->SendTo(nodeInfo.id.addr, buf, sb.length());
@@ -4645,8 +4659,9 @@ void AnnounceDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	}
 
 #ifdef _DEBUG_DHT
-	fprintf(impl->_lookup_log, "[%u] [%u] [%s]: ANNOUNCE -> %s\n"
-		, uint(get_milliseconds()), process_id(), name(), print_sockaddr(nodeInfo.id.addr).c_str());
+	if (_lookup_log)
+		fprintf(impl->_lookup_log, "[%u] [%u] [%s]: ANNOUNCE -> %s\n"
+			, uint(get_milliseconds()), process_id(), name(), print_sockaddr(nodeInfo.id.addr).c_str());
 #endif
 
 	impl->SendTo(nodeInfo.id.addr, buf, sb.length());
@@ -4765,8 +4780,9 @@ void GetDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	}
 
 #ifdef _DEBUG_DHT
-	fprintf(impl->_lookup_log, "[%u] [%u] [%s]: GET -> %s\n"
-		, uint(get_milliseconds()), process_id(), name(), print_sockaddr(nodeInfo.id.addr).c_str());
+	if (_lookup_log)
+		fprintf(impl->_lookup_log, "[%u] [%u] [%s]: GET -> %s\n"
+			, uint(get_milliseconds()), process_id(), name(), print_sockaddr(nodeInfo.id.addr).c_str());
 #endif
 
 #if defined(_DEBUG_DHT_VERBOSE)
@@ -4970,8 +4986,9 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	}
 
 #ifdef _DEBUG_DHT
-	fprintf(impl->_lookup_log, "[%u] [%u] [%s]: PUT -> %s\n"
-		, uint(get_milliseconds()), process_id(), name(), print_sockaddr(nodeInfo.id.addr).c_str());
+	if (_lookup_log)
+		fprintf(impl->_lookup_log, "[%u] [%u] [%s]: PUT -> %s\n"
+			, uint(get_milliseconds()), process_id(), name(), print_sockaddr(nodeInfo.id.addr).c_str());
 #endif
 
 #if defined(_DEBUG_DHT_VERBOSE)
@@ -5129,8 +5146,9 @@ void VoteDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	}
 
 #ifdef _DEBUG_DHT
-	fprintf(impl->_lookup_log, "[%u] [%u] [%s]: VOTE -> %s\n"
-		, uint(get_milliseconds()), process_id(), name(), print_sockaddr(nodeInfo.id.addr).c_str());
+	if (_lookup_log)
+		fprintf(impl->_lookup_log, "[%u] [%u] [%s]: VOTE -> %s\n"
+			, uint(get_milliseconds()), process_id(), name(), print_sockaddr(nodeInfo.id.addr).c_str());
 #endif
 
 	impl->SendTo(nodeInfo.id.addr, buf, sb.length());
@@ -5407,7 +5425,7 @@ bool DhtBucket::RemoveFromList(DhtImpl* pDhtImpl, const DhtID &id, BucketListTyp
 		assert(pDhtImpl->_dht_peers_count >= 0);
 
 #ifdef _DEBUG_DHT
-		if (pDhtImpl->_dht_bootstrap == 0) {
+		if (pDhtImpl->_dht_bootstrap == 0 && pDhtImpl->_bootstrap_log) {
 			fprintf(pDhtImpl->_bootstrap_log, "[%u] nodes: %u\n"
 				, uint(get_milliseconds() - pDhtImpl->_bootstrap_start)
 				, pDhtImpl->_dht_peers_count);
@@ -5495,7 +5513,7 @@ bool DhtBucket::InsertOrUpdateNode(DhtImpl* pDhtImpl, DhtPeer const& candidateNo
 		bucketList.enqueue(peer);
 
 #ifdef _DEBUG_DHT
-		if (pDhtImpl->_dht_bootstrap == 0) {
+		if (pDhtImpl->_dht_bootstrap == 0 && pDhtImpl->_bootstrap_log) {
 			fprintf(pDhtImpl->_bootstrap_log, "[%u] nodes: %u\n"
 				, uint(get_milliseconds() - pDhtImpl->_bootstrap_start)
 				, pDhtImpl->_dht_peers_count);
