@@ -91,8 +91,6 @@ static void do_log(char const* fmt, ...)
 	va_end(args);
 }
 
-#if defined(_DEBUG_DHT)
-
 // TODO: factor this into ut_utils sockaddr
 std::string print_sockaddr(SockAddr const& addr)
 {
@@ -116,6 +114,8 @@ std::string print_sockaddr(SockAddr const& addr)
 	}
 	return buf;
 }
+
+#if defined(_DEBUG_DHT)
 
 static void debug_log(char const* fmt, ...)
 {
