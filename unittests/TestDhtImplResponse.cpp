@@ -2832,8 +2832,6 @@ TEST_F(dht_impl_response_test, Announce_Slow_ReplyWithPeers) {
 	DhtRequest* req2 = impl->LookupRequest(Read32(tid.b));
 	EXPECT_FALSE(req2) <<
 			"The outstanding transaction id was not removed by the response";
-
-	EXPECT_FALSE(impl->IsBusy()) << "The dht should no longer be busy";
 }
 
 
@@ -2901,7 +2899,6 @@ TEST_F(dht_impl_response_test, Announce_Slow_ReplyWithMultipleNodes) {
 	// *****************************************************
 	// make the dht emit an announce message (the get_peers rpc)
 	// *****************************************************
-	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	impl->DoAnnounce(target, 20, NULL, &AddNodesCallbackDummy::Callback, NULL,
 			"filename.txt", NULL, IDht::announce_non_aggressive);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
@@ -3124,7 +3121,6 @@ TEST_F(dht_impl_response_test, Announce_TimeOut_ReplyWithMultipleNodes) {
 	// *****************************************************
 	// make the dht emit an announce message (the get_peers rpc)
 	// *****************************************************
-	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	impl->DoAnnounce(target, 20, NULL, &AddNodesCallbackDummy::Callback, NULL,
 			"filename.txt", NULL, 0);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
@@ -3340,7 +3336,6 @@ TEST_F(dht_impl_response_test, Announce_ICMPerror_ReplyWithMultipleNodes) {
 	// *****************************************************
 	// make the dht emit an announce message (the get_peers rpc)
 	// *****************************************************
-	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
 	impl->DoAnnounce(target, 20, NULL, &AddNodesCallbackDummy::Callback, NULL,
 			"filename.txt", NULL, 0);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";

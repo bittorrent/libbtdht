@@ -58,6 +58,22 @@ void dht_log(char const* fmt, ...)
 	// TODO: log to a file or something
 }
 
+#endif // g_log_dht
+
+static void do_log(char const* fmt, ...)
+{
+	va_list args;
+	va_start(args, fmt);
+	char buf[1000];
+	vsnprintf(buf, sizeof(buf), fmt, args);
+
+	fprintf(stderr, "DHT: %s\n", buf);
+	// TODO: call callback or something
+	va_end(args);
+}
+
+#if defined(_DEBUG_DHT)
+
 std::string print_sockaddr(SockAddr const& addr)
 {
 	char buf[256];
@@ -81,21 +97,6 @@ std::string print_sockaddr(SockAddr const& addr)
 	return buf;
 }
 
-#endif // g_log_dht
-
-static void do_log(char const* fmt, ...)
-{
-	va_list args;
-	va_start(args, fmt);
-	char buf[1000];
-	vsnprintf(buf, sizeof(buf), fmt, args);
-
-	fprintf(stderr, "DHT: %s\n", buf);
-	// TODO: call callback or something
-	va_end(args);
-}
-
-#if defined(_DEBUG_DHT)
 static void debug_log(char const* fmt, ...)
 {
 	va_list args;
@@ -354,7 +355,7 @@ void DhtImpl::GenerateId()
 
 #if defined(_DEBUG_DHT)
 		debug_log("Generating a hardened node ID: \"%s\""
-			, hexify(_my_id_bytes));
+			, hexify(id_bytes));
 #endif
 	} else {
 		uint32 *pTemp = (uint32 *) id_bytes;
@@ -364,7 +365,7 @@ void DhtImpl::GenerateId()
 
 #if defined(_DEBUG_DHT)
 		debug_log("Generating a random node ID: \"%s\""
-			, hexify(_my_id_bytes));
+			, hexify(id_bytes));
 #endif
 	}
 	SetId(id_bytes);
@@ -3274,7 +3275,7 @@ DhtPeer* DhtImpl::Update(const DhtPeerID &id, uint origin, bool seen, int rtt)
 	DhtBucket &bucket = *_buckets[bucket_id];
 
 #if defined(_DEBUG_DHT)
-	debug_log("Update: %s.", format_dht_id(id.id));
+//	debug_log("Update: %s.", format_dht_id(id.id));
 #endif
 
 	assert(bucket.TestForMatchingPrefix(id.id));
