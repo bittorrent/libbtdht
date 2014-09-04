@@ -79,6 +79,20 @@ void dht_log(char const* fmt, ...)
 
 #endif // g_log_dht
 
+static void do_log(char const* fmt, ...)
+{
+	va_list args;
+	va_start(args, fmt);
+	char buf[1000];
+	vsnprintf(buf, sizeof(buf), fmt, args);
+
+	(*g_logger)(buf);
+
+	va_end(args);
+}
+
+#if defined(_DEBUG_DHT)
+
 // TODO: factor this into ut_utils sockaddr
 std::string print_sockaddr(SockAddr const& addr)
 {
@@ -103,19 +117,6 @@ std::string print_sockaddr(SockAddr const& addr)
 	return buf;
 }
 
-static void do_log(char const* fmt, ...)
-{
-	va_list args;
-	va_start(args, fmt);
-	char buf[1000];
-	vsnprintf(buf, sizeof(buf), fmt, args);
-
-	(*g_logger)(buf);
-
-	va_end(args);
-}
-
-#if defined(_DEBUG_DHT)
 static void debug_log(char const* fmt, ...)
 {
 	va_list args;
