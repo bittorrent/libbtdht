@@ -28,6 +28,9 @@
 #define CAS_MISMATCH 301
 #define LOWER_SEQ 302
 
+bool DhtVerifyHardenedID(const SockAddr& addr, byte const* node_id, DhtSHACallback* sha);
+void DhtCalculateHardenedID(const SockAddr& addr, byte *node_id);
+
 int clamp(int v, int min, int max)
 {
 	if (v < min) return min;
@@ -184,7 +187,6 @@ DhtImpl::DhtImpl(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_so
 
 	_ed25519_sign_callback = NULL;
 	_ed25519_verify_callback = NULL;
-	_ed25519_key_sign_callback = NULL;
 	_sha_callback = NULL;
 }
 
@@ -2525,11 +2527,6 @@ void DhtImpl::SetEd25519VerifyCallback(Ed25519VerifyCallback* cb)
 void DhtImpl::SetEd25519SignCallback(Ed25519SignCallback* cb)
 {
 	_ed25519_sign_callback = cb;
-}
-
-void DhtImpl::SetEd25519KeySignCallback(Ed25519KeySignCallback* cb)
-{
-	_ed25519_key_sign_callback = cb;
 }
 
 void DhtImpl::SetAddNodeResponseCallback(DhtAddNodeResponseCallback* cb)

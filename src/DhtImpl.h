@@ -86,10 +86,6 @@ int CompareDhtID(const DhtID &a, const DhtID &b);
 int CompareDhtIDBytes(const DhtID &a, const DhtID &b, int num);
 void DhtIDToBytes(byte *b, const DhtID &id);
 
-void DhtCalculateHardenedID(const SockAddr& addr, byte *node_id);
-bool DhtVerifyHardenedID(const SockAddr& addr, byte const* node_id);
-uint32 generate_node_id_prefix(const SockAddr& addr, int random);
-
 struct StoredPeer {
 	byte ip[4];
 	byte port[2];
@@ -1788,7 +1784,6 @@ public:
 	void SetSHACallback(DhtSHACallback* cb);
 	void SetEd25519VerifyCallback(Ed25519VerifyCallback* cb);
 	void SetEd25519SignCallback(Ed25519SignCallback* cb);
-	void SetEd25519KeySignCallback(Ed25519KeySignCallback* cb);
 	void SetPacketCallback(DhtPacketCallback* cb);
 
 	void AddNode(const SockAddr& addr, void* userdata, uint origin);
@@ -1840,7 +1835,6 @@ public:
 	DhtSHACallback* _sha_callback;
 	Ed25519VerifyCallback* _ed25519_verify_callback;
 	Ed25519SignCallback* _ed25519_sign_callback;
-	Ed25519KeySignCallback* _ed25519_key_sign_callback;
 	ExternalIPCounter* _ip_counter;
 
 	// the buckets in the routing table. These buckets are ordered by their
