@@ -1037,15 +1037,19 @@ int DhtImpl::AssembleNodeList(const DhtID &target, DhtPeerID** ids
 	// Find 8 good ones or bad ones (in case there are no good ones)
 	int num = FindNodes(target, ids, (std::min)(8, numwant), (std::min)(8, numwant), 0);
 	assert(num <= numwant);
+	assert(num >= 0);
 	// And 8 definitely good ones.
 	num += FindNodes(target, ids + num, numwant - num, 0, 0);
 	assert(num <= numwant);
+	assert(num >= 0);
 	if (num < numwant || bootstrap) {
 
 		// if bootstrap is true, bootstrap routers take precedence over
 		// the other nodes
 		if (bootstrap && _bootstrap_routers.size() > numwant - num) {
 			num = numwant - _bootstrap_routers.size();
+			assert(num <= numwant);
+			assert(num >= 0);
 			if (num < 0) num = 0;
 		}
 
@@ -1069,8 +1073,11 @@ int DhtImpl::AssembleNodeList(const DhtID &target, DhtPeerID** ids
 			++num;
 		}
 		assert(num <= numwant);
+		assert(num >= 0);
 		// And 8 definitely good ones.
 		num += FindNodes(target, ids + num, numwant - num, 0, 0);
+		assert(num <= numwant);
+		assert(num >= 0);
 	}
 	return num;
 }
