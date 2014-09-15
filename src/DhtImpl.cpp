@@ -181,7 +181,7 @@ DhtImpl::DhtImpl(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_so
 	_udp6_socket_mgr = NULL;
 	_dht_busy = 0;
 
-	_dht_bootstrap = 1;
+	_dht_bootstrap = not_bootstrapped;
 	_dht_bootstrap_failed = 0;
 	_allow_new_job = false;
 	_refresh_bucket = 0;
@@ -347,7 +347,7 @@ void DhtImpl::Enable(bool enabled, int rate)
 	_dht_probe_rate = 5;
 	if (_dht_enabled != enabled) {
 		_dht_enabled = enabled;
-		_dht_bootstrap = 1;
+		_dht_bootstrap = not_bootstrapped;
 	}
 
 #ifdef _DEBUG_DHT
@@ -380,10 +380,10 @@ bool DhtImpl::CanAnnounce()
 {
 #ifdef _DEBUG_DHT
 	debug_log("CanAnnounce() [bootstrap=%d] = %d", _dht_bootstrap
-		, !(_dht_bootstrap != -2  || !_allow_new_job || _dht_peers_count < 32));
+		, !(_dht_bootstrap != bootstrap_complete  || !_allow_new_job || _dht_peers_count < 32));
 #endif
 
-	if (_dht_bootstrap != -2  || !_allow_new_job || _dht_peers_count < 32)
+	if (_dht_bootstrap != bootstrap_complete  || !_allow_new_job || _dht_peers_count < 32)
 		return false;
 	return true;
 }
@@ -2654,7 +2654,7 @@ void DhtImpl::ProcessCallback()
 	// connected to the inital DHT routers but none of them replied in 4 seconds. If we failed to get enough
 	// nodes in the first attempt, we will redo the bootstrapping again in 15 seconds.
 	if (_dht_peers_count >= 8) {
-		_dht_bootstrap = -2;
+		_dht_bootstrap = bootstrap_complete;
 		_dht_bootstrap_failed = 0;
 		_refresh_bucket = 0;
 		_refresh_buckets_counter = 0; // start forced bucket refresh
@@ -2885,6 +2885,7 @@ void DhtImpl::Tick()
 {
 	// TODO: make these members. and they could probably be collapsed to 1
 	static int _5min_counter;
+	static int _10min_counter;
 	static int _4_sec_counter;
 
 	_dht_probe_quota = _dht_probe_rate;
@@ -2944,7 +2945,7 @@ void DhtImpl::Tick()
 		RandomizeWriteToken();
 		ExpirePeersFromStore(time(NULL) - 30 * 60);
 		if (_dht_peers_count < 8) {
-			_dht_bootstrap = 1;
+			_dht_bootstrap = not_bootstrapped;
 #ifdef _DEBUG_DHT
 			debug_log("5 minute counter, %d peers [bootstrap=%d]"
 				, _dht_peers_count, _dht_bootstrap);
@@ -2957,9 +2958,9 @@ void DhtImpl::Tick()
 		_recent_punches.clear();
 	}
 
-	if (_dht_bootstrap > 0) {
+	if (_dht_bootstrap > valid_reponse_received) {
 		// Boot-strapping.
-		if (--_dht_bootstrap == 0) {
+		if (--_dht_bootstrap == valid_reponse_received) {
 
 			// This is where we kick off the actual bootstrapping. We launch
 			// Find Node on our own ID. keep in mind that if the routing
@@ -2982,7 +2983,7 @@ void DhtImpl::Tick()
 			DoBootstrap(target, this);
 		}
 
-	} else if (_dht_bootstrap < -1 ){
+	} else if (_dht_bootstrap < -1){
 		// Bootstrap finished. refresh buckets?
 		if (--_refresh_buckets_counter < 0) {
 			_refresh_buckets_counter = 6; // refresh buckets every 6 seconds
@@ -3006,6 +3007,20 @@ void DhtImpl::Tick()
 			// todo: don't allow new job?
 		}
 		_refresh_bucket = (_refresh_bucket + 1) % _buckets.size();
+	}
+
+	// Save State to disk every 10 minutes if bootstrapping complete
+	if (++_10min_counter == 60 * 10) {
+		_10min_counter = 0;
+
+		if (_dht_bootstrap == bootstrap_complete)
+		{
+			SaveState();
+#ifdef _DEBUG_DHT
+			debug_log("10 minute counter, saving DHT state to disk."
+				, _dht_peers_count, _dht_bootstrap);
+#endif
+		}
 	}
 
 	// Allow a new job every 4 seconds.
@@ -3124,7 +3139,7 @@ void DhtImpl::Restart() {
 	_dht_peers_count = 0;
 
 #ifdef _DEBUG_DHT
-	if (_dht_bootstrap == 0 && _bootstrap_log) {
+	if (_dht_bootstrap == valid_reponse_received && _bootstrap_log) {
 		fprintf(_bootstrap_log, "[%u] nodes: %u\n"
 			, uint(get_milliseconds() - _bootstrap_start), _dht_peers_count);
 	}
@@ -5428,7 +5443,7 @@ bool DhtBucket::RemoveFromList(DhtImpl* pDhtImpl, const DhtID &id, BucketListTyp
 		assert(pDhtImpl->_dht_peers_count >= 0);
 
 #ifdef _DEBUG_DHT
-		if (pDhtImpl->_dht_bootstrap == 0 && pDhtImpl->_bootstrap_log) {
+		if (pDhtImpl->_dht_bootstrap == DhtImpl::valid_reponse_received && pDhtImpl->_bootstrap_log) {
 			fprintf(pDhtImpl->_bootstrap_log, "[%u] nodes: %u\n"
 				, uint(get_milliseconds() - pDhtImpl->_bootstrap_start)
 				, pDhtImpl->_dht_peers_count);
@@ -5516,7 +5531,7 @@ bool DhtBucket::InsertOrUpdateNode(DhtImpl* pDhtImpl, DhtPeer const& candidateNo
 		bucketList.enqueue(peer);
 
 #ifdef _DEBUG_DHT
-		if (pDhtImpl->_dht_bootstrap == 0 && pDhtImpl->_bootstrap_log) {
+		if (pDhtImpl->_dht_bootstrap == DhtImpl::valid_reponse_received && pDhtImpl->_bootstrap_log) {
 			fprintf(pDhtImpl->_bootstrap_log, "[%u] nodes: %u\n"
 				, uint(get_milliseconds() - pDhtImpl->_bootstrap_start)
 				, pDhtImpl->_dht_peers_count);

@@ -1848,11 +1848,7 @@ public:
 
 	uint32 _cur_token[2];
 	uint32 _prev_token[2];
-	int _dht_bootstrap; // -1: bootstrap ping has replied
-						// -2: bootstrap find_nodes process has completed
-						//  0: a vaild bootstrapping response from dht routers has been received
-						//  1: dht not bootstrapped (initial condition)
-						// >1: an error was received, _dth_bootstrap set with a large number of seconds for a count-down
+	int _dht_bootstrap; // Possible states in enum below
 	int _dht_bootstrap_failed; // a counter used to compute the back-off time for bootstrap re-tries
 	int _dht_busy;
 	bool _allow_new_job;
@@ -1867,6 +1863,16 @@ public:
 	int _dht_rate;
 	int _dht_probe_quota;
 	int _dht_probe_rate;
+
+	// Possible states for _dht_bootstrap
+	enum {
+		bootstrap_complete = -2, 	// -2: bootstrap find_nodes complete
+		bootstrap_ping_replied,		// -1: bootstrap ping has replied
+		valid_reponse_received,		//  0: a vaild bootstrapping
+									// response from dht routers has been received
+		not_bootstrapped,			//  1: dht not bootstrapped (initial state)
+		bootstrap_error_received	// >1: an error was received, _dht_bootstrap set with a large number of seconds for a count-down
+	};
 
 	enum {
 		DHT_BW_IN_REQ = 0,	// incoming requests
