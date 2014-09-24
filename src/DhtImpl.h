@@ -1702,6 +1702,9 @@ public:
 	// timestamp of when we started bootstrap
 	uint _bootstrap_start;
 #endif
+#ifdef _DEBUG_DHT_INSTRUMENT
+	FILE* _instrument_log;
+#endif
 
 private:
 	void Initialize(UDPSocketInterface *_udp_socket_mgr, UDPSocketInterface *_udp6_socket_mgr );
