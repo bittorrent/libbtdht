@@ -138,6 +138,8 @@ public:
 	virtual void Initialize(UDPSocketInterface *, UDPSocketInterface *) = 0;
 	virtual bool IsEnabled() = 0;
 	virtual void ForceRefresh() = 0;
+	// do not respond to queries - for mobile nodes with data constraints
+	virtual void SetReadOnly(bool readOnly) = 0;
 	virtual bool ProcessIncoming(byte *buffer, size_t len, const SockAddr& addr) = 0;
 #ifdef _DEBUG_MEM_LEAK
 	virtual int FreeRequests() = 0;

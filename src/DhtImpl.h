@@ -1716,6 +1716,8 @@ public:
 	void Enable(bool enabled, int rate);
 	bool IsEnabled();
 	void ForceRefresh();
+	// do not respond to queries - for mobile nodes with data constraints
+	void SetReadOnly(bool readOnly);
 
 	bool CanAnnounce();
 
@@ -1853,6 +1855,7 @@ public:
 	int _dht_busy;
 	bool _allow_new_job;
 	bool _dht_enabled;
+	bool _dht_read_only;
 
 	int _refresh_bucket;		// Which bucket are we currently refreshing? -1 if disabled
 	bool _refresh_bucket_force;	// Force bucket refresh, generally at start/restart

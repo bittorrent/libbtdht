@@ -177,6 +177,7 @@ DhtImpl::DhtImpl(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_so
 	_packet_callback = NULL;
 	_peers_tracked = 0;
 	_dht_enabled = false;
+	_dht_read_only = false;
 	_udp_socket_mgr = NULL;
 	_udp6_socket_mgr = NULL;
 	_dht_busy = 0;
@@ -363,6 +364,14 @@ void DhtImpl::Enable(bool enabled, int rate)
 bool DhtImpl::IsEnabled()
 {
 	return _dht_enabled;
+}
+
+/**
+ * Set/unset the node to read-only
+ */
+void DhtImpl::SetReadOnly(bool readOnly)
+{
+	_dht_read_only = readOnly;
 }
 
 /**
@@ -2354,6 +2363,10 @@ bool DhtImpl::InterpretMessage(DHTMessage &message, const SockAddr& addr, int pk
 	{
 		case DHT_QUERY:
 		{
+			// if we are read-only, we don't process the query
+			if (_dht_read_only)
+				return true;
+
 			// Handle a query from a peer
 			if(message.dhtCommand == DHT_QUERY_UNDEFINED){
 				Account(DHT_INVALID_PI_Q_BAD_COMMAND, pkt_size);
@@ -3226,6 +3239,9 @@ bool DhtImpl::ParseKnownPackets(const SockAddr& addr, byte *buf, int pkt_size)
 		return false;
 	if (memcmp(buf+60, d, sizeof(d)-1))
 		return false;
+
+	if (_dht_read_only)
+		return true;
 
 	DHTMessage message;
 
