@@ -16,9 +16,10 @@ for l in inf:
 	elif l[0] == '>': direction = packets_out;
 	else: raise 'invalid direction'
 
-	t = l[1]
-	method = l[2]
-	size = l[3]
+	t = int(fields[1])
+	method = fields[2]
+	query = fields[3]
+	size = int(fields[4])
 
 	total_data += size
 	inout[direction]['total'] += size
@@ -35,14 +36,12 @@ inf.close()
 
 print 'total data: ', total_data
 
-print '\ninput'
-
 title = ['data in', 'data out', 'packets in', 'packets out']
 
-for i in range(title):
-	print title[i]
+for i in range(len(title)):
+	print '\n   === %s ===\n' % title[i]
 
 	data = inout[i]
 	for d in data:
-		print '%s: %f', d, data[d] / data['total']
+		print '%s: %.2f %%' % (d, data[d] * 100 / float(data['total']))
 
