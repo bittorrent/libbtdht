@@ -2253,7 +2253,7 @@ bool DhtImpl::ProcessQuery(DhtPeerID& peerID, DHTMessage &message, int packetSiz
 
 	// Nodes that are read_only do not respond to queries, so we don't
 	// want to add them to the buckets.  They also will not be pinged.
-	if (message.read_only) {
+	if (!message.read_only) {
 		DhtPeer *peer = Update(peerID, IDht::DHT_ORIGIN_INCOMING, false);
 		// Update version
 		if (peer != NULL) {
