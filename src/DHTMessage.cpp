@@ -45,6 +45,7 @@ void DHTMessage::Init()
 	type = command = NULL;
 	id = NULL;
 	args = NULL;
+	read_only = false;
 	region.first = region.second = NULL;
 	portNum = vote = seed = scrape = noseed = sequenceNum = 0;
 	error_code = 0;
@@ -72,6 +73,7 @@ void DHTMessage::DecodeMessageData(BencodedDict &bDict)
 	transactionID.b = (byte*)bDict.GetString("t", &transactionID.len);
 	version.b = (byte*)bDict.GetString("v", &version.len);
 	external_ip.b = (byte*)bDict.GetString("ip", &external_ip.len);
+	read_only = bDict.GetInt("ro", 0) != 0;
 
 	type = bDict.GetString("y", 1);
 	if (!type)
