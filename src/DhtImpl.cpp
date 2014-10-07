@@ -19,7 +19,6 @@
 #include <algorithm> // for std::min
 #include <math.h>
 #include <stdarg.h>
-#include <inttypes.h>
 
 #if defined(_DEBUG_DHT_VERBOSE) && !defined _DEBUG_DHT
 #define _DEBUG_DHT
@@ -2627,7 +2626,6 @@ void DhtImpl::ResolveName(DhtID const& target, DhtHashFileNameCallback* callb, v
 	delta.  See KademliaConstants enum for actual values.
 */
 void DhtImpl::DoAnnounce(const DhtID &target,
-	DhtPartialHashCompletedCallback *pcallb,
 	DhtAddNodesCallback *callb,
 	DhtPortCallback *pcb,
 	cstr file_name,
@@ -2648,7 +2646,6 @@ void DhtImpl::DoAnnounce(const DhtID &target,
 	DhtProcessManager *dpm = new DhtProcessManager(ids, num, target);
 
 	CallBackPointers cbPtrs;
-	cbPtrs.partialCallback = pcallb;
 	cbPtrs.addnodesCallback = callb;
 	cbPtrs.callbackContext = ctx;
 	cbPtrs.portCallback = pcb;
@@ -2920,7 +2917,6 @@ void DhtImpl::Put(const byte * pkey, const byte * skey
  */
 void DhtImpl::AnnounceInfoHash(
 	const byte *info_hash,
-	DhtPartialHashCompletedCallback *partialcallback,
 	DhtAddNodesCallback *addnodes_callback,
 	DhtPortCallback* pcb,
 	cstr file_name,
@@ -2929,7 +2925,7 @@ void DhtImpl::AnnounceInfoHash(
 {
 	DhtID id;
 	CopyBytesToDhtID(id, info_hash);
-	DoAnnounce(id, partialcallback, addnodes_callback,
+	DoAnnounce(id, addnodes_callback,
 		pcb, file_name, ctx, flags);
 	_allow_new_job = false;
 }
@@ -4113,12 +4109,6 @@ DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(
 					continue;
 				values.push_back(b);
 			}
-		}
-
-		if (callbackPointers.partialCallback && info_hash.len == DHT_ID_SIZE && info_hash.b) {
-			//we should only call this once
-			callbackPointers.partialCallback(callbackPointers.callbackContext, info_hash.b);
-			callbackPointers.partialCallback = NULL;
 		}
 
 		// if there is a filename callback, see if a filename is in the reply
