@@ -931,7 +931,6 @@ class CallBackPointers
 
 		void* callbackContext;
 		IDhtProcessCallbackListener *processListener;
-		DhtPartialHashCompletedCallback *partialCallback;
 		DhtAddNodesCallback *addnodesCallback;
 		DhtScrapeCallback *scrapeCallback;
 		DhtVoteCallback *voteCallback;
@@ -944,7 +943,6 @@ class CallBackPointers
 
 inline CallBackPointers::CallBackPointers() : callbackContext(NULL),
 	processListener(NULL),
-	partialCallback(NULL),
 	addnodesCallback(NULL),
 	scrapeCallback(NULL),
 	voteCallback(NULL),
@@ -1735,7 +1733,6 @@ public:
 		, int64 seq = 0);
 
 	void AnnounceInfoHash(const byte *info_hash,
-		DhtPartialHashCompletedCallback *partial_callback,
 		DhtAddNodesCallback *addnodes_callback, DhtPortCallback* pcb, cstr file_name,
 		void *ctx, int flags);
 
@@ -2095,7 +2092,6 @@ public:
 	void ResolveName(DhtID const& target, DhtHashFileNameCallback* callb, void *ctx, int flags = 0);
 
 	void DoAnnounce(const DhtID &target,
-		DhtPartialHashCompletedCallback *pcallb,
 		DhtAddNodesCallback *callb,
 		DhtPortCallback *pcb,
 		cstr file_name,

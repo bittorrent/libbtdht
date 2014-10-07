@@ -19,7 +19,6 @@ class BencEntity;
 
 // callback types used in the DHT
 typedef void DhtVoteCallback(void *ctx, const byte *target, int const* votes);
-typedef void DhtPartialHashCompletedCallback(void *ctx, const byte *info_hash);
 typedef void DhtHashFileNameCallback(void *ctx, const byte *info_hash, const byte *file_name);
 typedef void DhtAddNodesCallback(void *ctx, const byte *info_hash, const byte *peers, uint num_peers);
 typedef void DhtAddNodeResponseCallback(void*& userdata, bool is_response, SockAddr const& addr);
@@ -100,7 +99,6 @@ public:
 
 	virtual void AnnounceInfoHash(
 		const byte *info_hash,
-		DhtPartialHashCompletedCallback *partial_callback,
 		DhtAddNodesCallback *addnodes_callback,
 		DhtPortCallback* pcb,
 		cstr file_name,
