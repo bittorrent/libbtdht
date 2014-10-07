@@ -20,6 +20,8 @@
 #include <math.h>
 #include <stdarg.h>
 
+static_assert(sizeof(SockAddr) == 19, "unexpected size of SockAddr");
+
 #if defined(_DEBUG_DHT_VERBOSE) && !defined _DEBUG_DHT
 #define _DEBUG_DHT
 #endif
@@ -1034,8 +1036,9 @@ uint DhtImpl::CopyPeersFromBucket(uint bucket_id, DhtPeerID **list, uint numwant
 {
 	DhtBucketList &bucket = _buckets[bucket_id]->peers;
 	uint n = 0;
-	for(DhtPeer *peer = bucket.first(); peer && n < numwant; peer=peer->next) {
-		if (time(NULL) - peer->first_seen < min_age) {
+	time_t now = time(nullptr);
+	for (DhtPeer *peer = bucket.first(); peer && n < numwant; peer=peer->next) {
+		if (now - peer->first_seen < min_age) {
 			continue;
 		}
 		if (peer->num_fail < (peer->lastContactTime ? FAIL_THRES : FAIL_THRES_NOCONTACT) || --wantfail >= 0) {
@@ -1127,7 +1130,7 @@ int DhtImpl::AssembleNodeList(const DhtID &target, DhtPeerID** ids
 uint DhtImpl::FindNodes(const DhtID &target, DhtPeerID **list, uint numwant, int wantfail, time_t min_age)
 {
 	int bucket_id = GetBucket(target);
-	if(bucket_id < 0) return 0;
+	if (bucket_id < 0) return 0;
 
 	const int tempsize = 64;
 	DhtPeerID *temp[tempsize];

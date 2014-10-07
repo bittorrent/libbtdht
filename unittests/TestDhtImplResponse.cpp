@@ -80,7 +80,7 @@ class dht_impl_response_test : public dht_impl_test {
 
 		void fetch_announce(const DhtID &target, std::string &filename,
 				std::vector<byte> &tid_out) {
-			impl->DoAnnounce(target, NULL, &AddNodesCallbackDummy::Callback, NULL,
+			impl->DoAnnounce(target, &AddNodesCallbackDummy::Callback, NULL,
 					filename.c_str(), NULL, 0);
 			ASSERT_NO_FATAL_FAILURE(fetch_dict());
 			Buffer tid;
@@ -95,7 +95,7 @@ class dht_impl_response_test : public dht_impl_test {
 			const unsigned int bytes_per_peer = 106;
 			tids_out.clear();
 
-			impl->DoAnnounce(target, NULL, &AddNodesCallbackDummy::Callback, NULL,
+			impl->DoAnnounce(target, &AddNodesCallbackDummy::Callback, NULL,
 					filename.c_str(), NULL, 0);
 
 			// see how many strings went out.
@@ -414,7 +414,7 @@ TEST_F(dht_impl_response_test, Announce_ReplyWithNodes) {
 	// make the dht emit an announce message (the get_peers rpc)
 	// *****************************************************
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
-	impl->DoAnnounce(target, NULL, &AddNodesCallbackDummy::Callback, NULL,
+	impl->DoAnnounce(target, &AddNodesCallbackDummy::Callback, NULL,
 			"filename.txt", NULL, 0);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
 
@@ -517,7 +517,7 @@ TEST_F(dht_impl_response_test, Announce_ReplyWithPeers) {
 	// *****************************************************
 	std::string filenameTxt("This is a filaname that is very long like a file"
 			" name that would be found in the wild.txt");
-	impl->DoAnnounce(target, NULL, &AddNodesCallbackDummy::Callback, NULL,
+	impl->DoAnnounce(target, &AddNodesCallbackDummy::Callback, NULL,
 			filenameTxt.c_str(), NULL, 0);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
 
@@ -660,7 +660,7 @@ TEST_F(dht_impl_response_test, Announce_ReplyWithoutPeersOrNodes) {
 	// make the dht emit an announce message (the get_peers rpc)
 	// *****************************************************
 	std::string filenameTxt("filaname.txt");
-	impl->DoAnnounce(target, NULL, &AddNodesCallbackDummy::Callback, NULL,
+	impl->DoAnnounce(target, &AddNodesCallbackDummy::Callback, NULL,
 			filenameTxt.c_str(), NULL, 0);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
 
@@ -752,7 +752,7 @@ TEST_F(dht_impl_response_test, Announce_ReplyWith_ICMP) {
 	// make the dht emit an announce message (the get_peers rpc)
 	// *****************************************************
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
-	impl->DoAnnounce(target, NULL, &AddNodesCallbackDummy::Callback, NULL,
+	impl->DoAnnounce(target, &AddNodesCallbackDummy::Callback, NULL,
 			"filename.txt", NULL, 0);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
 
@@ -792,7 +792,7 @@ TEST_F(dht_impl_response_test, Announce_ReplyWith_ICMP_AfterAnnounce) {
 	// make the dht emit an announce message (the get_peers rpc)
 	// *****************************************************
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
-	impl->DoAnnounce(target, NULL, &AddNodesCallbackDummy::Callback, NULL,
+	impl->DoAnnounce(target, &AddNodesCallbackDummy::Callback, NULL,
 			"filename.txt", NULL, 0);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
 
@@ -886,7 +886,7 @@ TEST_F(dht_impl_response_test, AnnounceSeed_ReplyWithPeers) {
 	// make the dht emit an announce message (the get_peers rpc)
 	// *****************************************************
 	std::string filenameTxt("filaname.txt");
-	impl->DoAnnounce(target, NULL, &AddNodesCallbackDummy::Callback, NULL,
+	impl->DoAnnounce(target, &AddNodesCallbackDummy::Callback, NULL,
 			filenameTxt.c_str(), NULL, IDht::announce_seed);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
 
@@ -2522,7 +2522,7 @@ TEST_F(dht_impl_response_test, Announce_ReplyWithMultipleNodes) {
 	// make the dht emit an announce message (the get_peers rpc)
 	// *****************************************************
 	EXPECT_FALSE(impl->IsBusy()) << "The dht should not be busy yet";
-	impl->DoAnnounce(target, NULL, &AddNodesCallbackDummy::Callback, NULL,
+	impl->DoAnnounce(target, &AddNodesCallbackDummy::Callback, NULL,
 			"filename.txt", NULL, 0);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
 
@@ -2734,7 +2734,7 @@ TEST_F(dht_impl_response_test, Announce_Slow_ReplyWithPeers) {
 	// make the dht emit an announce message (the get_peers rpc)
 	// *****************************************************
 	std::string filenameTxt("filaname.txt");
-	impl->DoAnnounce(target, NULL, &AddNodesCallbackDummy::Callback, NULL,
+	impl->DoAnnounce(target, &AddNodesCallbackDummy::Callback, NULL,
 			filenameTxt.c_str(), NULL, 0);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
 
@@ -2899,7 +2899,7 @@ TEST_F(dht_impl_response_test, Announce_Slow_ReplyWithMultipleNodes) {
 	// *****************************************************
 	// make the dht emit an announce message (the get_peers rpc)
 	// *****************************************************
-	impl->DoAnnounce(target, NULL, &AddNodesCallbackDummy::Callback, NULL,
+	impl->DoAnnounce(target, &AddNodesCallbackDummy::Callback, NULL,
 			"filename.txt", NULL, IDht::announce_non_aggressive);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
 
@@ -3121,7 +3121,7 @@ TEST_F(dht_impl_response_test, Announce_TimeOut_ReplyWithMultipleNodes) {
 	// *****************************************************
 	// make the dht emit an announce message (the get_peers rpc)
 	// *****************************************************
-	impl->DoAnnounce(target, NULL, &AddNodesCallbackDummy::Callback, NULL,
+	impl->DoAnnounce(target, &AddNodesCallbackDummy::Callback, NULL,
 			"filename.txt", NULL, 0);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
 
@@ -3336,7 +3336,7 @@ TEST_F(dht_impl_response_test, Announce_ICMPerror_ReplyWithMultipleNodes) {
 	// *****************************************************
 	// make the dht emit an announce message (the get_peers rpc)
 	// *****************************************************
-	impl->DoAnnounce(target, NULL, &AddNodesCallbackDummy::Callback, NULL,
+	impl->DoAnnounce(target, &AddNodesCallbackDummy::Callback, NULL,
 			"filename.txt", NULL, 0);
 	EXPECT_TRUE(impl->IsBusy()) << "The dht should be busy";
 
