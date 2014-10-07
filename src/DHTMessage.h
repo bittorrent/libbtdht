@@ -112,6 +112,7 @@ public:
 	int seed;
 	int noseed;
 	int scrape;
+	bool read_only;
 	uint64 sequenceNum;  // 'seq' for mutable put
 	int impliedPort;
 

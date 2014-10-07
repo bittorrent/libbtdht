@@ -923,7 +923,9 @@ void DhtImpl::SendPunch(SockAddr const& dst, SockAddr const& punchee)
 	int len = punchee.compact(target_ip, true);
 	assert(len == 6);
 	sb("d1:ad2:id20:")(_my_id_bytes, DHT_ID_SIZE)
-		("2:ip6:")(target_ip, 6)("e1:q5:punch1:t4:....");
+		("2:ip6:")(target_ip, 6)("e1:q5:punch");
+	put_is_read_only(sb);
+	sb("1:t4:....");
 	put_version(sb);
 	sb("1:y1:qe");
 	assert(sb.length() >= 0);
@@ -944,6 +946,7 @@ DhtRequest *DhtImpl::SendPing(const DhtPeerID &peer_id) {
 #endif
 
 	sb("d1:ad2:id20:")(_my_id_bytes, DHT_ID_SIZE)("e1:q4:ping");
+	put_is_read_only(sb);
 	put_transaction_id(sb, Buffer((byte*)&req->tid, 4));
 	put_version(sb);
 	sb("1:y1:qe");
@@ -1607,6 +1610,11 @@ void DhtImpl::put_version(smart_buffer& sb) {
 			_dht_utversion[3]);
 }
 
+void DhtImpl::put_is_read_only(smart_buffer& sb) {
+	if (_dht_read_only)
+		sb("2:roi1e");
+}
+
 bool DhtImpl::ProcessQueryAnnouncePeer(DHTMessage& message, DhtPeerID &peerID,
 		int packetSize) {
 	unsigned char buf[256];
@@ -2243,10 +2251,14 @@ bool DhtImpl::ProcessQuery(DhtPeerID& peerID, DHTMessage &message, int packetSiz
 		return false;
 	}
 
-	DhtPeer *peer = Update(peerID, IDht::DHT_ORIGIN_INCOMING, false);
-	// Update version
-	if (peer != NULL) {
-		peer->client.from_compact(message.version.b, message.version.len);
+	// Nodes that are read_only do not respond to queries, so we don't
+	// want to add them to the buckets.  They also will not be pinged.
+	if (!message.read_only) {
+		DhtPeer *peer = Update(peerID, IDht::DHT_ORIGIN_INCOMING, false);
+		// Update version
+		if (peer != NULL) {
+			peer->client.from_compact(message.version.b, message.version.len);
+		}
 	}
 
 	switch(message.dhtCommand){
@@ -4399,6 +4411,7 @@ void FindNodeDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	sb("d1:ad2:id20:")(impl->_my_id_bytes, DHT_ID_SIZE);
 	sb("6:target20:")(target_bytes, DHT_ID_SIZE);
 	sb("e1:q9:find_node");
+	impl->put_is_read_only(sb);
 	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4));
 	impl->put_version(sb);
 	sb("1:y1:qe");
@@ -4574,6 +4587,7 @@ void GetPeersDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	sb((byte*)rpcArgsBuf, args_len);
 
 	sb("e1:q9:get_peers");
+	impl->put_is_read_only(sb);
 	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4));
 	impl->put_version(sb);
 	sb("1:y1:qe");
@@ -4726,6 +4740,7 @@ void AnnounceDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	int args_len = announceArgumenterPtr->BuildArgumentBytes((byte*)rpcArgsBuf, bufLen);
 	sb((byte*)rpcArgsBuf, args_len);
 	sb("e1:q13:announce_peer");
+	impl->put_is_read_only(sb);
 	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4));
 	impl->put_version(sb);
 	sb("1:y1:qe");
@@ -4847,6 +4862,7 @@ void GetDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	DhtIDToBytes(targetAsID, target);
 	sb(targetAsID, DHT_ID_SIZE);
 	sb("e1:q3:get");
+	impl->put_is_read_only(sb);
 	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4));
 	impl->put_version(sb);
 	sb("1:y1:qe");
@@ -5051,6 +5067,7 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 			int(nodeInfo.token.len));
 	sb("1:v")(reinterpret_cast<unsigned char*>(&blk[0]), blk.size());
 	sb("e1:q3:put");
+	impl->put_is_read_only(sb);
 	sb("1:t%d:", 4)(reinterpret_cast<const unsigned char*>(&transactionID), 4);
 	const unsigned char * dht_utversion = impl->get_version();
 	sb("1:v4:%c%c%c%c", dht_utversion[0], dht_utversion[1], dht_utversion[2],
@@ -5216,6 +5233,7 @@ void VoteDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	sb("6:target20:")(target_bytes, DHT_ID_SIZE);
 	sb("5:token%d:", int(nodeInfo.token.len))(nodeInfo.token);
 	sb("4:votei%de", voteValue)("e1:q4:vote");
+	impl->put_is_read_only(sb);
 	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4));
 	impl->put_version(sb);
 	sb("1:y1:qe");

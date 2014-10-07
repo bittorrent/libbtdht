@@ -2043,6 +2043,7 @@ public:
 
 	void put_transaction_id(smart_buffer& sb, Buffer tid);
 	void put_version(smart_buffer& sb);
+	void put_is_read_only(smart_buffer& sb);
 	const unsigned char* get_version();
 private:
 	void send_put_response(smart_buffer& sb, Buffer& transaction_id,
