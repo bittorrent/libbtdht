@@ -20,10 +20,6 @@
 #include <math.h>
 #include <stdarg.h>
 
-#if defined(_DEBUG_DHT_VERBOSE) && !defined _DEBUG_DHT
-#define _DEBUG_DHT
-#endif
-
 #ifdef _DEBUG_DHT_INSTRUMENT
 #define instrument_log_detail(path, direction, command, type, size) \
 	if (path) { \

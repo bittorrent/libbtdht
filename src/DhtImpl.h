@@ -20,6 +20,10 @@
 #include "tailqueue.h"
 #include "get_microseconds.h"
 
+#if defined(_DEBUG_DHT_VERBOSE) && !defined _DEBUG_DHT
+#define _DEBUG_DHT
+#endif
+
 // for logging dht activity
 #if g_log_dht
 
