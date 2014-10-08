@@ -158,6 +158,7 @@ struct VoteContainer {
 	}
 };
 
+// TODO: this should live in its own header
 class smart_buffer {
 	unsigned char* buffer;
 	unsigned char* start;
