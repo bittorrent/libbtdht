@@ -890,6 +890,9 @@ void DhtImpl::SendPunch(SockAddr const& dst, SockAddr const& punchee)
 	unsigned char buf[120];
 	smart_buffer sb(buf, sizeof(buf));
 
+	assert(punchee.isv4());
+	assert(dst.isv4());
+
 	// see if we have this pair of nodes in the bloom filter
 	// already. If we do, we've already sent a punch request recently,
 	// and we should skip it this time.
@@ -2189,6 +2192,7 @@ bool DhtImpl::ProcessQueryPunch(DHTMessage &message, DhtPeerID &peerID
 	bool ok = dst.from_compact(message.target_ip.b
 		, message.target_ip.len);
 	if (!ok) return false;
+	if (!dst.isv4()) return false;
 
 	byte record[6];
 	dst.compact(record, true);
