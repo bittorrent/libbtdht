@@ -42,12 +42,12 @@
 		(__VA_ARGS__)
 
 #define lenof(x) (sizeof(x)/sizeof(x[0]))
-#define MUTABLE_PAYLOAD_FORMAT "3:seqi%" PRIu64 "e1:v"
+const char MUTABLE_PAYLOAD_FORMAT[] = "3:seqi%" PRIu64 "e1:v";
 
-#define MESSAGE_TOO_BIG 205
-#define INVALID_SIGNATURE 206
-#define CAS_MISMATCH 301
-#define LOWER_SEQ 302
+const int MESSAGE_TOO_BIG = 205;
+const int INVALID_SIGNATURE = 206;
+const int CAS_MISMATCH = 301;
+const int LOWER_SEQ = 302;
 
 bool DhtVerifyHardenedID(const SockAddr& addr, byte const* node_id, DhtSHACallback* sha);
 void DhtCalculateHardenedID(const SockAddr& addr, byte *node_id);
