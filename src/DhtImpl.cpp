@@ -20,8 +20,6 @@
 #include <math.h>
 #include <stdarg.h>
 
-static_assert(sizeof(SockAddr) == 19, "unexpected size of SockAddr");
-
 #if defined(_DEBUG_DHT_VERBOSE) && !defined _DEBUG_DHT
 #define _DEBUG_DHT
 #endif
