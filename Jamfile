@@ -4,9 +4,6 @@ use-project /ut_utils : ut_utils ;
 
 SOURCES = DHTMessage DhtImpl ExternalIPCounter blockallocator dht crc32c ;
 
-feature dhti : off on : composite propagated link-incompatible ;
-feature.compose <dhti>on : <define>_DEBUG_DHT_INSTRUMENT=1 ;
-
 lib ut_dht : src/$(SOURCES).cpp
 	: # requirements
 	  <include>src

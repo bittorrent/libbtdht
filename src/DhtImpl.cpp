@@ -20,23 +20,6 @@
 #include <math.h>
 #include <stdarg.h>
 
-#ifdef _DEBUG_DHT_INSTRUMENT
-#define instrument_log_detail(path, direction, command, type, size) \
-	if (path) { \
-		fprintf(path, "%c\t%" PRId64 "\t%s\t%c\t%lu\n", direction, \
-				get_milliseconds(), command, type, (size_t)size); }
-#else
-#define instrument_log_detail(path, direction, command, type, size)
-#endif
-#define instrument_log_5(cls, direction, command, type, size) \
-	instrument_log_detail(cls->_instrument_log, direction, command, type, size)
-#define instrument_log_4(direction, command, type, size) \
-	instrument_log_detail(_instrument_log, direction, command, type, size)
-#define get_instrument_macro(_1, _2, _3, _4, _5, name, ...) name
-#define instrument_log(...) \
-	get_instrument_macro(__VA_ARGS__, instrument_log_5, instrument_log_4) \
-		(__VA_ARGS__)
-
 #define lenof(x) (sizeof(x)/sizeof(x[0]))
 const char MUTABLE_PAYLOAD_FORMAT[] = "3:seqi%" PRIu64 "e1:v";
 
@@ -127,6 +110,14 @@ std::string print_sockaddr(SockAddr const& addr)
 	}
 	return buf;
 }
+
+#ifdef _DEBUG_DHT_INSTRUMENT
+#define instrument_log(direction, command, type, size, tid) \
+		do_log("DHTI%c\t%" PRId64 "\t%s\t%c\t%lu\t%" PRIu32 "\n", direction, \
+				get_milliseconds(), (command ? command : "unknown"), type, (size_t)size, tid)
+#else
+#define instrument_log(direction, command, type, size, tid)
+#endif
 
 #if defined(_DEBUG_DHT)
 
@@ -245,9 +236,6 @@ DhtImpl::DhtImpl(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_so
 	_lookup_log = fopen("dht-lookups.log", "w+");
 
 #endif
-#ifdef _DEBUG_DHT_INSTRUMENT
-	_instrument_log = fopen("dht-instrument.log", "w+");
-#endif
 }
 
 DhtImpl::~DhtImpl()
@@ -258,10 +246,6 @@ DhtImpl::~DhtImpl()
 		fclose(_lookup_log);
 	if (_bootstrap_log)
 		fclose(_bootstrap_log);
-#endif
-#ifdef _DEBUG_DHT_INSTRUMENT
-	if (_instrument_log)
-		fclose(_instrument_log);
 #endif
 
 	for(int i = 0; i < _buckets.size(); i++) {
@@ -928,7 +912,8 @@ void DhtImpl::SendPunch(SockAddr const& dst, SockAddr const& punchee)
 	sb("1:y1:qe");
 	assert(sb.length() >= 0);
 	
-	instrument_log('>', "punch", 'q', sb.length());
+	// punch commands have tid '....' which is never used, sicne there is no reply
+	instrument_log('>', "punch", 'q', sb.length(), Read32((byte*)("....")));
 	SendTo(dst, buf, sb.length());
 }
 
@@ -954,7 +939,7 @@ DhtRequest *DhtImpl::SendPing(const DhtPeerID &peer_id) {
 		do_log("SendPing blob exceeds maximum size.");
 		return NULL;
 	}
-	instrument_log('>', "ping", 'q', sb.length());
+	instrument_log('>', "ping", 'q', sb.length(), req->tid);
 	SendTo(peer_id.addr, buf, sb.length());
 	return req;
 }
@@ -1681,7 +1666,7 @@ bool DhtImpl::ProcessQueryAnnouncePeer(DHTMessage& message, DhtPeerID &peerID,
 	sb("1:y1:re");
 
 	assert(sb.length() >= 0);
-	instrument_log('>', "announce_peer", 'r', sb.length());
+	instrument_log('>', "announce_peer", 'r', sb.length(), Read32(message.transactionID.b));
 	return AccountAndSend(peerID, buf, sb.length(), packetSize);
 }
 
@@ -1791,7 +1776,7 @@ bool DhtImpl::ProcessQueryGetPeers(DHTMessage &message, DhtPeerID &peerID,
 
 	assert(sb.length() >= 0 && sb.length() <= mtu);
 
-	instrument_log('>', "get_peers", 'r', sb.length());
+	instrument_log('>', "get_peers", 'r', sb.length(), Read32(message.transactionID.b));
 	return AccountAndSend(peerID, buf, sb.length(), packetSize);
 }
 
@@ -1835,7 +1820,7 @@ bool DhtImpl::ProcessQueryFindNode(DHTMessage &message, DhtPeerID &peerID,
 
 	assert(sb.length() >= 0 && sb.length() <= mtu);
 
-	instrument_log('>', "find_node", 'r', sb.length());
+	instrument_log('>', "find_node", 'r', sb.length(), Read32(message.transactionID.b));
 	return AccountAndSend(peerID, buf, sb.length(), packetSize);
 }
 
@@ -1848,7 +1833,7 @@ void DhtImpl::send_put_response(smart_buffer& sb, Buffer& transaction_id,
 	sb("1:y1:re");
 	assert(sb.length() >= 0);
 
-	instrument_log('>', "put", 'r', sb.length());
+	instrument_log('>', "put", 'r', sb.length(), Read32(transaction_id.b));
 	AccountAndSend(peerID, sb.begin(), sb.length(), packetSize);
 }
 
@@ -1864,7 +1849,7 @@ void DhtImpl::send_put_response(smart_buffer& sb, Buffer& transaction_id,
 	sb("1:y1:ee");
 	assert(sb.length() >= 0);
 
-	instrument_log('>', "put", 'r', sb.length());
+	instrument_log('>', "put", 'r', sb.length(), Read32(transaction_id.b));
 	AccountAndSend(peerID, sb.begin(), sb.length(), packetSize);
 }
 
@@ -2103,7 +2088,7 @@ bool DhtImpl::ProcessQueryGet(DHTMessage &message, DhtPeerID &peerID,
 
 	assert(sb.length() >= 0 && sb.length() <= mtu);
 
-	instrument_log('>', "get", 'r', sb.length());
+	instrument_log('>', "get", 'r', sb.length(), Read32(message.transactionID.b));
 	return AccountAndSend(peerID, buf, sb.length(), packetSize);
 }
 
@@ -2153,7 +2138,7 @@ bool DhtImpl::ProcessQueryVote(DHTMessage &message, DhtPeerID &peerID,
 	assert(sb.length() >= 0 && sb.length() <= GetUDP_MTU(peerID.addr));
 
 	// Send the reply to the peer.
-	instrument_log('>', "vote", 'r', sb.length());
+	instrument_log('>', "vote", 'r', sb.length(), Read32(message.transactionID.b));
 	return AccountAndSend(peerID, buf, sb.length(), packetSize);
 }
 
@@ -2177,7 +2162,7 @@ bool DhtImpl::ProcessQueryPing(DHTMessage &message, DhtPeerID &peerID,
 
 	assert(sb.length() >= 0);
 
-	instrument_log('>', "ping", 'r', sb.length());
+	instrument_log('>', "ping", 'r', sb.length(), Read32(message.transactionID.b));
 	return AccountAndSend(peerID, sb.begin(), sb.length(), packetSize);
 }
 
@@ -2231,7 +2216,7 @@ bool DhtImpl::ProcessQueryPunch(DHTMessage &message, DhtPeerID &peerID
 		: _udp6_socket_mgr;
 
 	assert(socketMgr);
-	instrument_log('>', "punch", 'r', sb.length());
+	instrument_log('>', "punch", 'r', sb.length(), 0);
 	socketMgr->Send(dst, buf, sb.length());
 	return true;
 }
@@ -3333,9 +3318,9 @@ bool DhtImpl::ProcessIncoming(byte *buffer, size_t len, const SockAddr& addr)
 	}
 
 #if defined(_DEBUG_DHT_INSTRUMENT)
-	if (message.type && message.command) {
-		instrument_log('<', message.command, message.type[0], len);
-	};
+	if (message.type) {
+		instrument_log('<', message.command, message.type[0], len, Read32(message.transactionID.b));
+	}
 #endif
 
 #if defined(_DEBUG_DHT)
@@ -4419,7 +4404,7 @@ void FindNodeDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 			, uint(get_milliseconds()), process_id(), name(), print_sockaddr(nodeInfo.id.addr).c_str());
 #endif
 
-	instrument_log(impl, '>', "find_node", 'q', sb.length());
+	instrument_log('>', "find_node", 'q', sb.length(), transactionID);
 	impl->SendTo(nodeInfo.id.addr, buf, sb.length());
 }
 
@@ -4595,7 +4580,7 @@ void GetPeersDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 			, uint(get_milliseconds()), process_id(), name(), print_sockaddr(nodeInfo.id.addr).c_str());
 #endif
 
-	instrument_log(impl, '>', "get_peers", 'q', sb.length());
+	instrument_log('>', "get_peers", 'q', sb.length(), transactionID);
 	impl->SendTo(nodeInfo.id.addr, buf, sb.length());
 }
 
@@ -4748,7 +4733,7 @@ void AnnounceDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 			, uint(get_milliseconds()), process_id(), name(), print_sockaddr(nodeInfo.id.addr).c_str());
 #endif
 
-	instrument_log(impl, '>', "announce_peer", 'q', sb.length());
+	instrument_log('>', "announce_peer", 'q', sb.length(), transactionID);
 	impl->SendTo(nodeInfo.id.addr, buf, sb.length());
 }
 
@@ -4875,7 +4860,7 @@ void GetDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	debug_log("[%u] --> GET %s tid=%d", process_id()
 		, hexify(targetAsID), transactionID);
 #endif
-	instrument_log(impl, '>', "get", 'q', sb.length());
+	instrument_log('>', "get", 'q', sb.length(), transactionID);
 	impl->SendTo(nodeInfo.id.addr, buf, sb.length());
 }
 
@@ -5083,7 +5068,7 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	debug_log("[%u] --> PUT %s tid=%d", process_id()
 		, hexify(this->_id), transactionID);
 #endif
-	instrument_log(impl, '>', "put", 'q', sb.length());
+	instrument_log('>', "put", 'q', sb.length(), transactionID);
 	impl->SendTo(nodeInfo.id.addr, buf, len);
 }
 
@@ -5241,7 +5226,7 @@ void VoteDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 			, uint(get_milliseconds()), process_id(), name(), print_sockaddr(nodeInfo.id.addr).c_str());
 #endif
 
-	instrument_log(impl, '>', "vote", 'q', sb.length());
+	instrument_log('>', "vote", 'q', sb.length(), transactionID);
 	impl->SendTo(nodeInfo.id.addr, buf, sb.length());
 }
 
