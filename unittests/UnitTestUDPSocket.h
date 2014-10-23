@@ -12,7 +12,7 @@
 class UnitTestUDPSocket : public UDPSocketInterface
 {
 private:
-	std::vector<byte> _dataBytes;
+	std::vector<std::vector<byte> > _packets;
 	SockAddr _bind_addr;
 
 public:
@@ -21,16 +21,16 @@ public:
 	virtual void Send(const SockAddr& dest, const byte *p, size_t len, uint32 flags = 0);
 	virtual void Send(const SockAddr& dest, cstr host, const byte *p, size_t len, uint32 flags = 0) { Send(dest, p, len, flags); };
 	virtual const SockAddr &GetBindAddr( void ) const {return _bind_addr;}
-	std::string GetSentDataAsString();
-	std::vector<byte>& GetSentByteVector(){return _dataBytes;}
-	void Reset(){_dataBytes.clear();}
-	virtual void event(DWORD events){}
+	std::string GetSentDataAsString(int i = -1);
+	std::vector<byte> GetSentByteVector(int i = -1);
+	void Reset() {_packets.clear(); }
+	virtual void event(DWORD events) {}
 	virtual DWORD get_event_mask() const {return 0;}
 	void SetBindAddr(SockAddr &bindAddr){_bind_addr = bindAddr;}
+	void popPacket();
 
-	// use Length() and [] to iterate through the bytes in a loop
-	unsigned int Length(){return _dataBytes.size();}
-	byte& operator[](int index){return _dataBytes[index];}
+	int numPackets() const { return _packets.size(); }
+
 };
 
 #endif // __UDPUNITTESTSOCKET_H__

@@ -20,6 +20,10 @@
 #include "tailqueue.h"
 #include "get_microseconds.h"
 
+#if defined(_DEBUG_DHT_VERBOSE) && !defined _DEBUG_DHT
+#define _DEBUG_DHT
+#endif
+
 // for logging dht activity
 #if g_log_dht
 
@@ -619,8 +623,6 @@ struct MutableData
 	byte signature[64];
 	// ed25519 key
 	byte key[32];
-	sha1_hash cas; // hash of sequence number and value
-	bool cas_initialized;
 	std::vector<byte> v;
 };
 
@@ -704,11 +706,14 @@ enum DhtProcessFlags
 struct DhtRequest;
 
 /**
- This is used by DhtProcess type callbacks stored in the DhtImpl's request table and
+ This is used by DhtProcessBase type callbacks stored in the DhtImpl's request table and
  tied to a transaction ID
 
  Typically used with OnReply()
 */
+
+// TODO: this is most likely a redundant interface. look for ways to remove it
+// to simplify the code. This goes for DhtRequestListener also
 class IDhtRequestListener
 {
 public:
@@ -741,16 +746,32 @@ protected:
 
 enum KademliaConstants
 {
+	// the default number of nodes to find in searches (for
+	// PUTs, we need to find at least as many nodes as we're
+	// PUTting to).
 	KADEMLIA_K = 8,
+
+	// the default number of nodes to announce and put to
 	KADEMLIA_K_ANNOUNCE = 8,
-	KADEMLIA_BUCKET_SIZE = 8, // MUST be a power of 2 for routing table optimization; see KADEMLIA_BUCKET_SIZE_POWER
-	KADEMLIA_BUCKET_SIZE_POWER = 3, // MUST stay coordinated with KADEMLIA_BUCKET_SIZE
+
+	// MUST be a power of 2 for routing table optimization; see
+	// KADEMLIA_BUCKET_SIZE_POWER
+	KADEMLIA_BUCKET_SIZE = 8,
+
+	// MUST stay coordinated with KADEMLIA_BUCKET_SIZE
+	KADEMLIA_BUCKET_SIZE_POWER = 3,
 
 	// The sum of these two items should always be greater than 0.
-	KADEMLIA_LOOKUP_OUTSTANDING = 4,  // initial dht searches should allow more outstanding lookups
-	KADEMLIA_LOOKUP_OUTSTANDING_DELTA = -2, // How much to reduce the number of outstanding lookup requests allowed for
-											// less agressive dht searches once some connectivity threshold is reached.
-	KADEMLIA_BROADCAST_OUTSTANDING = 3,
+
+	// initial dht searches should allow more outstanding lookups
+	KADEMLIA_LOOKUP_OUTSTANDING = 4, 
+
+	// How much to reduce the number of outstanding lookup requests allowed for
+	// less agressive dht searches once some connectivity threshold is reached.
+	KADEMLIA_LOOKUP_OUTSTANDING_DELTA = -2,
+
+	// the number of outstanding announce_peer / put requests to have at a time
+	KADEMLIA_BROADCAST_OUTSTANDING = 4,
 };
 
 struct DhtRequest {
@@ -870,7 +891,19 @@ struct DhtFindNodeEntry {
 	DhtPeerID id;
 	byte queried;
 	Buffer token;
-	sha1_hash cas; // hash of seq / value of node's data
+
+	// sequence number the data we got back from this node had. Or 0 if
+	// we did not receive data from this node. This is used to implement
+	// atomic writes. Once we have modified the blob we found on the DHT
+	// and are writing it back, we echo this sequence number back to make
+	// sure nonody else has writtent to it since we read it.
+	uint64 cas;
+
+	// the two letter client version from the DHT messages
+	char client[2];
+
+	// the 16 bit version number from the DHT messages
+	uint version;
 };
 
 struct DhtGetNodeResult {
@@ -902,24 +935,26 @@ class CallBackPointers
 
 		void* callbackContext;
 		IDhtProcessCallbackListener *processListener;
-		DhtPartialHashCompletedCallback *partialCallback;
 		DhtAddNodesCallback *addnodesCallback;
 		DhtScrapeCallback *scrapeCallback;
 		DhtVoteCallback *voteCallback;
 		DhtHashFileNameCallback *filenameCallback;
 		DhtPortCallback *portCallback;
 		DhtPutCallback * putCallback;
+		DhtPutCompletedCallback * putCompletedCallback;
+		DhtPutDataCallback * putDataCallback;
 };
 
-inline CallBackPointers::CallBackPointers():callbackContext(NULL),
+inline CallBackPointers::CallBackPointers() : callbackContext(NULL),
 	processListener(NULL),
-	partialCallback(NULL),
 	addnodesCallback(NULL),
 	scrapeCallback(NULL),
 	voteCallback(NULL),
 	filenameCallback(NULL),
 	portCallback(NULL),
-	putCallback(NULL)
+	putCallback(NULL),
+	putCompletedCallback(NULL),
+	putDataCallback(NULL)
 {}
 
 //*****************************************************************************
@@ -934,12 +969,13 @@ class DhtLookupNodeList
 {
 	private:
 		unsigned int numNodes;	// Number of entries in node table
-		DhtFindNodeEntry nodes[KADEMLIA_K*4];		// Table of closest nodes
+		DhtFindNodeEntry nodes[KADEMLIA_K*8];		// Table of closest nodes
 		static void FreeNodeEntry(DhtFindNodeEntry &ent) { if (ent.token.b) free(ent.token.b); }
 
 	protected:
-		unsigned int seq_max;
+		uint64 seq_max;
 		std::vector<char> data_blk;
+		SockAddr src_ip;
 
 	public:
 		DhtLookupNodeList();
@@ -947,17 +983,18 @@ class DhtLookupNodeList
 		virtual ~DhtLookupNodeList();
 		DhtFindNodeEntry* FindQueriedPeer(const DhtPeerID &id);
 		virtual void InsertPeer(const DhtPeerID &id, const DhtID &target);
-		int size(){return numNodes;}
+		int size() { return numNodes; }
 		DhtFindNodeEntry& operator[](const unsigned int index);
 		void SetQueriedStatus(unsigned int index, QueriedStatus status);
 		void SetAllQueriedStatus(QueriedStatus status);
 		void SetNodeIds(DhtPeerID** ids, unsigned int numId, const DhtID &target);
 		void CompactList();
-		int64 seq(){return seq_max;}
-		void set_seq(int64 sq){seq_max = sq;}
-		void set_data_blk(byte * v, int v_len);
-		std::vector<char> &get_data_blk(){return data_blk;}
-		char * get_data_blk(size_t & len){len = data_blk.size(); return &data_blk[0];}	
+		uint64 seq() { return seq_max; }
+		void set_seq(uint64 sq) {seq_max = sq;}
+		void set_data_blk(byte * v, int v_len, SockAddr src);
+		std::vector<char> &get_data_blk() { return data_blk; }
+		char * get_data_blk(size_t & len) { len = data_blk.size(); return &data_blk[0]; }	
+		SockAddr data_blk_source() const { return src_ip; }
 };
 
 inline DhtLookupNodeList::DhtLookupNodeList():numNodes(0), seq_max(0)
@@ -1031,6 +1068,7 @@ class DhtProcessManager : public DhtLookupNodeList
 		{}
 		~DhtProcessManager();
 		unsigned int AddDhtProcess(DhtProcessBase *process);
+
 		void Start();
 		void Next();
 };
@@ -1113,17 +1151,15 @@ inline unsigned int DhtProcessManager::AddDhtProcess(DhtProcessBase *process)
 */
 class DhtProcessBase
 {
+	private:
+		DhtProcessBase(DhtProcessManager& dpm);
+
 	protected:
 		CallBackPointers callbackPointers;
 		DhtID target;
-		int target_len;
 		smart_ptr<DhtImpl> impl;
 		time_t start_time;
 		DhtProcessManager &processManager;
-
-		// this constructor should never be used.
-		DhtProcessBase(DhtProcessManager& dpm): processManager(dpm)
-		{ assert(false); }
 
 		virtual void DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 			, const unsigned int transactionID) = 0;
@@ -1131,10 +1167,16 @@ class DhtProcessBase
 		virtual void CompleteThisProcess();
 
 	public:
+
+#ifdef _DEBUG_DHT
+		unsigned int process_id() const;
+		virtual char const* name() const = 0;
+#endif
+
 		static DHTMessage dummyMessage;
 
 		DhtProcessBase(DhtImpl *pImpl, DhtProcessManager &dpm
-			, const DhtID &target2, int target2_len, time_t startTime
+			, const DhtID &target2, time_t startTime
 			, const CallBackPointers &consumerCallbacks);
 		virtual ~DhtProcessBase();
 		virtual void Start();
@@ -1142,43 +1184,17 @@ class DhtProcessBase
 			, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags) = 0;
 		virtual void ImplementationSpecificReplyProcess(void *userdata
 			, const DhtPeerID &peer_id, DHTMessage &message, uint flags) {}
+
+		// return true if we should not send an RPC to this node. This is
+		// used to not send put messages to nodes we know don't support it
+		// For lookups this has slightly different semantics. For a lookup
+		// it means whether or not it will be filtered in a store operation
+		// (i.e. put or announce_peer). nodes that will be filtered
+		// don't count when we try to get a response from K nodes,
+		// to try to get more responses if nodes are filtered
+		// The behavior is implemented in the two Schedule() functions
+		virtual bool Filter(DhtFindNodeEntry const& e) { return false; }
 };
-
-inline void DhtProcessBase::Start()
-{
-	Schedule();
-}
-
-inline void DhtProcessBase::CompleteThisProcess()
-{
-	// let the process manager know that this phase of the dht process is complete
-	// and to start the next phase of the process (or terminate if all phases are
-	// complete).
-	processManager.Next();
-}
-
-
-//*****************************************************************************
-//
-// DhtProcessManager  (additional definitions)
-//
-//*****************************************************************************
-inline void DhtProcessManager::Start()
-{
-	_currentProcessNumber = 0;
-	if (_dhtProcesses.size() > 0)
-		_dhtProcesses[0]->Start();
-}
-
-inline void DhtProcessManager::Next()
-{
-	_currentProcessNumber++;  // increment to the next process
-	if (_currentProcessNumber < _dhtProcesses.size())
-		_dhtProcesses[_currentProcessNumber]->Start();
-	else
-		delete this; // all processes have completed; terminate the manager
-}
-
 
 //*****************************************************************************
 //
@@ -1189,8 +1205,7 @@ inline void DhtProcessManager::Next()
 	This scheduler is optimized for use with "find_nodes" and "get_peers".  It
 	will issue dht requests up to a maximum of KADEMLIA_LOOKUP_OUTSTANDING = 4
 	out standing requests at a time by default or a different maximum if specified
-	in the constructor or set using SetMaxOutstandingLookupQueries().
-	after construction. As more nodes are added to the node list,
+	in the constructor. As more nodes are added to the node list,
 	additional requests will be made.  If a node with an outstanding request
 	to it is designated as "slow" an additional request to another node will
 	be issued (if available).
@@ -1198,15 +1213,16 @@ inline void DhtProcessManager::Next()
 class DhtLookupScheduler : public DhtProcessBase
 {
 	private:
-		int maxOutstandingLookupQueries;
+		DhtLookupScheduler(DhtProcessManager &dpm);
 
 	protected:
+		// the number of closest nodes to find
+		int num_targets;
+		int maxOutstandingLookupQueries;
+
 		int numNonSlowRequestsOutstanding;
 		int totalOutstandingRequests;
 
-		DhtLookupScheduler(DhtProcessManager &dpm)
-			: DhtProcessBase(dpm)
-		{ assert(false); }
 		virtual void Schedule();
 		virtual void ImplementationSpecificReplyProcess(void *userdata
 			, const DhtPeerID &peer_id, DHTMessage &message, uint flags);
@@ -1220,31 +1236,14 @@ class DhtLookupScheduler : public DhtProcessBase
 			, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags);
 
 		DhtLookupScheduler(DhtImpl* pDhtImpl, DhtProcessManager &dpm
-			, const DhtID &target2, int target2_len, time_t startTime
-			, const CallBackPointers &consumerCallbacks, int maxOutstanding);
-		void SetMaxOutstandingLookupQueries(int maxOutstanding);
-};
+			, const DhtID &target2, time_t startTime
+			, const CallBackPointers &consumerCallbacks, int maxOutstanding
+			, int targets = KADEMLIA_K);
 
-inline DhtLookupScheduler::DhtLookupScheduler(DhtImpl* pDhtImpl
-	, DhtProcessManager &dpm, const DhtID &target2, int target2_len
-	, time_t startTime, const CallBackPointers &consumerCallbacks
-	, int maxOutstanding)
-	: DhtProcessBase(pDhtImpl, dpm, target2, target2_len
-		, startTime,consumerCallbacks), maxOutstandingLookupQueries(maxOutstanding)
-		, numNonSlowRequestsOutstanding(0), totalOutstandingRequests(0)
-{
-	assert(maxOutstandingLookupQueries > 0);
-#if g_log_dht
-	dht_log("DhtLookupScheduler,instantiated,id,%d,time,%d\n", target.id[0]
-		, get_microseconds());
+#ifdef _DEBUG_DHT
+		virtual char const* name() const { return "Lookup"; }
 #endif
-}
-
-inline void DhtLookupScheduler::SetMaxOutstandingLookupQueries(int maxOutstanding)
-{
-	maxOutstandingLookupQueries = maxOutstanding;
-	assert(maxOutstandingLookupQueries > 0);
-}
+};
 
 //*****************************************************************************
 //
@@ -1256,12 +1255,17 @@ inline void DhtLookupScheduler::SetMaxOutstandingLookupQueries(int maxOutstandin
 */
 class DhtBroadcastScheduler : public DhtProcessBase
 {
+	private:
+		DhtBroadcastScheduler(DhtProcessManager &dpm);
+
 	protected:
+		// the number of nodes to announce/put to
+		int num_targets;
+
+		// the number of outstanding announces/puts to keep at any given time
 		int outstanding;
 		bool aborted;
 
-		DhtBroadcastScheduler(DhtProcessManager &dpm)
-			: DhtProcessBase(dpm), outstanding(0) { assert(false); }
 		virtual void Schedule();
 
 	public:
@@ -1269,12 +1273,18 @@ class DhtBroadcastScheduler : public DhtProcessBase
 			, DHTMessage &message, DhtProcessFlags flags);
 
 		DhtBroadcastScheduler(DhtImpl* pDhtImpl, DhtProcessManager &dpm
-			, const DhtID &target2, int target2_len, time_t startTime
-			, const CallBackPointers &consumerCallbacks)
-			: DhtProcessBase(pDhtImpl, dpm, target2, target2_len, startTime
-			, consumerCallbacks), outstanding(0), aborted(false) {}
+			, const DhtID &target2, time_t startTime
+			, const CallBackPointers &consumerCallbacks
+			, int targets = KADEMLIA_K_ANNOUNCE)
+			: DhtProcessBase(pDhtImpl, dpm, target2, startTime
+			, consumerCallbacks), num_targets(targets), outstanding(0)
+			, aborted(false) {}
 
 		virtual void Abort() { aborted = true; }
+
+#ifdef _DEBUG_DHT
+		virtual char const* name() const { return "Broadcast"; }
+#endif
 };
 
 
@@ -1286,6 +1296,7 @@ class DhtBroadcastScheduler : public DhtProcessBase
 class FindNodeDhtProcess : public DhtLookupScheduler //public DhtProcessBase
 {
 	protected:
+
 		byte target_bytes[DHT_ID_SIZE]; // used to store the bytes of the target DhtID
 
 		virtual void DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID);
@@ -1294,24 +1305,18 @@ class FindNodeDhtProcess : public DhtLookupScheduler //public DhtProcessBase
 	public:
 
 		FindNodeDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2
-			, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks
+			, time_t startTime, const CallBackPointers &consumerCallbacks
 			, int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING);
 
 		static DhtProcessBase* Create(DhtImpl* pImpl, DhtProcessManager &dpm,
-			const DhtID &target2, int target2_len,
+			const DhtID &target2,
 			CallBackPointers &cbPointers,
 			int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING);
-};
 
-inline FindNodeDhtProcess::FindNodeDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2
-	, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks, int maxOutstanding)
-	: DhtLookupScheduler(pDhtImpl,dpm,target2,target2_len,startTime,consumerCallbacks,maxOutstanding)
-{
-	DhtIDToBytes(target_bytes, target);
-#if g_log_dht
-	dht_log("FindNodeDhtProcess,instantiated,id,%d,time,%d\n", target.id[0], get_microseconds());
+#ifdef _DEBUG_DHT
+		virtual char const* name() const { return "FindNode"; }
 #endif
-}
+};
 
 
 //*****************************************************************************
@@ -1334,6 +1339,9 @@ inline FindNodeDhtProcess::FindNodeDhtProcess(DhtImpl* pDhtImpl, DhtProcessManag
 	beyond the buffer length and must also set the number of useful bytes in the
 	array using SetNumUsefulBytes().
 */
+
+// TODO: remove this class along with Argumenter. There is no need for the
+// members to be dynamically allocated
 class ArgumenterValueInfo
 {
 	public:
@@ -1472,30 +1480,19 @@ class GetPeersDhtProcess : public DhtLookupScheduler
 	public:
 
 		GetPeersDhtProcess(DhtImpl *pDhtImpl, DhtProcessManager &dpm, const DhtID &target2
-			, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks
+			, time_t startTime, const CallBackPointers &consumerCallbacks
 			, int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING);
 		~GetPeersDhtProcess();
 		static DhtProcessBase* Create(DhtImpl* pImpl, DhtProcessManager &dpm,
-			const DhtID &target2, int target2_len,
+			const DhtID &target2,
 			CallBackPointers &cbPointers,
 			int flags = 0,
 			int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING);
-};
 
-inline void GetPeersDhtProcess::CompleteThisProcess()
-{
-#if g_log_dht
-	dht_log("GetPeersDhtProcess,completed,id,%d,time,%d\n", target.id[0], get_microseconds());
+#ifdef _DEBUG_DHT
+		virtual char const* name() const { return "GetPeers"; }
 #endif
-	processManager.CompactList();
-	DhtProcessBase::CompleteThisProcess();
-}
-
-inline GetPeersDhtProcess::~GetPeersDhtProcess()
-{
-	delete gpArgumenterPtr;
-}
-
+};
 
 //*****************************************************************************
 //
@@ -1530,30 +1527,20 @@ class AnnounceDhtProcess : public DhtBroadcastScheduler
 
 	public:
 		AnnounceDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2
-			, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks);
+			, time_t startTime, const CallBackPointers &consumerCallbacks);
 		~AnnounceDhtProcess();
 		virtual void Start();
 
 		static DhtProcessBase* Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
-			const DhtID &target2, int target2_len,
+			const DhtID &target2,
 			CallBackPointers &cbPointers,
 			cstr file_name,
 			int flags);
-};
 
-inline void AnnounceDhtProcess::Start()
-{
-#if g_log_dht
-	dht_log("AnnounceDhtProcess,start_announce,id,%d,time,%d\n", target.id[0], get_microseconds());
+#ifdef _DEBUG_DHT
+		virtual char const* name() const { return "Announce"; }
 #endif
-	processManager.SetAllQueriedStatus(QUERIED_NO);
-	DhtProcessBase::Start();
-}
-
-inline AnnounceDhtProcess::~AnnounceDhtProcess()
-{
-	delete announceArgumenterPtr;
-}
+};
 
 //*****************************************************************************
 //
@@ -1573,24 +1560,21 @@ class GetDhtProcess : public DhtLookupScheduler
 		byte _id[DHT_ID_SIZE];
 
 		GetDhtProcess(DhtImpl *pDhtImpl, DhtProcessManager &dpm, const DhtID& target2
-			, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks
+			, time_t startTime, const CallBackPointers &consumerCallbacks
 			, int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING, bool with_cas = false);
+
+		virtual bool Filter(DhtFindNodeEntry const& e);
+
 		static DhtProcessBase* Create(DhtImpl* pImpl, DhtProcessManager &dpm,
-			const DhtID &target2, int target2_len,
+			const DhtID &target2,
 			CallBackPointers &cbPointers,
 			int flags = 0,
 			int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING);
-};
 
-inline void GetDhtProcess::CompleteThisProcess()
-{
-#if g_log_dht
-	dht_log("GetDhtProcess,completed,id,%d,time,%d\n", target.id[0], get_microseconds());
+#ifdef _DEBUG_DHT
+		virtual char const* name() const { return "Get"; }
 #endif
-	processManager.CompactList();
-	DhtProcessBase::CompleteThisProcess();
-}
-
+};
 
 //*****************************************************************************
 //
@@ -1605,6 +1589,8 @@ class PutDhtProcess : public DhtBroadcastScheduler
 		virtual void CompleteThisProcess();
 		std::vector<char> signature;
 		GetDhtProcess* getProc;
+
+		virtual bool Filter(DhtFindNodeEntry const& e);
 
 	public:
 
@@ -1624,22 +1610,12 @@ class PutDhtProcess : public DhtBroadcastScheduler
 			CallBackPointers &cbPointers,
 			int flags);
 
+#ifdef _DEBUG_DHT
+		virtual char const* name() const { return "Put"; }
+#endif
 	protected:
 		bool _with_cas;
 };
-
-inline void PutDhtProcess::Start()
-{
-#if g_log_dht
-	dht_log("PutDhtProcess,start_announce,id,%d,time,%d\n", target.id[0], get_microseconds());
-#endif
-	processManager.SetAllQueriedStatus(QUERIED_NO);
-	DhtProcessBase::Start();
-}
-
-inline PutDhtProcess::~PutDhtProcess()
-{
-}
 
 //*****************************************************************************
 //
@@ -1650,38 +1626,26 @@ class ScrapeDhtProcess : public GetPeersDhtProcess
 {
 	private:
 		// used to aggregate responses from scrapes
-		bloom_filter* seeds;
-		bloom_filter* downloaders;
+		bloom_filter seeds;
+		bloom_filter downloaders;
 
 	protected:
 		virtual void ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags);
 		virtual void CompleteThisProcess();
 
 	public:
-		ScrapeDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks, int maxOutstanding);
+		ScrapeDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2, time_t startTime, const CallBackPointers &consumerCallbacks, int maxOutstanding);
 		virtual ~ScrapeDhtProcess();
 
 		static DhtProcessBase* Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
-			const DhtID &target2, int target2_len,
+			const DhtID &target2,
 			CallBackPointers &cbPointers,
 			int maxOutstanding);
+
+#ifdef _DEBUG_DHT
+		virtual char const* name() const { return "Scrape"; }
+#endif
 };
-
-inline ScrapeDhtProcess::ScrapeDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
-	, const DhtID &target2, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks, int maxOutstanding)
-	: GetPeersDhtProcess(pDhtImpl,dpm,target2,target2_len,startTime,consumerCallbacks,maxOutstanding)
-{
-	gpArgumenterPtr->enabled[a_scrape] = true;
-	seeds = new bloom_filter(2048, 2);
-	downloaders = new bloom_filter(2048, 2);
-}
-
-inline ScrapeDhtProcess::~ScrapeDhtProcess()
-{
-	delete seeds;
-	delete downloaders;
-}
-
 
 //*****************************************************************************
 //
@@ -1699,35 +1663,19 @@ protected:
 
 public:
 
-	VoteDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2, int target2_len, time_t startTime, const CallBackPointers &consumerCallbacks);
+	VoteDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2, time_t startTime, const CallBackPointers &consumerCallbacks);
 	virtual ~VoteDhtProcess(){}
 	void SetVoteValue(int value);
 	virtual void Start();
 
 	static DhtProcessBase* Create(DhtImpl* pImpl, DhtProcessManager &dpm
-		, const DhtID &target2, int target2_len
+		, const DhtID &target2
 		, CallBackPointers &cbPointers, int voteValue);
+
+#ifdef _DEBUG_DHT
+		virtual char const* name() const { return "Vote"; }
+#endif
 };
-
-inline VoteDhtProcess::VoteDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
-	, const DhtID &target2, int target2_len, time_t startTime
-	, const CallBackPointers &consumerCallbacks)
-	: DhtBroadcastScheduler(pDhtImpl,dpm,target2,target2_len,startTime,consumerCallbacks)
-	, voteValue(0)
-{
-}
-
-inline void VoteDhtProcess::SetVoteValue(int value)
-{
-	assert(value >= 0 && value <= 5);
-	voteValue = value;
-}
-
-inline void VoteDhtProcess::Start()
-{
-	processManager.SetAllQueriedStatus(QUERIED_NO);
-	DhtProcessBase::Start();
-}
 
 #if !STABLE_VERSION || defined _DEBUG || defined BRANDED_MAC
 	bool ValidateEncoding( const void * data, uint len );
@@ -1749,6 +1697,17 @@ public:
 	~DhtImpl();
 	REFBASE;
 
+#ifdef _DEBUG_DHT
+	FILE* _lookup_log;
+
+	FILE* _bootstrap_log;
+	// timestamp of when we started bootstrap
+	uint _bootstrap_start;
+#endif
+#ifdef _DEBUG_DHT_INSTRUMENT
+	FILE* _instrument_log;
+#endif
+
 private:
 	void Initialize(UDPSocketInterface *_udp_socket_mgr, UDPSocketInterface *_udp6_socket_mgr );
 public:
@@ -1762,6 +1721,8 @@ public:
 	void Enable(bool enabled, int rate);
 	bool IsEnabled();
 	void ForceRefresh();
+	// do not respond to queries - for mobile nodes with data constraints
+	void SetReadOnly(bool readOnly);
 
 	bool CanAnnounce();
 
@@ -1769,11 +1730,13 @@ public:
 
 	void SetId(byte new_id_bytes[DHT_ID_SIZE]);
 
-	void Put( const byte * pkey, const byte * skey, DhtPutCallback * put_callback,
-		void *ctx, int flags = 0, int64 seq = 0);
+	void Put(const byte * pkey, const byte* skey, DhtPutCallback * put_callback
+		, DhtPutCompletedCallback* put_completed_callback
+		, DhtPutDataCallback* put_data_callback
+		, void *ctx, int flags = 0
+		, int64 seq = 0);
 
-	void AnnounceInfoHash(const byte *info_hash, int info_hash_len,
-		DhtPartialHashCompletedCallback *partial_callback,
+	void AnnounceInfoHash(const byte *info_hash,
 		DhtAddNodesCallback *addnodes_callback, DhtPortCallback* pcb, cstr file_name,
 		void *ctx, int flags);
 
@@ -1814,16 +1777,6 @@ public:
 #define NUM_SEARCHES 10000
 	static bool search_running = false;
 #endif
-
-#ifdef _DEBUG_MEM_LEAK
-	std::vector<DhtProcess*> _dhtprocesses;
-	int _dhtprocesses_init;
-
-	void AddDhtProcess(DhtProcess *p);
-	void RemoveDhtProcess(DhtProcess *p);
-	int FreeRequests();
-#endif
-
 
 	DhtID _my_id;
 	byte _my_id_bytes[DHT_ID_SIZE];
@@ -1887,20 +1840,26 @@ public:
 	// stores votes for keys
 	std::vector<VoteContainer> _vote_store;
 
+	// recent punch requests we've sent. Don't send duplicates within
+	// short periods of time. This bloom filter is cleared every 5 minutes
+	// or so
+	bloom_filter _recent_punch_requests;
+
+	// recent punches we've sent (this is the small packet meant to open the
+	// pinhole, sent in response to a punch request).
+	bloom_filter _recent_punches;
+
 #define MAX_PEERS (4*1000*1000)
 	int _peers_tracked;
 
 	uint32 _cur_token[2];
 	uint32 _prev_token[2];
-	int _dht_bootstrap; // -1: bootstrap ping has replied
-						// -2: bootstrap find_nodes process has completed
-						//  0: a vaild bootstrapping response from dht routers has been received
-						//  1: dht not bootstrapped (initial condition)
-						// >1: an error was received, _dth_bootstrap set with a large number of seconds for a count-down
+	int _dht_bootstrap; // Possible states in enum below
 	int _dht_bootstrap_failed; // a counter used to compute the back-off time for bootstrap re-tries
 	int _dht_busy;
 	bool _allow_new_job;
 	bool _dht_enabled;
+	bool _dht_read_only;
 
 	int _refresh_bucket;		// Which bucket are we currently refreshing? -1 if disabled
 	bool _refresh_bucket_force;	// Force bucket refresh, generally at start/restart
@@ -1911,6 +1870,16 @@ public:
 	int _dht_rate;
 	int _dht_probe_quota;
 	int _dht_probe_rate;
+
+	// Possible states for _dht_bootstrap
+	enum {
+		bootstrap_complete = -2, 	// -2: bootstrap find_nodes complete
+		bootstrap_ping_replied,		// -1: bootstrap ping has replied
+		valid_reponse_received,		//  0: a vaild bootstrapping
+									// response from dht routers has been received
+		not_bootstrapped,			//  1: dht not bootstrapped (initial state)
+		bootstrap_error_received	// >1: an error was received, _dht_bootstrap set with a large number of seconds for a count-down
+	};
 
 	enum {
 		DHT_BW_IN_REQ = 0,	// incoming requests
@@ -1985,7 +1954,7 @@ public:
 
 	bool AccountAndSend(const DhtPeerID &peer, const void *data, int len,
 			int packetSize);
-	void SendTo(const DhtPeerID &peer, const void *data, uint len);
+	void SendTo(SockAddr const& peer, const void *data, uint len);
 
 	// determine which bucket an id belongs to
 	int GetBucket(const DhtID &id);
@@ -1999,6 +1968,8 @@ public:
 	DhtRequest *AllocateRequest(const DhtPeerID &peer_id);
 
 	DhtRequest *SendPing(const DhtPeerID &peer_id);
+
+	void SendPunch(SockAddr const& dst, SockAddr const& punchee);
 
 	// Update the internal DHT tables with an id.
 	DhtPeer *Update(const DhtPeerID &id, uint origin, bool seen = false, int rtt = INT_MAX);
@@ -2019,7 +1990,8 @@ public:
 	int clean_up_dht_request();
 #endif
 
-	int BuildFindNodesPacket(smart_buffer &sb, DhtID &target_id, int size);
+	int BuildFindNodesPacket(smart_buffer &sb, DhtID &target_id, int size
+		, SockAddr const& requestor, bool send_punches = false);
 
 	// Get the storage container associated with a info_hash
 	std::vector<VoteContainer>::iterator GetVoteStorageForID(DhtID const& key);
@@ -2037,16 +2009,13 @@ public:
 	void AddVoteToStore(smart_buffer& sb, DhtID& target
 		, SockAddr const& addr, int vote);
 
-
 	void AddPeerToStore(const DhtID &info_hash, cstr file_name, const SockAddr& addr, bool seed);
 
 	void ExpirePeersFromStore(time_t expire_before);
 
-
 	void GenerateWriteToken(sha1_hash *token, const DhtPeerID &peer_id);
 	bool ValidateWriteToken(const DhtPeerID &peer_id, const byte *token);
 	void RandomizeWriteToken();
-
 
 	enum {
 		PACKET_PING,
@@ -2055,8 +2024,6 @@ public:
 		PACKET_ANNOUNCE_PEER,
 		PACKET_VOTE
 	};
-
-	char *hexify(byte *b);
 
 	bool ParseIncomingICMP(BencEntity &benc, const SockAddr& addr);
 
@@ -2076,6 +2043,7 @@ public:
 
 	void put_transaction_id(smart_buffer& sb, Buffer tid);
 	void put_version(smart_buffer& sb);
+	void put_is_read_only(smart_buffer& sb);
 	const unsigned char* get_version();
 private:
 	void send_put_response(smart_buffer& sb, Buffer& transaction_id,
@@ -2101,6 +2069,8 @@ public:
 			DhtRequest *req);
 	bool ProcessError(DhtPeerID& peerID, DHTMessage &message, int pkt_size,
 			DhtRequest *req);
+	bool ProcessQueryPunch(DHTMessage &message, DhtPeerID &peerID
+		, int packetSize);
 
 
 	bool InterpretMessage(DHTMessage &message, const SockAddr& addr, int pkt_size);
@@ -2108,11 +2078,11 @@ public:
 	void GenRandomIDInBucket(DhtID &target, DhtBucket &bucket);
 	void GetStalestPeerInBucket(DhtPeer **ppeerFound, DhtBucket &bucket);
 
-	void DoFindNodes(DhtID &target, int target_len
+	void DoFindNodes(DhtID &target
 		, IDhtProcessCallbackListener *process_callback = NULL
 		, bool performLessAgressiveSearch = true);
 
-	void DoBootstrap(DhtID &target, int target_len
+	void DoBootstrap(DhtID &target
 		, IDhtProcessCallbackListener *process_listener);
 
 #ifdef DHT_SEARCH_TEST
@@ -2126,8 +2096,6 @@ public:
 	void ResolveName(DhtID const& target, DhtHashFileNameCallback* callb, void *ctx, int flags = 0);
 
 	void DoAnnounce(const DhtID &target,
-		int target_len,
-		DhtPartialHashCompletedCallback *pcallb,
 		DhtAddNodesCallback *callb,
 		DhtPortCallback *pcb,
 		cstr file_name,
@@ -2176,30 +2144,5 @@ public:
 };
 
 void LoadDHTFeed();
-
-//*****************************************************************************
-//
-// DhtProcessBase  (members that needed to be defined after DhtImpl definition
-//
-//*****************************************************************************
-inline DhtProcessBase::DhtProcessBase(DhtImpl *pImpl, DhtProcessManager &dpm
-	, const DhtID &target2, int target2_len, time_t startTime
-	, const CallBackPointers &consumerCallbacks)
-	: callbackPointers(consumerCallbacks)
-	, target(target2)
-	, target_len(target2_len)
-	, impl(pImpl)
-	, start_time(startTime)
-	, processManager(dpm)
-{
-	// let the DHT know there is an active process
-	impl->_dht_busy++;
-};
-
-inline DhtProcessBase::~DhtProcessBase()
-{
-	impl->_dht_busy--;
-}
-
 
 #endif //__DHT_IMPL_H__

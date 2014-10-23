@@ -19,12 +19,14 @@ class BencEntity;
 
 // callback types used in the DHT
 typedef void DhtVoteCallback(void *ctx, const byte *target, int const* votes);
-typedef void DhtPartialHashCompletedCallback(void *ctx, const byte *info_hash);
 typedef void DhtHashFileNameCallback(void *ctx, const byte *info_hash, const byte *file_name);
 typedef void DhtAddNodesCallback(void *ctx, const byte *info_hash, const byte *peers, uint num_peers);
 typedef void DhtAddNodeResponseCallback(void*& userdata, bool is_response, SockAddr const& addr);
 typedef void DhtScrapeCallback(void *ctx, const byte *target, int downloaders, int seeds);
-typedef void DhtPutCallback(void * ctx, std::vector<char>& buffer, int64 seq);
+typedef void DhtPutCallback(void * ctx, std::vector<char>& buffer, int64 seq, SockAddr src);
+typedef void DhtPutDataCallback(void * ctx, std::vector<char> const& buffer, int64 seq, SockAddr src);
+typedef void DhtPutCompletedCallback(void * ctx);
+typedef void DhtLogCallback(char const* str);
 
 // asks the client to save the DHT state
 typedef void DhtSaveCallback(const byte* buf, int len);
@@ -81,6 +83,13 @@ public:
 		//This method is called in DhtSendRPC for Put. 
 		//It takes v (from get responses) as an input and may or may not change v to place in Put messages.
 		DhtPutCallback * put_callback,
+		//called in CompleteThisProcess
+		DhtPutCompletedCallback * put_completed_callback,
+		// called every time we receive a blob from a node. This cannot be
+		// used to modify and write back the data, this is just a sneak-peek
+		// of what's likely to be in the final blob that's passed to
+		// put_callback
+		DhtPutDataCallback* put_data_callback,
 		void *ctx,
 		int flags = 0,
 		// seq is an optional provided monotonically increasing sequence number to be
@@ -90,8 +99,6 @@ public:
 
 	virtual void AnnounceInfoHash(
 		const byte *info_hash,
-		int info_hash_len,
-		DhtPartialHashCompletedCallback *partial_callback,
 		DhtAddNodesCallback *addnodes_callback,
 		DhtPortCallback* pcb,
 		cstr file_name,
@@ -129,6 +136,8 @@ public:
 	virtual void Initialize(UDPSocketInterface *, UDPSocketInterface *) = 0;
 	virtual bool IsEnabled() = 0;
 	virtual void ForceRefresh() = 0;
+	// do not respond to queries - for mobile nodes with data constraints
+	virtual void SetReadOnly(bool readOnly) = 0;
 	virtual bool ProcessIncoming(byte *buffer, size_t len, const SockAddr& addr) = 0;
 #ifdef _DEBUG_MEM_LEAK
 	virtual int FreeRequests() = 0;
@@ -164,6 +173,8 @@ public:
 
 smart_ptr<IDht> create_dht(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_socket_mgr
 	, DhtSaveCallback* save, DhtLoadCallback* load, ExternalIPCounter* eip = NULL);
+
+void set_log_callback(DhtLogCallback* log);
 
 #endif //__DHT_H__
 

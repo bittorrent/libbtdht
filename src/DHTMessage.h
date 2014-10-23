@@ -24,7 +24,8 @@ enum DHTCommands
 	DHT_QUERY_ANNOUNCE_PEER,
 	DHT_QUERY_VOTE,
 	DHT_QUERY_GET,
-	DHT_QUERY_PUT
+	DHT_QUERY_PUT,
+	DHT_QUERY_PUNCH
 };
 
 class BencodedDict;
@@ -111,9 +112,15 @@ public:
 	int seed;
 	int noseed;
 	int scrape;
-	int64 sequenceNum;  // 'seq' for mutable put
+	bool read_only;
+	uint64 sequenceNum;  // 'seq' for mutable put
 	int impliedPort;
-	sha1_hash cas; // hash of expected previous value for compare-and-swap operations
+
+	// expected current sequence number for compare-and-swap operations
+	// if the blob we're about to overwrite has a different sequence number than
+	// this, the write must fail and be retried.
+	uint64 cas;
+
 	Buffer filename;
 	Buffer infoHash;
 	Buffer token;
@@ -128,6 +135,9 @@ public:
 	// a bencstring is parsed.  It is assigned the region's values when it is
 	// determined that a "put" request was made.  Otherwise it is unassigned.
 	Buffer vBuf;
+
+	// this is the target IP address to punch a hole to for punch requests
+	Buffer target_ip;
 
 	// reply specific components
 	BencodedDict* replyDict;

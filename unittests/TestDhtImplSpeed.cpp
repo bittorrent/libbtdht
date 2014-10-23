@@ -175,7 +175,7 @@ TEST_F(dht_impl_speed_test, Announce_ReplyWithNodes_Speed) {
 		// *****************************************************
 		// make the dht emit an announce message (the get_peers rpc)
 		// *****************************************************
-		impl->DoAnnounce(target, 20, NULL, &AddNodesCallbackDummy::Callback, NULL,
+		impl->DoAnnounce(target, &AddNodesCallbackDummy::Callback, NULL,
 				filenameTxt.c_str(), NULL, 0);
 		ASSERT_NO_FATAL_FAILURE(fetch_dict());
 		ASSERT_NO_FATAL_FAILURE(expect_query_type());
