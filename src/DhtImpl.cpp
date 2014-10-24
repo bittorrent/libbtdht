@@ -2476,7 +2476,8 @@ void DhtImpl::GetStalestPeerInBucket(DhtPeer **ppeerFound, DhtBucket &bucket)
 }
 
 void DhtImpl::DoBootstrap(DhtID &target
-	, IDhtProcessCallbackListener *process_listener)
+	, IDhtProcessCallbackListener *process_listener
+	, int flags)
 {
 	DhtPeerID *ids[32];
 	int num = AssembleNodeList(target, ids, sizeof(ids)/sizeof(ids[0]), true);
@@ -2493,7 +2494,7 @@ void DhtImpl::DoBootstrap(DhtID &target
 	cbPtrs.processListener = process_listener;
 	// get peers in those nodes
 	DhtProcessBase* p = FindNodeDhtProcess::Create(this, *dpm, target, cbPtrs
-		, KADEMLIA_LOOKUP_OUTSTANDING);
+		, KADEMLIA_LOOKUP_OUTSTANDING, flags);
 #ifdef _DEBUG_DHT
 	if (_lookup_log)
 		fprintf(_lookup_log, "[%u] [%u] [%s]: START-BOOTSTRAP\n"
@@ -2505,9 +2506,9 @@ void DhtImpl::DoBootstrap(DhtID &target
 
 void DhtImpl::DoFindNodes(DhtID &target
 	, IDhtProcessCallbackListener *process_listener
-	, bool performLessAgressiveSearch)
+	, int flags)
 {
-	int maxOutstanding = (performLessAgressiveSearch)
+	int maxOutstanding = (flags & IDht::announce_non_aggressive)
 		? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA
 		: KADEMLIA_LOOKUP_OUTSTANDING;
 
@@ -2525,7 +2526,8 @@ void DhtImpl::DoFindNodes(DhtID &target
 	CallBackPointers cbPtrs;
 	cbPtrs.processListener = process_listener;
 	// get peers in those nodes
-	DhtProcessBase* p = FindNodeDhtProcess::Create(this, *dpm, target, cbPtrs, maxOutstanding);
+	DhtProcessBase* p = FindNodeDhtProcess::Create(this, *dpm, target, cbPtrs
+		, maxOutstanding, flags);
 	dpm->AddDhtProcess(p);
 	dpm->Start();
 }
@@ -2543,7 +2545,7 @@ void DhtImpl::RunSearches()
 		for (size_t i = 0; i < 5; i++) {
 			target.id[i] = rand();
 		}
-		DhtProcess* p = DoFindNodes(target);
+		DhtProcess* p = DoFindNodes(target, NULL, 0);
 		p->process_listener = (IDhtProcessCallbackListener *)5;
 		_allow_new_job = false;
 	}
@@ -2577,7 +2579,8 @@ void DhtImpl::DoVote(const DhtID &target, int vote, DhtVoteCallback* callb, void
 	dpm->Start();
 }
 
-void DhtImpl::DoScrape(const DhtID &target, DhtScrapeCallback *callb, void *ctx, int flags)
+void DhtImpl::DoScrape(const DhtID &target, DhtScrapeCallback *callb
+	, void* ctx, int flags)
 {
 	int maxOutstanding = (flags & announce_non_aggressive)
 		? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA
@@ -2589,13 +2592,15 @@ void DhtImpl::DoScrape(const DhtID &target, DhtScrapeCallback *callb, void *ctx,
 
 	CallBackPointers cbPtrs;
 	cbPtrs.scrapeCallback = callb;
-	DhtProcessBase* p = ScrapeDhtProcess::Create(this, *dpm, target, cbPtrs, maxOutstanding);
+	DhtProcessBase* p = ScrapeDhtProcess::Create(this, *dpm, target, cbPtrs
+		, maxOutstanding, flags);
 
 	dpm->AddDhtProcess(p);
 	dpm->Start();
 }
 
-void DhtImpl::ResolveName(DhtID const& target, DhtHashFileNameCallback* callb, void *ctx, int flags)
+void DhtImpl::ResolveName(DhtID const& target, DhtHashFileNameCallback* callb
+	, void *ctx, int flags)
 {
 	int maxOutstanding = (flags & announce_non_aggressive)
 		? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA
@@ -2673,7 +2678,7 @@ void DhtImpl::RefreshBucket(uint buck)
 #endif
 
 	// find the 8 closest nodes (allow up to 4 invalid nodes)
-	DoFindNodes(target);
+	DoFindNodes(target, NULL, 0);
 }
 
 uint DhtImpl::PingStalestInBucket(uint buck)
@@ -3031,7 +3036,7 @@ void DhtImpl::Tick()
 			target.id[4] ^= 1;
 			// Here, "this" is an IDhtProcessCallbackListener*, which leads
 			// to DhtImpl::ProcessCallback(), necessary to complete bootstrapping
-			DoBootstrap(target, this);
+			DoBootstrap(target, this, 0);
 		}
 
 	} else if (_dht_bootstrap < -1){
@@ -3851,13 +3856,14 @@ DhtProcessBase::~DhtProcessBase()
 DhtLookupScheduler::DhtLookupScheduler(DhtImpl* pDhtImpl
 	, DhtProcessManager &dpm, const DhtID &target2
 	, time_t startTime, const CallBackPointers &consumerCallbacks
-	, int maxOutstanding, int targets)
+	, int maxOutstanding, int fl, int targets)
 	: DhtProcessBase(pDhtImpl, dpm, target2
 		, startTime,consumerCallbacks)
 	, num_targets(targets)
 	, maxOutstandingLookupQueries(maxOutstanding)
 	, numNonSlowRequestsOutstanding(0)
 	, totalOutstandingRequests(0)
+	, flags(fl)
 {
 	assert(maxOutstandingLookupQueries > 0);
 #if g_log_dht
@@ -3881,13 +3887,17 @@ void DhtLookupScheduler::Schedule()
 	int K = num_targets;
 	int nodeIndex=0;
 
-	// so long as the index is still within the size of the nodes array
-	// and so long as we have not queried KADEMLIA_K (8) non-errored nodes (as a terminating condition)
-	// if the first 4 (default value) good nodes in the list do not yet have queries out to them - continue making queries
-	// if the number of uncompromised outstanding queries is less than max outstanding allowed - continue making queries
+	bool aggressive = (flags & IDht::announce_non_aggressive) == 0;
+
+	// so long as the index is still within the size of the nodes array and so
+	// long as we have not queried KADEMLIA_K (8) non-errored nodes (as a
+	// terminating condition) if the first 4 (default value) good nodes in the
+	// list do not yet have queries out to them - continue making queries if the
+	// number of uncompromised outstanding queries is less than max outstanding
+	// allowed - continue making queries
 	while (nodeIndex < processManager.size()
 		&& nodeIndex < K
-		&& (numOutstandingRequestsToClosestNodes < maxOutstandingLookupQueries
+		&& ((aggressive && numOutstandingRequestsToClosestNodes < maxOutstandingLookupQueries)
 			|| numNonSlowRequestsOutstanding < maxOutstandingLookupQueries
 			)
 		) {
@@ -3899,13 +3909,15 @@ void DhtLookupScheduler::Schedule()
 			}
 			case QUERIED_YES:
 
-			// if a node is marked as slow, a query to the next unqueried node has already been sent in its place.
+			// if a node is marked as slow, a query to the next unqueried node has
+			// already been sent in its place.
 			case QUERIED_SLOW: {
 				numOutstandingRequestsToClosestNodes++;
 				break;
 			}
 			case QUERIED_ERROR: {
-				// if a node has errored, advance how far down the list we are allowed to travel
+				// if a node has errored, advance how far down the list we are
+				// allowed to travel
 				++K;
 				break;
 			}
@@ -4375,9 +4387,10 @@ void DhtBroadcastScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id
 FindNodeDhtProcess::FindNodeDhtProcess(DhtImpl* pDhtImpl
 	, DhtProcessManager &dpm, const DhtID &target2
 	, time_t startTime
-	, const CallBackPointers &consumerCallbacks, int maxOutstanding)
+	, const CallBackPointers &consumerCallbacks, int maxOutstanding
+	, int flags)
 	: DhtLookupScheduler(pDhtImpl,dpm,target2,startTime
-		,consumerCallbacks,maxOutstanding)
+		,consumerCallbacks,maxOutstanding, flags)
 {
 	DhtIDToBytes(target_bytes, target);
 #if g_log_dht
@@ -4419,11 +4432,15 @@ void FindNodeDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 /**
  Factory for creating FindNodeDhtProcess objects
 */
-DhtProcessBase* FindNodeDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
-	const DhtID &target2,
-	CallBackPointers &cbPointers, int maxOutstanding)
+DhtProcessBase* FindNodeDhtProcess::Create(DhtImpl* pDhtImpl
+	, DhtProcessManager &dpm
+	, const DhtID &target2
+	, CallBackPointers &cbPointers
+	, int maxOutstanding
+	, int flags)
 {
-	FindNodeDhtProcess* process = new FindNodeDhtProcess(pDhtImpl, dpm, target2, time(NULL), cbPointers, maxOutstanding);
+	FindNodeDhtProcess* process = new FindNodeDhtProcess(pDhtImpl, dpm, target2
+		, time(NULL), cbPointers, maxOutstanding, flags);
 	return process;
 }
 
@@ -4504,9 +4521,9 @@ GetPeersDhtProcess::~GetPeersDhtProcess()
 
 GetPeersDhtProcess::GetPeersDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 	, const DhtID &target2, time_t startTime
-	, const CallBackPointers &consumerCallbacks, int maxOutstanding)
+	, const CallBackPointers &consumerCallbacks, int maxOutstanding, int flags)
 	: DhtLookupScheduler(pDhtImpl, dpm, target2, startTime
-		, consumerCallbacks,maxOutstanding)
+		, consumerCallbacks,maxOutstanding,flags)
 {
 	byte infoHashBytes[DHT_ID_SIZE];
 
@@ -4541,11 +4558,14 @@ GetPeersDhtProcess::GetPeersDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 #endif
 }
 
-DhtProcessBase* GetPeersDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
-	const DhtID &target2,
-	CallBackPointers &cbPointers, int flags, int maxOutstanding)
+DhtProcessBase* GetPeersDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm
+	, const DhtID &target2
+	, CallBackPointers &cbPointers
+	, int flags
+	, int maxOutstanding)
 {
-	GetPeersDhtProcess* process = new GetPeersDhtProcess(pDhtImpl, dpm, target2, time(NULL), cbPointers, maxOutstanding);
+	GetPeersDhtProcess* process = new GetPeersDhtProcess(pDhtImpl, dpm, target2
+		, time(NULL), cbPointers, maxOutstanding, flags);
 
 	// If flags & announce_seed is true, then we want to include noseed in the rpc arguments.
 	// If seed is false, then noseed should also be false (just not included in the
@@ -4780,10 +4800,10 @@ void AnnounceDhtProcess::CompleteThisProcess()
 GetDhtProcess::GetDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 	, const DhtID & target_2, time_t startTime
 	, const CallBackPointers &consumerCallbacks, int maxOutstanding
-	, bool with_cas)
+	, int flags)
 	: DhtLookupScheduler(pDhtImpl, dpm, target_2, startTime
 		, consumerCallbacks, maxOutstanding, 12) // <-- find 12 nodes, not 8!
-	, _with_cas(with_cas)
+	, _with_cas(flags & IDht::with_cas)
 {
 	
 	char* buf = (char*)this->_id;
@@ -4805,7 +4825,8 @@ DhtProcessBase* GetDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
 	const DhtID & target2,
 	CallBackPointers &cbPointers, int flags, int maxOutstanding)
 {
-	GetDhtProcess* process = new GetDhtProcess(pDhtImpl, dpm, target2, time(NULL), cbPointers, maxOutstanding, flags & IDht::with_cas);
+	GetDhtProcess* process = new GetDhtProcess(pDhtImpl, dpm, target2
+		, time(NULL), cbPointers, maxOutstanding, flags);
 
 	return process;
 }
@@ -5162,9 +5183,10 @@ void ScrapeDhtProcess::ImplementationSpecificReplyProcess(void *userdata, const 
 }
 
 ScrapeDhtProcess::ScrapeDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
-	, const DhtID &target2, time_t startTime, const CallBackPointers &consumerCallbacks, int maxOutstanding)
+	, const DhtID &target2, time_t startTime
+	, const CallBackPointers &consumerCallbacks, int maxOutstanding, int flags)
 	: GetPeersDhtProcess(pDhtImpl, dpm, target2, startTime
-		, consumerCallbacks, maxOutstanding)
+		, consumerCallbacks, maxOutstanding, flags)
 	, seeds(2048, 2)
 	, downloaders(2048, 2)
 {
@@ -5186,12 +5208,14 @@ void ScrapeDhtProcess::CompleteThisProcess()
 	DhtProcessBase::CompleteThisProcess();
 }
 
-DhtProcessBase* ScrapeDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
-	const DhtID &target2,
-	CallBackPointers &cbPointers,
-	int maxOutstanding)
+DhtProcessBase* ScrapeDhtProcess::Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm
+	, const DhtID &target2
+	, CallBackPointers &cbPointers
+	, int maxOutstanding
+	, int flags)
 {
-	ScrapeDhtProcess* process = new ScrapeDhtProcess(pDhtImpl,dpm, target2, time(NULL), cbPointers, maxOutstanding);
+	ScrapeDhtProcess* process = new ScrapeDhtProcess(pDhtImpl,dpm, target2
+		, time(NULL), cbPointers, maxOutstanding, flags);
 	return process;
 }
 

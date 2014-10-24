@@ -1214,7 +1214,7 @@ class DhtProcessBase
 class DhtLookupScheduler : public DhtProcessBase
 {
 	private:
-		DhtLookupScheduler(DhtProcessManager &dpm);
+		DhtLookupScheduler(DhtProcessManager &dpm, int flags);
 
 	protected:
 		// the number of closest nodes to find
@@ -1223,6 +1223,8 @@ class DhtLookupScheduler : public DhtProcessBase
 
 		int numNonSlowRequestsOutstanding;
 		int totalOutstandingRequests;
+
+		int flags;
 
 		virtual void Schedule();
 		virtual void ImplementationSpecificReplyProcess(void *userdata
@@ -1238,7 +1240,9 @@ class DhtLookupScheduler : public DhtProcessBase
 
 		DhtLookupScheduler(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 			, const DhtID &target2, time_t startTime
-			, const CallBackPointers &consumerCallbacks, int maxOutstanding
+			, const CallBackPointers &consumerCallbacks
+			, int maxOutstanding
+			, int flags
 			, int targets = KADEMLIA_K);
 
 #ifdef _DEBUG_DHT
@@ -1307,12 +1311,13 @@ class FindNodeDhtProcess : public DhtLookupScheduler //public DhtProcessBase
 
 		FindNodeDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2
 			, time_t startTime, const CallBackPointers &consumerCallbacks
-			, int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING);
+			, int maxOutstanding, int flags);
 
-		static DhtProcessBase* Create(DhtImpl* pImpl, DhtProcessManager &dpm,
-			const DhtID &target2,
-			CallBackPointers &cbPointers,
-			int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING);
+		static DhtProcessBase* Create(DhtImpl* pImpl, DhtProcessManager &dpm
+			, const DhtID &target2
+			, CallBackPointers &cbPointers
+			, int maxOutstanding
+			, int flags);
 
 #ifdef _DEBUG_DHT
 		virtual char const* name() const { return "FindNode"; }
@@ -1482,7 +1487,7 @@ class GetPeersDhtProcess : public DhtLookupScheduler
 
 		GetPeersDhtProcess(DhtImpl *pDhtImpl, DhtProcessManager &dpm, const DhtID &target2
 			, time_t startTime, const CallBackPointers &consumerCallbacks
-			, int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING);
+			, int maxOutstanding, int flags);
 		~GetPeersDhtProcess();
 		static DhtProcessBase* Create(DhtImpl* pImpl, DhtProcessManager &dpm,
 			const DhtID &target2,
@@ -1562,7 +1567,7 @@ class GetDhtProcess : public DhtLookupScheduler
 
 		GetDhtProcess(DhtImpl *pDhtImpl, DhtProcessManager &dpm, const DhtID& target2
 			, time_t startTime, const CallBackPointers &consumerCallbacks
-			, int maxOutstanding = KADEMLIA_LOOKUP_OUTSTANDING, bool with_cas = false);
+			, int maxOutstanding, int flags);
 
 		virtual bool Filter(DhtFindNodeEntry const& e);
 
@@ -1635,13 +1640,17 @@ class ScrapeDhtProcess : public GetPeersDhtProcess
 		virtual void CompleteThisProcess();
 
 	public:
-		ScrapeDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm, const DhtID &target2, time_t startTime, const CallBackPointers &consumerCallbacks, int maxOutstanding);
+		ScrapeDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
+			, const DhtID &target2, time_t startTime
+			, const CallBackPointers &consumerCallbacks, int maxOutstanding
+			, int flags);
 		virtual ~ScrapeDhtProcess();
 
-		static DhtProcessBase* Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
-			const DhtID &target2,
-			CallBackPointers &cbPointers,
-			int maxOutstanding);
+		static DhtProcessBase* Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm
+			, const DhtID &target2
+			, CallBackPointers &cbPointers
+			, int maxOutstanding
+			, int flags);
 
 #ifdef _DEBUG_DHT
 		virtual char const* name() const { return "Scrape"; }
@@ -2080,11 +2089,12 @@ public:
 	void GetStalestPeerInBucket(DhtPeer **ppeerFound, DhtBucket &bucket);
 
 	void DoFindNodes(DhtID &target
-		, IDhtProcessCallbackListener *process_callback = NULL
-		, bool performLessAgressiveSearch = true);
+		, IDhtProcessCallbackListener *process_callback
+		, int flags = 0);
 
 	void DoBootstrap(DhtID &target
-		, IDhtProcessCallbackListener *process_listener);
+		, IDhtProcessCallbackListener *process_listener
+		, int flags = 0);
 
 #ifdef DHT_SEARCH_TEST
 	void RunSearches();
