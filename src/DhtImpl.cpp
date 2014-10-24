@@ -1046,7 +1046,9 @@ struct dht_node_comparator
 
 // Given the source list and size, sort it and copy the destCount closest
 // to the dest list
-void FindNClosestToTarget( DhtPeerID *src[], uint srcCount, DhtPeerID *dest[], uint destCount, const DhtID &target ){
+void FindNClosestToTarget( DhtPeerID *src[], uint srcCount, DhtPeerID *dest[]
+	, uint destCount, const DhtID &target )
+{
 	// sort the list to find the closest peers.
 	// Seems to only be used on lists of 30 or smaller
 	std::vector<DhtPeerID*> sorted_list(src, src + srcCount);
@@ -3010,8 +3012,10 @@ void DhtImpl::Tick()
 		_immutablePutStore.UpdateUsage(time(NULL));
 		_mutablePutStore.UpdateUsage(time(NULL));
 
+#if USE_HOLEPUNCH
 		_recent_punch_requests.clear();
 		_recent_punches.clear();
+#endif
 	}
 
 	if (_dht_bootstrap > valid_reponse_received) {
@@ -3591,7 +3595,7 @@ DhtPeer* DhtImpl::Update(const DhtPeerID &id, uint origin, bool seen, int rtt)
 	bool added = bucket.InsertOrUpdateNode(this, candidateNode, DhtBucket::peer_list, &returnNode);
 
 	// the node was already in or added to the main bucket
-	if (added){
+	if (added) {
 		return returnNode;
 	}
 
@@ -5578,10 +5582,11 @@ bool DhtBucket::InsertOrUpdateNode(DhtImpl* pDhtImpl, DhtPeer const& candidateNo
 	for (DhtPeer **peer = &bucketList.first(); *peer; peer=&(*peer)->next, ++n) {
 		DhtPeer *p = *peer;
 		bucketList.UpdateSubPrefixInfo(*p);
-		if (p->num_fail)
+		if (p->num_fail) {
 			// This element is here for convienence Update() & InsertOrUpdateNode().
 			// It only has a valid meaning immediatly after the consumer has set it.
 			bucketList.listContainesAnErroredNode = true;
+		}
 
 		// Check if the peer is already in the bucket
 		if (candidateNode.id != p->id) continue;
