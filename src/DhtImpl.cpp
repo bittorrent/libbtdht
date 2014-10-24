@@ -867,6 +867,7 @@ DhtRequest *DhtImpl::AllocateRequest(const DhtPeerID &peer_id)
 	return req;
 }
 
+#if USE_HOLEPUNCH
 // send a request to dst to ping punchee, in order for it to
 // open a pinhole.
 void DhtImpl::SendPunch(SockAddr const& dst, SockAddr const& punchee)
@@ -916,6 +917,7 @@ void DhtImpl::SendPunch(SockAddr const& dst, SockAddr const& punchee)
 	instrument_log('>', "punch", 'q', sb.length(), Read32((byte*)("....")));
 	SendTo(dst, buf, sb.length());
 }
+#endif // USE_HOLEPUNCH
 
 DhtRequest *DhtImpl::SendPing(const DhtPeerID &peer_id) {
 	unsigned char buf[120];
@@ -1171,7 +1173,9 @@ int DhtImpl::BuildFindNodesPacket(smart_buffer &sb, DhtID &target_id, int size
 	sb("5:nodes%d:", n * 26);
 	for(uint i=0; i!=n; i++) {
 		sb(list[i]->id)(list[i]->addr);
+#if USE_HOLEPUNCH
 		if (send_punches) SendPunch(list[i]->addr, requestor);
+#endif
 	}
 	assert(sb.length() >= 0);
 	return n;
@@ -2166,6 +2170,7 @@ bool DhtImpl::ProcessQueryPing(DHTMessage &message, DhtPeerID &peerID,
 	return AccountAndSend(peerID, sb.begin(), sb.length(), packetSize);
 }
 
+#if USE_HOLEPUNCH
 // when we get a punch request, send a tiny message to the specified
 // IP:port, in the hopes that our NAT will open up a pinhole to it
 bool DhtImpl::ProcessQueryPunch(DHTMessage &message, DhtPeerID &peerID
@@ -2220,6 +2225,7 @@ bool DhtImpl::ProcessQueryPunch(DHTMessage &message, DhtPeerID &peerID
 	socketMgr->Send(dst, buf, sb.length());
 	return true;
 }
+#endif // USE_HOLEPUNCH
 
 bool DhtImpl::ProcessQuery(DhtPeerID& peerID, DHTMessage &message, int packetSize) {
 
@@ -2254,7 +2260,9 @@ bool DhtImpl::ProcessQuery(DhtPeerID& peerID, DHTMessage &message, int packetSiz
 		case DHT_QUERY_VOTE: return ProcessQueryVote(message, peerID, packetSize);
 		case DHT_QUERY_PUT: return ProcessQueryPut(message, peerID, packetSize);
 		case DHT_QUERY_GET: return ProcessQueryGet(message, peerID, packetSize);
+#if USE_HOLEPUNCH
 		case DHT_QUERY_PUNCH: return ProcessQueryPunch(message, peerID, packetSize);
+#endif
 		case DHT_QUERY_UNDEFINED: return false;
 	}
 

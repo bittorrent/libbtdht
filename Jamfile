@@ -4,6 +4,9 @@ use-project /ut_utils : ut_utils ;
 
 SOURCES = DHTMessage DhtImpl ExternalIPCounter blockallocator dht crc32c ;
 
+feature holepunch : off on : composite propagated link-incompatible ;
+feature.compose <holepunch>on : <define>USE_HOLEPUNCH=1 ;
+
 lib ut_dht : src/$(SOURCES).cpp
 	: # requirements
 	  <include>src
