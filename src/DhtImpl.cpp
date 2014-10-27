@@ -111,6 +111,10 @@ std::string print_sockaddr(SockAddr const& addr)
 	return buf;
 }
 
+#ifdef _MSC_VER
+#define PRIu32 "u"
+#endif
+
 #ifdef _DEBUG_DHT_INSTRUMENT
 #define instrument_log(direction, command, type, size, tid) \
 		do_log("DHTI%c\t%" PRId64 "\t%s\t%c\t%lu\t%" PRIu32 "\n", direction, \
