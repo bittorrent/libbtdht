@@ -643,6 +643,7 @@ public:
 	byte num_fail;
 
 	// time of last contact with this peer
+	// lastContactTime may be 0, in case we have not contacted this node yet
 	time_t lastContactTime;
 
 	// round trip time of this node. This is
@@ -657,6 +658,7 @@ public:
 	// used for a "quarantine", where we don't forward this
 	// node to others until we trust it more, i.e. have talked
 	// to it again some time after the first time we saw it.
+	// first_seen may be 0, in case we have not contacted this node yet
 	time_t first_seen;
 
 	ClientID client;
@@ -864,10 +866,12 @@ public:
 //--------------------------------------------------------------------------------
 
 #define FAIL_THRES_NOCONTACT 1 // no contact?, lower thres...
-#define FAIL_THRES_BAD_NOCONTACT 1 // no contact ever? delete quickly..
-
 #define FAIL_THRES 2
+
+// TODO: there doesn't seem to be any logic anymore treating buckets
+// that would become empty specially.
 #define FAIL_THRES_BAD 5 // really bad, force delete even if buckets are empty..
+#define FAIL_THRES_BAD_NOCONTACT 1 // no contact ever? delete quickly..
 
 #define CROSBY_E (2*60) // age in second a peer must be before we include them in find nodes
 
@@ -1733,6 +1737,8 @@ public:
 	void ForceRefresh();
 	// do not respond to queries - for mobile nodes with data constraints
 	void SetReadOnly(bool readOnly);
+	void SetPingFrequency(int seconds);
+	void SetPingBatching(int num_pings);
 
 	bool CanAnnounce();
 
@@ -1873,8 +1879,15 @@ public:
 	bool _dht_enabled;
 	bool _dht_read_only;
 
-	int _refresh_bucket;		// Which bucket are we currently refreshing? -1 if disabled
-	bool _refresh_bucket_force;	// Force bucket refresh, generally at start/restart
+	// Which bucket are we currently pinging a peer in? -1 if disabled
+	int _ping_bucket;
+	// Which bucket are we currently refreshing? -1 if disabled
+	// both _refresh_bucket and _ping_bucket are round-robin counters over all
+	// buckets in the routing table. The difference is that _ping_bucket skips
+	// empty buckets, whereas _refresh_bucket doesn't. This way, we can ping
+	// a node in one bucket, but get nodes back for another.
+	int _refresh_bucket;
+
 	int _dht_peers_count;
 	int _outstanding_add_node;
 	int _refresh_buckets_counter;	// Number of seconds since the last bucket was operated upon
@@ -1887,7 +1900,7 @@ public:
 	enum {
 		bootstrap_complete = -2, 	// -2: bootstrap find_nodes complete
 		bootstrap_ping_replied,		// -1: bootstrap ping has replied
-		valid_reponse_received,		//  0: a vaild bootstrapping
+		valid_response_received,		//  0: a vaild bootstrapping
 									// response from dht routers has been received
 		not_bootstrapped,			//  1: dht not bootstrapped (initial state)
 		bootstrap_error_received	// >1: an error was received, _dht_bootstrap set with a large number of seconds for a count-down
@@ -1956,6 +1969,15 @@ public:
 	// temporarily. This is where we put them.
 	std::vector<DhtPeerID> _temp_nodes;
 
+	// the number of seconds in between each pings to nodes in the
+	// routing table
+	int _ping_frequency;
+
+	// when refreshing the routing table, ping this many nodes at a time, when
+	// waking up. (if this is > 1, the interval between waking up to ping is
+	// also multiplied by _ping_batching)
+	int _ping_batching;
+
 	void Account(int slot, int size);
 
 	void DumpAccountingInfo();
@@ -1980,6 +2002,7 @@ public:
 	DhtRequest *AllocateRequest(const DhtPeerID &peer_id);
 
 	DhtRequest *SendPing(const DhtPeerID &peer_id);
+	DhtRequest *SendFindNode(const DhtPeerID &peer_id);
 
 	void SendPunch(SockAddr const& dst, SockAddr const& punchee);
 
@@ -2115,7 +2138,6 @@ public:
 		void *ctx,
 		int flags);
 
-	void RefreshBucket(uint buck);
 	uint PingStalestInBucket(uint buck);
 
 	// Implement IDhtProcessCallback::ProcessCallback(), for bootstrap callback
