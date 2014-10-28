@@ -68,16 +68,16 @@ def parse_file(file,  plot_period):
 
 			if plot_period > 0:
 				if not method in graphs:
-					graphs[method] = [ [0] * current, [0] * current ]
+					graphs[method] = [ [0] * len(time), [0] * len(time) ]
 					data[method] = [0, 0]
-				if int(t/float(plot_period)) > current:
+				if int(t/float(plot_period) + 0.5) > current:
 					for m in graphs:
 						graphs[m][0].append(data[m][0])
 						graphs[m][1].append(data[m][1])
 						data[m][0] = 0
 						data[m][1] = 0
 					time.append(plot_period*current)
-					current = int(t/float(plot_period))
+					current = int(t/float(plot_period) + 0.5)
 				data[method][direction] += size
 
 	if plot_period == 0:
