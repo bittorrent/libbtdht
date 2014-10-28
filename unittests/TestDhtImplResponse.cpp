@@ -330,8 +330,14 @@ void ResolveNameCallbackDummy::Clear() {
 // TESTS START HERE
 
 TEST_F(dht_impl_response_test, TestSendPings) {
+
+	// essentially disable any maintanence, to just have our test messages
+	// be sent
+	impl->SetPingFrequency(60);
+
 	// put a peer into the dht for it to work with
-	DhtPeer *pTestPeer = impl->Update(peer_id, 0, false);
+	DhtPeer *pTestPeer = impl->Update(peer_id, 0, true, 10);
+
 	// Check that our node is in there
 	ASSERT_EQ(1, impl->GetNumPeers());
 	Buffer peer_id_buffer;
@@ -402,7 +408,7 @@ TEST_F(dht_impl_response_test, TestSendPings) {
 */
 TEST_F(dht_impl_response_test, Announce_ReplyWithNodes) {
 	// put a peer into the dht for it to work with
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -495,7 +501,7 @@ TEST_F(dht_impl_response_test, Announce_ReplyWithPeers) {
 	// put a peer into the dht for it to work with
 	peer_id.addr.set_port(('8' << 8) + '8'); // 88
 	peer_id.addr.set_addr4('aaaa'); // aaaa
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -639,7 +645,7 @@ TEST_F(dht_impl_response_test, Announce_ReplyWithoutPeersOrNodes) {
 	// put a peer into the dht for it to work with
 	peer_id.addr.set_port(('8' << 8) + '8'); // 88
 	peer_id.addr.set_addr4('aaaa'); // aaaa
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -740,7 +746,7 @@ TEST_F(dht_impl_response_test, Announce_ReplyWithoutPeersOrNodes) {
 */
 TEST_F(dht_impl_response_test, Announce_ReplyWith_ICMP) {
 	// put a peer into the dht for it to work with
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -780,7 +786,7 @@ TEST_F(dht_impl_response_test, Announce_ReplyWith_ICMP) {
 
 TEST_F(dht_impl_response_test, Announce_ReplyWith_ICMP_AfterAnnounce) {
 	// put a peer into the dht for it to work with
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -865,7 +871,7 @@ TEST_F(dht_impl_response_test, AnnounceSeed_ReplyWithPeers) {
 	// put a peer into the dht for it to work with
 	peer_id.addr.set_port(('8' << 8) + '8'); // 88
 	peer_id.addr.set_addr4('aaaa'); // aaaa
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -991,7 +997,7 @@ TEST_F(dht_impl_response_test, DoFindNodes_OnReplyCallback) {
 	DhtRequest* req;
 
 	// put a peer into the dht for it to work with
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -1086,7 +1092,7 @@ TEST_F(dht_impl_response_test, DoFindNodes_OnReplyCallback) {
 
 TEST_F(dht_impl_response_test, DoFindNodes_NoNodesInReply) {
 	// put a peer into the dht for it to work with
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -1150,7 +1156,7 @@ TEST_F(dht_impl_response_test, DoFindNodes_NoNodesInReply) {
 
 TEST_F(dht_impl_response_test, DoFindNodes_ReplyWith_ICMP) {
 	// put a peer into the dht for it to work with
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -1203,7 +1209,7 @@ TEST_F(dht_impl_response_test, DoFindNodes_ReplyWith_ICMP) {
 */
 TEST_F(dht_impl_response_test, DoVoteWithNodeReply) {
 	// put a peer into the dht for it to work with
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -1272,7 +1278,7 @@ TEST_F(dht_impl_response_test, DoVoteWithNodeReply) {
 								  |
 */
 TEST_F(dht_impl_response_test, DoVoteWithPeerReply) {
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -1354,7 +1360,7 @@ TEST_F(dht_impl_response_test, DoVoteWithPeerReply) {
 								  |
 */
 TEST_F(dht_impl_response_test, DoVote_ReplyWith_ICMP) {
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -1407,7 +1413,7 @@ TEST_F(dht_impl_response_test, DoVote_ReplyWith_ICMP) {
                                   |
 */
 TEST_F(dht_impl_response_test, DoVote_ReplyWith_ICMP_AfterVote) {
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -1468,7 +1474,7 @@ TEST_F(dht_impl_response_test, TestResponseToPing) {
 	impl->SetId(myId);
 
 	// put a peer into the dht for it to work with
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -1502,7 +1508,7 @@ TEST_F(dht_impl_response_test, TestResponseToPing_ReplyWith_ICMP) {
 	impl->SetId(myId);
 
 	// put a peer into the dht for it to work with
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -1531,7 +1537,7 @@ TEST_F(dht_impl_response_test, TestResponseToPing_ReplyWith_ICMP) {
 								  |
 */
 TEST_F(dht_impl_response_test, DoScrape_ReplyWithNodes) {
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -1609,7 +1615,7 @@ TEST_F(dht_impl_response_test, Scrape_ReplyWithPeers) {
 	// put a peer into the dht for it to work with
 	peer_id.addr.set_port(('8' << 8) + '8'); // 88
 	peer_id.addr.set_addr4('aaaa'); // aaaa
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -1682,7 +1688,7 @@ TEST_F(dht_impl_response_test, Scrape_ReplyWithPeers) {
 TEST_F(dht_impl_response_test, Scrape_ReplyWith_ICMP) {
 	peer_id.addr.set_port(('8' << 8) + '8'); // 88
 	peer_id.addr.set_addr4('aaaa'); // aaaa
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -1741,7 +1747,7 @@ TEST_F(dht_impl_response_test, Scrape_ReplyWith_ICMP) {
 TEST_F(dht_impl_response_test, TestResolveName) {
 	peer_id.addr.set_port(('8' << 8) + '8'); // 88
 	peer_id.addr.set_addr4('aaaa'); // aaaa
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -1817,7 +1823,7 @@ TEST_F(dht_impl_response_test, TestResolveName) {
 TEST_F(dht_impl_response_test, TestResolveName_NoNameInReply) {
 	peer_id.addr.set_port(('8' << 8) + '8'); // 88
 	peer_id.addr.set_addr4('aaaa'); // aaaa
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -1894,7 +1900,7 @@ TEST_F(dht_impl_response_test, TestResolveName_NoNameInReply) {
 TEST_F(dht_impl_response_test, TestResolveName_ReplyWith_ICMP) {
 	peer_id.addr.set_port(('8' << 8) + '8'); // 88
 	peer_id.addr.set_addr4('aaaa'); // aaaa
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -1957,7 +1963,7 @@ TEST_F(dht_impl_response_test, MultipleAnnounce_ReplyWithSinglePeer) {
 	// put a peer into the dht for it to work with
 	peer_id.addr.set_port(('8' << 8) + '8'); // 88
 	peer_id.addr.set_addr4('aaaa'); // aaaa
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -2085,7 +2091,7 @@ TEST_F(dht_impl_response_test, SingleAnnounce_ReplyWithMultiplePeers) {
 	// put a peer into the dht for it to work with
 	peer_id.addr.set_port(('8' << 8) + '8'); // 88
 	peer_id.addr.set_addr4('aaaa'); // aaaa
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -2232,7 +2238,7 @@ TEST_F(dht_impl_response_test, AnnounceWithMultiplePeers_ReplyWithSinglePeer) {
 	// put the FIRST peer into the dht for it to work with
 	peer_id.addr.set_port(('8' << 8) + '8'); // 88
 	peer_id.addr.set_addr4('aaaa'); // aaaa
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -2246,7 +2252,7 @@ TEST_F(dht_impl_response_test, AnnounceWithMultiplePeers_ReplyWithSinglePeer) {
 	peer_id_2.id.id[4] = '7777'; // 7777
 	peer_id_2.addr.set_port(('8' << 8) + '8'); // 88
 	peer_id_2.addr.set_addr4('aaab'); // aaaa
-	impl->Update(peer_id_2, 0, false);
+	impl->Update(peer_id_2, 0, true, 10);
 	Buffer peer_id_buffer2;
 	peer_id_buffer2.len = 20;
 	peer_id_buffer2.b = (byte*)&peer_id_2.id.id[0];
@@ -2345,7 +2351,7 @@ TEST_F(dht_impl_response_test, DoFindNodesWithMultipleNodesInDHT) {
 	// put the FIRST peer into the dht for it to work with
 	peer_id.addr.set_port(('8' << 8) + '8'); // 88
 	peer_id.addr.set_addr4('aaaa'); // aaaa
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -2359,7 +2365,7 @@ TEST_F(dht_impl_response_test, DoFindNodesWithMultipleNodesInDHT) {
 	peer_id_2.id.id[4] = '7777'; // 7777
 	peer_id_2.addr.set_port(('8' << 8) + '8'); // 88
 	peer_id_2.addr.set_addr4('aaab'); // aaab
-	impl->Update(peer_id_2, 0, false);
+	impl->Update(peer_id_2, 0, true, 10);
 	Buffer peer_id_buffer2;
 	peer_id_buffer2.len = 20;
 	peer_id_buffer2.b = (byte*)&peer_id_2.id.id[0];
@@ -2503,7 +2509,7 @@ TEST_F(dht_impl_response_test, Announce_ReplyWithMultipleNodes) {
 	impl->_dht_utversion[3] = 'x';
 
 	// put a peer into the dht for it to work with
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -2713,7 +2719,7 @@ TEST_F(dht_impl_response_test, Announce_Slow_ReplyWithPeers) {
 	// put a peer into the dht for it to work with
 	peer_id.addr.set_port(('8' << 8) + '8'); // 88
 	peer_id.addr.set_addr4('aaaa'); // aaaa
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -2883,7 +2889,7 @@ TEST_F(dht_impl_response_test, Announce_Slow_ReplyWithMultipleNodes) {
 
 
 	// put a peer into the dht for it to work with
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -3105,7 +3111,7 @@ TEST_F(dht_impl_response_test, Announce_TimeOut_ReplyWithMultipleNodes) {
 	impl->_dht_utversion[3] = 'x';
 
 	// put a peer into the dht for it to work with
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -3320,7 +3326,7 @@ TEST_F(dht_impl_response_test, Announce_ICMPerror_ReplyWithMultipleNodes) {
 	impl->_dht_utversion[3] = 'x';
 
 	// put a peer into the dht for it to work with
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];

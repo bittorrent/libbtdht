@@ -1739,6 +1739,7 @@ public:
 	void SetReadOnly(bool readOnly);
 	void SetPingFrequency(int seconds);
 	void SetPingBatching(int num_pings);
+	void EnableQuarantine(bool e);
 
 	bool CanAnnounce();
 
@@ -1978,6 +1979,10 @@ public:
 	// also multiplied by _ping_batching)
 	int _ping_batching;
 
+	// when false, don't require nodes to be old enough before handing them
+	// out to requestors
+	bool _enable_quarantine;
+
 	void Account(int slot, int size);
 
 	void DumpAccountingInfo();
@@ -2010,7 +2015,7 @@ public:
 	DhtPeer *Update(const DhtPeerID &id, uint origin, bool seen = false, int rtt = INT_MAX);
 
 	// Increase the error counter for a peer
-	void UpdateError(const DhtPeerID &id);
+	void UpdateError(const DhtPeerID &id, bool force_remove = false);
 	
 	uint CopyPeersFromBucket(uint bucket_id, DhtPeerID **list, uint numwant, int &wantfail, time_t min_age);
 

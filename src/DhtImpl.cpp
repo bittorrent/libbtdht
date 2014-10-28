@@ -202,6 +202,7 @@ DhtImpl::DhtImpl(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_so
 	// ping a node every 6 seconds
 	_ping_frequency = 6;
 	_ping_batching = 1;
+	_enable_quarantine = true;
 
 	_dht_utversion[0] = 'U';
 	_dht_utversion[1] = 'T';
@@ -390,6 +391,11 @@ void DhtImpl::SetPingFrequency(int seconds)
 {
 	assert(seconds > 0);
 	_ping_frequency = seconds;
+}
+
+void DhtImpl::EnableQuarantine(bool e)
+{
+	_enable_quarantine = e;
 }
 
 void DhtImpl::SetPingBatching(int num_pings)
@@ -1049,7 +1055,7 @@ DhtRequest *DhtImpl::SendFindNode(const DhtPeerID &peer_id) {
 /**
 	Increase the error counter for a peer
 */
-void DhtImpl::UpdateError(const DhtPeerID &id)
+void DhtImpl::UpdateError(const DhtPeerID &id, bool force_remove)
 {
 	int bucket_id = GetBucket(id.id);
 	if (bucket_id < 0) return;
@@ -1067,7 +1073,8 @@ void DhtImpl::UpdateError(const DhtPeerID &id)
 #endif
 
 		if (++p->num_fail >= (p->lastContactTime ? FAIL_THRES : FAIL_THRES_NOCONTACT)
-			|| !bucket.replacement_peers.empty()) {
+			|| !bucket.replacement_peers.empty()
+			|| force_remove) {
 			// failed plenty of times... delete
 #if g_log_dht
 			assert((*peer)->origin >= 0);
@@ -1098,7 +1105,8 @@ void DhtImpl::UpdateError(const DhtPeerID &id)
 		DhtPeer *p = *peer;
 		// Check if the peer is already in the bucket
 		if (id != p->id) continue;
-		if (++p->num_fail >= (p->lastContactTime ? FAIL_THRES : FAIL_THRES_NOCONTACT)) {
+		if (++p->num_fail >= (p->lastContactTime ? FAIL_THRES : FAIL_THRES_NOCONTACT)
+			|| force_remove) {
 #if g_log_dht
 			assert((*peer)->origin >= 0);
 			assert((*peer)->origin < sizeof(g_dht_peertype_count)/sizeof(g_dht_peertype_count[0]));
@@ -1121,12 +1129,18 @@ void DhtImpl::UpdateError(const DhtPeerID &id)
 }
 
 
-uint DhtImpl::CopyPeersFromBucket(uint bucket_id, DhtPeerID **list, uint numwant, int &wantfail, time_t min_age)
+uint DhtImpl::CopyPeersFromBucket(uint bucket_id, DhtPeerID **list
+	, uint numwant, int &wantfail, time_t min_age)
 {
 	DhtBucketList &bucket = _buckets[bucket_id]->peers;
 	uint n = 0;
 	time_t now = time(nullptr);
 	for (DhtPeer *peer = bucket.first(); peer && n < numwant; peer=peer->next) {
+
+		// if first_seen is 0, it means we have never sent any query and seen
+		// a response from this peer. i.e. it's automatically filtered when
+		// pulling out peers from the bucket. We need to ping it first and see
+		// that it's alive
 		if (peer->first_seen == 0 || now - peer->first_seen < min_age) {
 			continue;
 		}
@@ -1220,7 +1234,8 @@ int DhtImpl::AssembleNodeList(const DhtID &target, DhtPeerID** ids
  Find the numwant nodes closest to target
  Returns the number of nodes found.
 */
-uint DhtImpl::FindNodes(const DhtID &target, DhtPeerID **list, uint numwant, int wantfail, time_t min_age)
+uint DhtImpl::FindNodes(const DhtID &target, DhtPeerID **list, uint numwant
+	, int wantfail, time_t min_age)
 {
 	int bucket_id = GetBucket(target);
 	if (bucket_id < 0) return 0;
@@ -1264,7 +1279,8 @@ int DhtImpl::BuildFindNodesPacket(smart_buffer &sb, DhtID &target_id, int size
 	, SockAddr const& requestor, bool send_punches)
 {
 	DhtPeerID *list[KADEMLIA_K];
-	uint n = FindNodes(target_id, list, sizeof(list)/sizeof(list[0]), 0, CROSBY_E);
+	uint n = FindNodes(target_id, list, sizeof(list)/sizeof(list[0]), 0
+		, _enable_quarantine ? CROSBY_E : 0);
 
 	// Send an array of peers.
 	// Each peer is DHT_ID_SIZE byte id, 4 byte ip and 2 byte port, in big endian format.
@@ -2574,8 +2590,9 @@ void DhtImpl::GenRandomIDInBucket(DhtID &target, DhtBucket &bucket)
 
 void DhtImpl::GetStalestPeerInBucket(DhtPeer **ppeerFound, DhtBucket &bucket)
 {
-	time_t oldest = time(NULL);
+	time_t oldest = std::numeric_limits<time_t>::max();
 	for(DhtPeer *peer = bucket.peers.first(); peer != NULL; peer=peer->next) {
+
 		if(!peer->lastContactTime){
 			*ppeerFound = peer;
 			break;	// Never lastContactTime; consider most stale
@@ -2782,7 +2799,12 @@ uint DhtImpl::PingStalestInBucket(uint buck)
 
 	bucket.last_active = time(NULL);	// TODO: isn't this updated on ping response?
 	GetStalestPeerInBucket(&ptarget, bucket);
-	if (ptarget == NULL) return 0;
+	if (ptarget == NULL) {
+#if defined(_DEBUG_DHT)
+		debug_log("No stale node found in bucket %2d", buck);
+#endif
+		return 0;
+	}
 
 #if defined(_DEBUG_DHT)
 	debug_log("RB %2d: %s", buck, format_dht_id(bucket.first));
@@ -2913,7 +2935,7 @@ void DhtImpl::OnPingReply(void* &userdata, const DhtPeerID &peer_id
 		|| (flags & ANY_ERROR)) {
 
 		// Mark that the peer errored
-		UpdateError(peer_id);
+		UpdateError(peer_id, flags & ICMP_ERROR);
 		return;
 	}
 
@@ -4158,7 +4180,7 @@ void DhtLookupScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id
 	if(flags & ANY_ERROR){
 		DhtFindNodeEntry *dfnh = processManager.FindQueriedPeer(peer_id);
 		if (dfnh) dfnh->queried = QUERIED_ERROR;
-		impl->UpdateError(peer_id);
+		impl->UpdateError(peer_id, flags & ICMP_ERROR);
 
 #if defined(_DEBUG_DHT_VERBOSE)
 		debug_log("[%u] *** TIMEOUT tid=%d", process_id(), req->tid);
@@ -4331,7 +4353,7 @@ DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(
 	if(errored || (flags & ANY_ERROR)){
 		// mark peer as errored
 		if (dfnh) dfnh->queried = QUERIED_ERROR;
-		impl->UpdateError(peer_id);
+		impl->UpdateError(peer_id, flags & ICMP_ERROR);
 	}
 	else if (dfnh) {
 		// mark that the peer replied.
@@ -4505,7 +4527,7 @@ void DhtBroadcastScheduler::OnReply(void*& userdata, const DhtPeerID &peer_id
 	else if(flags & ANY_ERROR){  // if ICMP or timeout error
 		DhtFindNodeEntry *dfnh = processManager.FindQueriedPeer(peer_id);
 		if (dfnh) dfnh->queried = QUERIED_ERROR;
-		impl->UpdateError(peer_id);
+		impl->UpdateError(peer_id, flags & ICMP_ERROR);
 		outstanding--;
 		Schedule(); // put another request in flight since this peer is slow to reply (and may be dead)
 		return;
@@ -4903,7 +4925,7 @@ void AnnounceDhtProcess::ImplementationSpecificReplyProcess(void *userdata, cons
 {
 	// handle errors
 	if(message.dhtMessageType != DHT_RESPONSE){
-		impl->UpdateError(peer_id);
+		impl->UpdateError(peer_id, flags & ICMP_ERROR);
 	}
 }
 
@@ -5240,7 +5262,7 @@ void PutDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 {
 	// handle errors
 	if (message.dhtMessageType != DHT_RESPONSE){
-		impl->UpdateError(peer_id);
+		impl->UpdateError(peer_id, flags & ICMP_ERROR);
 	}
 	if (message.dhtMessageType == DHT_ERROR
 		&& (message.error_code == LOWER_SEQ

@@ -140,6 +140,8 @@ public:
 	virtual void SetReadOnly(bool readOnly) = 0;
 	virtual void SetPingFrequency(int seconds) = 0;
 	virtual void SetPingBatching(int num_pings) = 0;
+	virtual void EnableQuarantine(bool e) = 0;
+
 	virtual bool ProcessIncoming(byte *buffer, size_t len, const SockAddr& addr) = 0;
 #ifdef _DEBUG_MEM_LEAK
 	virtual int FreeRequests() = 0;
