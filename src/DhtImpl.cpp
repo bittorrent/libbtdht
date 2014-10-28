@@ -19,6 +19,7 @@
 #include <algorithm> // for std::min
 #include <math.h>
 #include <stdarg.h>
+#include <limits>
 
 #define lenof(x) (sizeof(x)/sizeof(x[0]))
 const char MUTABLE_PAYLOAD_FORMAT[] = "3:seqi%" PRIu64 "e1:v";
@@ -2590,7 +2591,7 @@ void DhtImpl::GenRandomIDInBucket(DhtID &target, DhtBucket &bucket)
 
 void DhtImpl::GetStalestPeerInBucket(DhtPeer **ppeerFound, DhtBucket &bucket)
 {
-	time_t oldest = std::numeric_limits<time_t>::max();
+	time_t oldest = (std::numeric_limits<time_t>::max)();
 	for(DhtPeer *peer = bucket.peers.first(); peer != NULL; peer=peer->next) {
 
 		if(!peer->lastContactTime){
