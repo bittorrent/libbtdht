@@ -770,9 +770,12 @@ void DhtImpl::DumpBuckets()
 			total++;
 		}
 
-		do_log("Bucket %d: %.8X%.8X%.8X%.8X%.8X (nodes: %d replacement-nodes: %d, span: %d)", i,
+		char const* progress_bar = "########";
+
+		do_log("Bucket %2d: %.8X%.8X%.8X%.8X%.8X (nodes: [%-8s] replacement-nodes: [%-8s], span: %d)", i,
 			 bucket.first.id[0], bucket.first.id[1], bucket.first.id[2],
-			 bucket.first.id[3], bucket.first.id[4], main_nodes, cache_nodes, bucket.span);
+			 bucket.first.id[3], bucket.first.id[4], progress_bar + (8 - main_nodes),
+			 progress_bar + (8 - cache_nodes), bucket.span);
 		for (DhtPeer **peer = &bucket.peers.first(); *peer; peer=&(*peer)->next) {
 			DhtPeer *p = *peer;
 			char age[64];
