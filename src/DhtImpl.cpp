@@ -194,7 +194,6 @@ DhtImpl::DhtImpl(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_so
 	_dht_bootstrap = not_bootstrapped;
 	_dht_bootstrap_failed = 0;
 	_allow_new_job = false;
-	_ping_bucket = 0;
 	_refresh_bucket = 0;
 	_refresh_buckets_counter = -1;
 	_outstanding_add_node = 0;
@@ -816,8 +815,8 @@ DhtBucket *DhtImpl::CreateBucket(uint position)
 	_buckets.insert(_buckets.begin() + position, bucket);
 
 	// update currently refreshing bucket
-	if ((int)position < _ping_bucket)
-		_ping_bucket++;
+	if ((int)position < _refresh_bucket)
+		_refresh_bucket++;
 
 	return bucket;
 }
@@ -1015,11 +1014,21 @@ DhtRequest *DhtImpl::SendFindNode(const DhtPeerID &peer_id) {
 	smart_buffer sb(buf, sizeof(buf));
 
 	DhtID target;
-	DhtBucket &bucket = *_buckets[_refresh_bucket];
+	int buck = GetBucket(peer_id.id);
+
+	// this logic picks an adjacent bucket in case one of them is empty. It
+	// prefers to pick the bucket + 1 because that is probably the next bucket
+	// to ping
+	if (buck + 1 < _buckets.size() && _buckets[buck + 1]->peers.first() == NULL)
+		buck +=1;
+	else if (buck - 1 >= 0 && _buckets[buck - 1]->peers.first() == NULL)
+		buck -= 1;
+
+	DhtBucket* bucket= _buckets[buck];
 
 	// pick the bucket using a different round-robin counter,
 	// to get nodes for empty buckets too
-	GenRandomIDInBucket(target, bucket);
+	GenRandomIDInBucket(target, *bucket);
 	byte target_bytes[DHT_ID_SIZE];
 	DhtIDToBytes(target_bytes, target);
 
@@ -2831,7 +2840,6 @@ void DhtImpl::ProcessCallback()
 	if (_dht_peers_count >= 8) {
 		_dht_bootstrap = bootstrap_complete;
 		_dht_bootstrap_failed = 0;
-		_ping_bucket = 0;
 		_refresh_bucket = 0;
 		_refresh_buckets_counter = 0; // start forced bucket refresh
 
@@ -2984,10 +2992,6 @@ void DhtImpl::OnPingReply(void* &userdata, const DhtPeerID &peer_id
 			num_nodes--;
 		}
 	}
-
-	// next time we ping, ask for nodes in the next bucket (regardless of if
-	// it's empty or not)
-	_refresh_bucket = (_refresh_bucket + 1) % _buckets.size();
 }
 
 void DhtImpl::AddNode(const SockAddr& addr, void* userdata, uint origin)
@@ -3217,8 +3221,8 @@ void DhtImpl::Tick()
 
 		if (_refresh_buckets_counter == _ping_frequency * _ping_batching) {
 			for (int i = 0; i < _ping_batching; ++i) {
-				PingStalestInBucket(_ping_bucket);
-				_ping_bucket = (_ping_bucket + 1) % _buckets.size();
+				PingStalestInBucket(_refresh_bucket);
+				_refresh_bucket = (_refresh_bucket + 1) % _buckets.size();
 			}
 		}
 	}
@@ -3349,7 +3353,7 @@ void DhtImpl::Restart() {
 	}
 	_buckets.clear();
 	_refresh_buckets_counter = 0;
-	_ping_bucket = 0;
+	_refresh_bucket = 0;
 	_dht_peers_count = 0;
 
 #ifdef _DEBUG_DHT

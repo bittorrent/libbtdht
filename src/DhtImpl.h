@@ -1881,12 +1881,6 @@ public:
 	bool _dht_read_only;
 
 	// Which bucket are we currently pinging a peer in? -1 if disabled
-	int _ping_bucket;
-	// Which bucket are we currently refreshing? -1 if disabled
-	// both _refresh_bucket and _ping_bucket are round-robin counters over all
-	// buckets in the routing table. The difference is that _ping_bucket skips
-	// empty buckets, whereas _refresh_bucket doesn't. This way, we can ping
-	// a node in one bucket, but get nodes back for another.
 	int _refresh_bucket;
 
 	int _dht_peers_count;
