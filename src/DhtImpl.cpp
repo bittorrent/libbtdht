@@ -3747,6 +3747,11 @@ DhtPeer* DhtImpl::Update(const DhtPeerID &id, uint origin, bool seen, int rtt)
 	if (id.addr.get_port() == 0)
 		return NULL;
 
+	// never add ourself to the routing table
+	if (id.id == _my_id) {
+		return NULL;
+	}
+
 	int bucket_id = GetBucket(id.id);
 
 	// this will detect the -1 case
@@ -4370,11 +4375,12 @@ DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(
 				peer.addr.from_compact(nodes.b + DHT_ID_SIZE, 6);
 				nodes.b += node_size;
 
-				impl->Update(peer, IDht::DHT_ORIGIN_FROM_PEER, false);
-
 				// Check if it's identical to myself?
 				// Don't add myself to my internal list of peers.
 				if (!(peer.id == impl->_my_id) && peer.addr.get_port() != 0) {
+
+					impl->Update(peer, IDht::DHT_ORIGIN_FROM_PEER, false);
+
 					// Insert into my list...
 					processManager.InsertPeer(peer, target);
 				}
