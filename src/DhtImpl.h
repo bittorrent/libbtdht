@@ -851,7 +851,6 @@ public:
 
 	// these are the peers in this bucket
 	DhtBucketList peers, replacement_peers;
-	time_t last_active;
 
 	bool InsertOrUpdateNode(DhtImpl* pDhtImpl, DhtPeer const& node, BucketListType bucketType, DhtPeer** pout);
 	bool FindReplacementCandidate(DhtImpl* pDhtImpl, DhtPeer const& candidate, BucketListType bucketType, DhtPeer** pout);
@@ -1780,7 +1779,6 @@ public:
 	int GetBootstrapState();
 	int GetRate();
 	int GetQuota();
-	int GetNumOutstandingAddNodes();
 	int GetProbeRate();
 	int GetNumPeersTracked();
 	int GetNumPutItems();
@@ -1839,6 +1837,8 @@ public:
 	// effect, since half of the space will fit 128 nodes.
 
 	// TODO: we should probably factor out the routing table into its own class and unit test it
+	// TODO: why is this an array of pointers instead of an array of objects?
+	// DhtBucket is fairly light weight
 	std::vector<DhtBucket*> _buckets; // DHT buckets
 
 	//static MAKE_BLOCK_ALLOCATOR(_dht_bucket_allocator, DhtBucket, 50);
@@ -1880,11 +1880,7 @@ public:
 	bool _dht_enabled;
 	bool _dht_read_only;
 
-	// Which bucket are we currently pinging a peer in? -1 if disabled
-	int _refresh_bucket;
-
 	int _dht_peers_count;
-	int _outstanding_add_node;
 	int _refresh_buckets_counter;	// Number of seconds since the last bucket was operated upon
 	int _dht_quota;
 	int _dht_rate;
@@ -2109,16 +2105,14 @@ public:
 
 	bool InterpretMessage(DHTMessage &message, const SockAddr& addr, int pkt_size);
 
-	void GenRandomIDInBucket(DhtID &target, DhtBucket &bucket);
-	void GetStalestPeerInBucket(DhtPeer **ppeerFound, DhtBucket &bucket);
+	void GenRandomIDInBucket(DhtID &target, DhtBucket* bucket);
+	uint PingStalestNode();
 
 	void DoFindNodes(DhtID &target
 		, IDhtProcessCallbackListener *process_callback
 		, int flags = 0);
 
-	void DoBootstrap(DhtID &target
-		, IDhtProcessCallbackListener *process_listener
-		, int flags = 0);
+	void DoBootstrap();
 
 #ifdef DHT_SEARCH_TEST
 	void RunSearches();

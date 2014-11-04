@@ -194,9 +194,7 @@ DhtImpl::DhtImpl(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_so
 	_dht_bootstrap = not_bootstrapped;
 	_dht_bootstrap_failed = 0;
 	_allow_new_job = false;
-	_refresh_bucket = 0;
 	_refresh_buckets_counter = -1;
-	_outstanding_add_node = 0;
 	_dht_peers_count = 0;
 
 	// ping a node every 6 seconds
@@ -534,14 +532,6 @@ int DhtImpl::GetQuota()
 /**
  *
  */
-int DhtImpl::GetNumOutstandingAddNodes()
-{
-	return _outstanding_add_node;
-}
-
-/**
- *
- */
 int DhtImpl::GetProbeRate()
 {
 	return _dht_probe_rate;
@@ -764,17 +754,21 @@ void DhtImpl::DumpBuckets()
 			total_cache++;
 		}
 		int main_nodes = 0;
+		int unpinged_nodes = 0;
 		for (DhtPeer **peer = &bucket.peers.first(); *peer; peer=&(*peer)->next) {
 			main_nodes++;
 			total++;
+			if ((*peer)->lastContactTime == 0) unpinged_nodes++;
 		}
 
 		char const* progress_bar = "########";
 
-		do_log("Bucket %2d: %.8X%.8X%.8X%.8X%.8X (nodes: [%-8s] replacement-nodes: [%-8s], span: %d)", i,
-			 bucket.first.id[0], bucket.first.id[1], bucket.first.id[2],
-			 bucket.first.id[3], bucket.first.id[4], progress_bar + (8 - main_nodes),
-			 progress_bar + (8 - cache_nodes), bucket.span);
+		do_log("Bucket %2d: %.8X nodes: [%-8s] replacements: [%-8s], "
+			"span: %d, unpinged: [%-8s]", i
+			, bucket.first.id[0], progress_bar + (8 - main_nodes)
+			, progress_bar + (8 - cache_nodes), bucket.span
+			, progress_bar + (8 - unpinged_nodes));
+
 		for (DhtPeer **peer = &bucket.peers.first(); *peer; peer=&(*peer)->next) {
 			DhtPeer *p = *peer;
 			char age[64];
@@ -791,7 +785,6 @@ void DhtImpl::DumpBuckets()
 		}
 	}
 	do_log("Total peers: %d (in replacement cache %d)", total, total_cache);
-	do_log("Outstanding add nodes: %d", _outstanding_add_node);
 	DumpAccountingInfo();
 }
 
@@ -811,12 +804,7 @@ DhtBucket *DhtImpl::CreateBucket(uint position)
 	DhtBucket *bucket = _dht_bucket_allocator.Alloc();
 	bucket->peers.init();
 	bucket->replacement_peers.init();
-	bucket->last_active = time(NULL);
 	_buckets.insert(_buckets.begin() + position, bucket);
-
-	// update currently refreshing bucket
-	if ((int)position < _refresh_bucket)
-		_refresh_bucket++;
 
 	return bucket;
 }
@@ -1016,19 +1004,24 @@ DhtRequest *DhtImpl::SendFindNode(const DhtPeerID &peer_id) {
 	DhtID target;
 	int buck = GetBucket(peer_id.id);
 
-	// this logic picks an adjacent bucket in case one of them is empty. It
-	// prefers to pick the bucket + 1 because that is probably the next bucket
-	// to ping
-	if (buck + 1 < _buckets.size() && _buckets[buck + 1]->peers.first() == NULL)
-		buck +=1;
-	else if (buck - 1 >= 0 && _buckets[buck - 1]->peers.first() == NULL)
-		buck -= 1;
+	// pick the target for the lookup. If we're in the bucket that can
+	// split, use our ID as the target. We want to continuously try to find nodes
+	// closer to us
+	if (_buckets[buck]->TestForMatchingPrefix(_my_id)) {
+		target = _my_id;
+	} else {
+		// pick an adjacent bucket, if it's empty
+		if (buck + 1 < _buckets.size() && _buckets[buck + 1]->peers.first() == NULL)
+			buck +=1;
+		else if (buck - 1 >= 0 && _buckets[buck - 1]->peers.first() == NULL)
+			buck -= 1;
+		DhtBucket* bucket = _buckets[buck];
 
-	DhtBucket* bucket= _buckets[buck];
+		// pick the bucket using a different round-robin counter,
+		// to get nodes for empty buckets too
+		GenRandomIDInBucket(target, bucket);
+	}
 
-	// pick the bucket using a different round-robin counter,
-	// to get nodes for empty buckets too
-	GenRandomIDInBucket(target, *bucket);
 	byte target_bytes[DHT_ID_SIZE];
 	DhtIDToBytes(target_bytes, target);
 
@@ -1104,7 +1097,7 @@ void DhtImpl::UpdateError(const DhtPeerID &id, bool force_remove)
 			assert(_dht_peers_count >= 0);
 
 #ifdef _DEBUG_DHT
-			if (_dht_bootstrap == 0 && _bootstrap_log) {
+			if (_dht_bootstrap == valid_response_received && _bootstrap_log) {
 				fprintf(_bootstrap_log, "[%u] nodes: %u\n"
 					, uint(get_milliseconds() - _bootstrap_start), _dht_peers_count);
 			}
@@ -1131,7 +1124,7 @@ void DhtImpl::UpdateError(const DhtPeerID &id, bool force_remove)
 			assert(_dht_peers_count >= 0);
 
 #ifdef _DEBUG_DHT
-			if (_dht_bootstrap == 0 && _bootstrap_log) {
+			if (_dht_bootstrap == valid_response_received && _bootstrap_log) {
 				fprintf(_bootstrap_log, "[%u] nodes: %u\n"
 					, uint(get_milliseconds() - _bootstrap_start), _dht_peers_count);
 			}
@@ -1150,11 +1143,11 @@ uint DhtImpl::CopyPeersFromBucket(uint bucket_id, DhtPeerID **list
 	time_t now = time(nullptr);
 	for (DhtPeer *peer = bucket.first(); peer && n < numwant; peer=peer->next) {
 
-		// if first_seen is 0, it means we have never sent any query and seen
+		// if lastContactTime is 0, it means we have never sent any query and seen
 		// a response from this peer. i.e. it's automatically filtered when
 		// pulling out peers from the bucket. We need to ping it first and see
 		// that it's alive
-		if (peer->first_seen == 0 || now - peer->first_seen < min_age) {
+		if (peer->lastContactTime == 0 || now - peer->first_seen < min_age) {
 			continue;
 		}
 		if (peer->num_fail < (peer->lastContactTime ? FAIL_THRES : FAIL_THRES_NOCONTACT)
@@ -2582,10 +2575,33 @@ bool DhtImpl::InterpretMessage(DHTMessage &message, const SockAddr& addr, int pk
 	return false;
 }
 
-void DhtImpl::GenRandomIDInBucket(DhtID &target, DhtBucket &bucket)
+void DhtImpl::GenRandomIDInBucket(DhtID &target, DhtBucket *bucket)
 {
-	target = bucket.first;
-	uint span = bucket.span;
+	// since we start out with many top=level buckets, with the same
+	// span. If there are more than two buckets with the same span as
+	// the one specified, also pick a random bucket from those.
+	int count = 0;
+	for (int i = 0; i < _buckets.size(); ++i) {
+		if (_buckets[i]->span == bucket->span) ++count;
+	}
+
+	if (count > 2) {
+		// pick a random bucket with the same span as we specified
+		int buck = rand() % count;
+		for (int i = 0; i < _buckets.size(); ++i) {
+			if (_buckets[i]->span != bucket->span) continue;
+
+			if (buck > 0) {
+				--buck;
+				continue;
+			}
+			bucket = _buckets[i];
+			break;
+		}
+	}
+
+	target = bucket->first;
+	uint span = bucket->span;
 	uint i = 4;
 	while (span > 32) {
 		target.id[i] = rand();
@@ -2601,26 +2617,23 @@ void DhtImpl::GenRandomIDInBucket(DhtID &target, DhtBucket &bucket)
 	target.id[i] = (target.id[i] & ~(m - 1)) | (rand() & (m - 1));
 }
 
-void DhtImpl::GetStalestPeerInBucket(DhtPeer **ppeerFound, DhtBucket &bucket)
+void DhtImpl::DoBootstrap()
 {
-	time_t oldest = (std::numeric_limits<time_t>::max)();
-	for(DhtPeer *peer = bucket.peers.first(); peer != NULL; peer=peer->next) {
+#ifdef _DEBUG_DHT
+	debug_log("start bootstrap");
 
-		if(!peer->lastContactTime){
-			*ppeerFound = peer;
-			break;	// Never lastContactTime; consider most stale
-		}
-		if (peer->lastContactTime < oldest) {
-			*ppeerFound = peer;
-			oldest = peer->lastContactTime;
-		}
+	_bootstrap_start = get_milliseconds();
+	if (_bootstrap_log) {
+		fprintf(_bootstrap_log, "[0] start\n");
+		fprintf(_bootstrap_log, "[%u] nodes: %u\n"
+			, uint(get_milliseconds() - _bootstrap_start), _dht_peers_count);
 	}
-}
+#endif
+	DhtID target = _my_id;
+	target.id[4] ^= 1;
+	// Here, "this" is an IDhtProcessCallbackListener*, which leads
+	// to DhtImpl::ProcessCallback(), necessary to complete bootstrapping
 
-void DhtImpl::DoBootstrap(DhtID &target
-	, IDhtProcessCallbackListener *process_listener
-	, int flags)
-{
 	DhtPeerID *ids[32];
 	int num = AssembleNodeList(target, ids, sizeof(ids)/sizeof(ids[0]), true);
 
@@ -2633,10 +2646,15 @@ void DhtImpl::DoBootstrap(DhtID &target
 #endif
 
 	CallBackPointers cbPtrs;
-	cbPtrs.processListener = process_listener;
+
+	// This is where we kick off the actual bootstrapping. We launch
+	// Find Node on our own ID. keep in mind that if the routing
+	// table is empty, we add the bootstrap nodes (see AssembleNodeList).
+
+	cbPtrs.processListener = this;
 	// get peers in those nodes
 	DhtProcessBase* p = FindNodeDhtProcess::Create(this, *dpm, target, cbPtrs
-		, KADEMLIA_LOOKUP_OUTSTANDING, flags);
+		, KADEMLIA_LOOKUP_OUTSTANDING, 0);
 #ifdef _DEBUG_DHT
 	if (_lookup_log)
 		fprintf(_lookup_log, "[%u] [%u] [%s]: START-BOOTSTRAP\n"
@@ -2805,26 +2823,61 @@ void DhtImpl::DoAnnounce(const DhtID &target,
 	dpm->Start();
 }
 
-uint DhtImpl::PingStalestInBucket(uint buck)
+int count_nodes(DhtBucketList& l)
 {
-	DhtPeer *ptarget = NULL;
-	DhtBucket &bucket = *_buckets[buck];
+	int ret = 0;
+	for (DhtPeer **peer = &l.first(); *peer; peer=&(*peer)->next)
+		++ret;
+	return ret;
+}
 
-	bucket.last_active = time(NULL);	// TODO: isn't this updated on ping response?
-	GetStalestPeerInBucket(&ptarget, bucket);
-	if (ptarget == NULL) {
-#if defined(_DEBUG_DHT)
-		debug_log("No stale node found in bucket %2d", buck);
-#endif
-		return 0;
+uint DhtImpl::PingStalestNode()
+{
+	// first we need to figure out which order the buckets are, from closest
+	// to us from farthest away from us. The span is a proxy for this, larger
+	// span means farther away.
+	std::vector<int> bucket_order;
+	bucket_order.resize(_buckets.size());
+	for (int i = 0; i < _buckets.size(); ++i) bucket_order[i] = i;
+
+	// bucket_order has the index of the buckets ordered by increasing span,
+	// i.e. the smaller buckets first, the ones close to us.
+	std::sort(bucket_order.begin(), bucket_order.end()
+		, [&](int a, int b)
+		{
+			// whichever bucket our ID is in is actually the closest one.
+			if (_buckets[a]->TestForMatchingPrefix(_my_id)) return true;
+			if (_buckets[b]->TestForMatchingPrefix(_my_id)) return false;
+
+			if (_buckets[a]->span < _buckets[b]->span) return true;
+			if (_buckets[a]->span > _buckets[b]->span) return false;
+
+			// an bucket with more nodes has lower priority
+			// since we start with 32 buckets of equal span, it makes
+			// sense to still rank them.
+			return count_nodes(_buckets[a]->peers) < count_nodes(_buckets[b]->peers);
+		});
+
+	DhtPeer* oldest = NULL;
+	for (int i = 0; i < bucket_order.size(); ++i) {
+		DhtBucket &bucket = *_buckets[bucket_order[i]];
+		for (DhtPeer *peer = bucket.peers.first(); peer != NULL; peer=peer->next) {
+
+			if (!peer->lastContactTime) {
+				oldest = peer;
+				goto done;
+			}
+			if (oldest == NULL || peer->lastContactTime < oldest->lastContactTime) {
+				oldest = peer;
+			}
+		}
 	}
+done:
 
-#if defined(_DEBUG_DHT)
-	debug_log("RB %2d: %s", buck, format_dht_id(bucket.first));
-	debug_log("  target: %s", ptarget ? format_dht_id(ptarget->id.id) : "(none)");
-#endif
+	if (oldest == NULL) return 0;
 
-	DhtRequest *req = SendFindNode(ptarget->id);
+	oldest->lastContactTime = time(NULL);
+	DhtRequest *req = SendFindNode(oldest->id);
 	req->_pListener = new DhtRequestListener<DhtImpl>(this
 		, &DhtImpl::OnPingReply);
 	return req->tid;
@@ -2840,7 +2893,6 @@ void DhtImpl::ProcessCallback()
 	if (_dht_peers_count >= 8) {
 		_dht_bootstrap = bootstrap_complete;
 		_dht_bootstrap_failed = 0;
-		_refresh_bucket = 0;
 		_refresh_buckets_counter = 0; // start forced bucket refresh
 
 #ifdef _DEBUG_DHT
@@ -2918,13 +2970,6 @@ void DhtImpl::SetAddNodeResponseCallback(DhtAddNodeResponseCallback* cb)
 void DhtImpl::OnAddNodeReply(void* &userdata, const DhtPeerID &peer_id
 	, DhtRequest *req, DHTMessage &message, DhtProcessFlags flags)
 {
-	// if we are processing a reply to a non-slow peer (the "reply" could be in the
-	// form of an error - ICMP, Timeout, ...) then decrease the count of non-slow
-	// outstanding requests
-	if (!req->slow_peer && (flags & (NORMAL_RESPONSE | ANY_ERROR))) {
-		--_outstanding_add_node;
-	}
-
 	// if this is a reply on bhalf of a slow peer, do nothing
 	if (flags == PROCESS_AS_SLOW)
 		return;
@@ -2932,6 +2977,8 @@ void DhtImpl::OnAddNodeReply(void* &userdata, const DhtPeerID &peer_id
 	if (_add_node_callback && (flags & (NORMAL_RESPONSE | ANY_ERROR))) {
 		_add_node_callback(userdata, message.dhtMessageType == DHT_RESPONSE, peer_id.addr);
 	}
+
+	OnPingReply(userdata, peer_id, req, message, flags);
 }
 
 void DhtImpl::OnPingReply(void* &userdata, const DhtPeerID &peer_id
@@ -2987,7 +3034,7 @@ void DhtImpl::OnPingReply(void* &userdata, const DhtPeerID &peer_id
 				// Update the internal tables with this peer's information
 				// The contacted attribute is set to false because we haven't
 				// actually confirmed that this node exists or works yet.
-				Update(peer, IDht::DHT_ORIGIN_FROM_PEER, false, INT_MAX);
+				Update(peer, IDht::DHT_ORIGIN_FROM_PEER, false);
 			}
 			num_nodes--;
 		}
@@ -2996,16 +3043,15 @@ void DhtImpl::OnPingReply(void* &userdata, const DhtPeerID &peer_id
 
 void DhtImpl::AddNode(const SockAddr& addr, void* userdata, uint origin)
 {
-	// TODO: remove the v6 check when uT supports v6 DHT
 	assert(!addr.isv6());
-
-	// we don't add nodes directly, we ping them, and if they respond
-	// we add them to the routing table
-	_outstanding_add_node++;
 
 	DhtPeerID peer_id;
 	peer_id.addr = addr;
-	DhtRequest *req = SendPing(peer_id);
+	// just make us look up nodes close to ourself, to continuously try to
+	// get a deeper routing table.
+	peer_id.id = _my_id;
+
+	DhtRequest *req = SendFindNode(peer_id);
 	req->has_id = false;
 	req->_pListener = new DhtRequestListener<DhtImpl>(this
 		, &DhtImpl::OnAddNodeReply, userdata);
@@ -3191,39 +3237,15 @@ void DhtImpl::Tick()
 		// Boot-strapping.
 		if (--_dht_bootstrap == valid_response_received) {
 
-			// This is where we kick off the actual bootstrapping. We launch
-			// Find Node on our own ID. keep in mind that if the routing
-			// table is empty, we add the bootstrap nodes (see AssembleNodeList).
-
-#ifdef _DEBUG_DHT
-			debug_log("start bootstrap");
-
-			_bootstrap_start = get_milliseconds();
-			if (_bootstrap_log) {
-				fprintf(_bootstrap_log, "[0] start\n");
-				fprintf(_bootstrap_log, "[%u] nodes: %u\n"
-					, uint(get_milliseconds() - _bootstrap_start), _dht_peers_count);
-			}
-#endif
-			DhtID target = _my_id;
-			target.id[4] ^= 1;
-			// Here, "this" is an IDhtProcessCallbackListener*, which leads
-			// to DhtImpl::ProcessCallback(), necessary to complete bootstrapping
-			DoBootstrap(target, this, 0);
+			DoBootstrap();
 		}
+	}
 
-	} else if (_dht_bootstrap == bootstrap_complete) {
-		// Bootstrap finished. refresh buckets?
-		if (--_refresh_buckets_counter < 0) {
-			// refresh buckets every 6 (or so) seconds
-			_refresh_buckets_counter = _ping_frequency * _ping_batching;
-		}
-
-		if (_refresh_buckets_counter == _ping_frequency * _ping_batching) {
-			for (int i = 0; i < _ping_batching; ++i) {
-				PingStalestInBucket(_refresh_bucket);
-				_refresh_bucket = (_refresh_bucket + 1) % _buckets.size();
-			}
+	if (--_refresh_buckets_counter < 0) {
+		// refresh buckets every 6 (or so) seconds
+		_refresh_buckets_counter = _ping_frequency * _ping_batching;
+		for (int i = 0; i < _ping_batching; ++i) {
+			PingStalestNode();
 		}
 	}
 
@@ -3239,6 +3261,9 @@ void DhtImpl::Tick()
 				, _dht_peers_count, _dht_bootstrap);
 #endif
 		}
+
+		// rerun the bootstrap every 10 minutes, just to make sure 
+		DoBootstrap();
 	}
 
 	// Allow a new job every 4 seconds.
@@ -3353,7 +3378,6 @@ void DhtImpl::Restart() {
 	}
 	_buckets.clear();
 	_refresh_buckets_counter = 0;
-	_refresh_bucket = 0;
 	_dht_peers_count = 0;
 
 #ifdef _DEBUG_DHT
@@ -3740,11 +3764,14 @@ DhtPeer* DhtImpl::Update(const DhtPeerID &id, uint origin, bool seen, int rtt)
 
 	DhtPeer* returnNode = NULL;
 
+	time_t now = time(NULL);
+
 	DhtPeer candidateNode;
 	candidateNode.id = id;
 	candidateNode.rtt = rtt;
 	candidateNode.num_fail = 0;
-	candidateNode.first_seen = candidateNode.lastContactTime = seen ? time(NULL) : 0;
+	candidateNode.first_seen = now;
+	candidateNode.lastContactTime = seen ? now : 0;
 #if g_log_dht
 	candidateNode.origin = origin;
 #endif
@@ -4342,6 +4369,8 @@ DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(
 				CopyBytesToDhtID(peer.id, nodes.b);
 				peer.addr.from_compact(nodes.b + DHT_ID_SIZE, 6);
 				nodes.b += node_size;
+
+				impl->Update(peer, IDht::DHT_ORIGIN_FROM_PEER, false);
 
 				// Check if it's identical to myself?
 				// Don't add myself to my internal list of peers.
@@ -5756,14 +5785,17 @@ bool DhtBucket::InsertOrUpdateNode(DhtImpl* pDhtImpl, DhtPeer const& candidateNo
 		assert(p->origin < sizeof(g_dht_peertype_count)/sizeof(g_dht_peertype_count[0]));
 #endif
 		p->num_fail = 0;
-		p->lastContactTime = candidateNode.lastContactTime;
-		if (p->first_seen == 0) {
+		if (candidateNode.lastContactTime > p->lastContactTime)
+			p->lastContactTime = candidateNode.lastContactTime;
+
+		if (p->first_seen == 0)
 			p->first_seen = candidateNode.first_seen;
+
+		if (p->rtt == INT_MAX)
 			p->rtt = candidateNode.rtt;
-		} else {
+		else if (candidateNode.rtt != INT_MAX) {
 			// sliding average. blend in the new RTT by one quarter
-			if (candidateNode.rtt != INT_MAX)
-				p->rtt = (p->rtt * 3 + candidateNode.rtt) >> 2;
+				p->rtt = (p->rtt * 3 + candidateNode.rtt) / 4;
 		}
 		if (pout) *pout = p;
 		return true;

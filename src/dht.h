@@ -163,7 +163,6 @@ public:
 	virtual int GetBootstrapState() = 0;
 	virtual int GetRate() = 0;
 	virtual int GetQuota() = 0;
-	virtual int GetNumOutstandingAddNodes() = 0;
 	virtual int GetProbeRate() = 0;
 	virtual int GetNumPeersTracked() = 0;
 	virtual void Restart() = 0;
