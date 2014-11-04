@@ -2577,7 +2577,7 @@ bool DhtImpl::InterpretMessage(DHTMessage &message, const SockAddr& addr, int pk
 
 void DhtImpl::GenRandomIDInBucket(DhtID &target, DhtBucket *bucket)
 {
-	// since we start out with many top=level buckets, with the same
+	// since we start out with many top-level buckets, with the same
 	// span. If there are more than two buckets with the same span as
 	// the one specified, also pick a random bucket from those.
 	int count = 0;
