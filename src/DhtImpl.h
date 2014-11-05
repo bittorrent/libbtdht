@@ -1865,6 +1865,7 @@ public:
 
 #define MAX_PEERS (4*1000*1000)
 	int _peers_tracked;
+	time_t _last_self_refresh;
 
 	uint32 _cur_token[2];
 	uint32 _prev_token[2];
@@ -1881,6 +1882,11 @@ public:
 	int _dht_rate;
 	int _dht_probe_quota;
 	int _dht_probe_rate;
+
+	// the smallest bucket span we've seen in the table, ever. This is a target
+	// for bootstrapping. Until we reach this depth, we'll keep trying to
+	// bootstrap.
+	int _lowest_span;
 
 	// Possible states for _dht_bootstrap
 	enum {

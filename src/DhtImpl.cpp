@@ -197,6 +197,12 @@ DhtImpl::DhtImpl(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_so
 	_refresh_buckets_counter = -1;
 	_dht_peers_count = 0;
 
+	// we just happen to know the DHT network is larger than this. If our routing
+	// table isn't deep enough, just keep bootstrapping.
+	_lowest_span = 150;
+
+	_last_self_refresh = time(NULL);
+
 	// ping a node every 6 seconds
 	_ping_frequency = 6;
 	_ping_batching = 1;
@@ -743,10 +749,13 @@ void DhtImpl::DumpBuckets()
 {
 	int total = 0;
 	int total_cache = 0;
+	int lowest_span = 160;
 	do_log("Num buckets: %d. My DHT ID: %s", _buckets.size(), format_dht_id(_my_id));
 
 	for(uint i=0; i<_buckets.size(); i++) {
-		DhtBucket &bucket = *_buckets[i];
+		DhtBucket& bucket = *_buckets[i];
+		if (bucket.span < lowest_span && bucket.peers.first() != NULL)
+			lowest_span = bucket.span;
 
 		int cache_nodes = 0;
 		for (DhtPeer **peer = &bucket.replacement_peers.first(); *peer; peer=&(*peer)->next) {
@@ -789,6 +798,7 @@ void DhtImpl::DumpBuckets()
 		}
 	}
 	do_log("Total peers: %d (in replacement cache %d)", total, total_cache);
+	do_log("Deepest bucket: %d [target: %d]", 160 - lowest_span, 160 - _lowest_span);
 	DumpAccountingInfo();
 }
 
@@ -2660,6 +2670,9 @@ void DhtImpl::DoBootstrap()
 	DhtPeerID *ids[32];
 	int num = AssembleNodeList(target, ids, sizeof(ids)/sizeof(ids[0]), true);
 
+	// and flip it back again
+	target.id[0] ^= 0x80000000;
+
 	DhtProcessManager *dpm = new DhtProcessManager(ids, num, target);
 
 #if defined(_DEBUG_DHT)
@@ -2685,6 +2698,8 @@ void DhtImpl::DoBootstrap()
 #endif
 	dpm->AddDhtProcess(p);
 	dpm->Start();
+
+	_last_self_refresh = time(NULL);
 }
 
 void DhtImpl::DoFindNodes(DhtID &target
@@ -3284,9 +3299,6 @@ void DhtImpl::Tick()
 				, _dht_peers_count, _dht_bootstrap);
 #endif
 		}
-
-		// rerun the bootstrap every 10 minutes, just to make sure 
-		DoBootstrap();
 	}
 
 	// Allow a new job every 4 seconds.
@@ -3312,6 +3324,29 @@ void DhtImpl::Tick()
 #endif
 
 		_allow_new_job = true;
+
+		int lowest_span = 160;
+		for (int i = 0; i < _buckets.size(); i++) {
+			DhtBucket &bucket = *_buckets[i];
+			if (bucket.span < lowest_span && bucket.peers.first() != NULL)
+				lowest_span = bucket.span;
+		}
+
+		if (lowest_span < _lowest_span) _lowest_span = lowest_span;
+
+		time_t now = time(NULL);
+
+		if ((lowest_span > _lowest_span + 1
+				&& now - _last_self_refresh > 60)
+			|| (now - _last_self_refresh > 10 * 60)
+			|| (_dht_peers_count < 10
+				&& now - _last_self_refresh > 60)) {
+
+			// it's been 10 minutes since our last bootstrap attempt, issue
+			// another one. If we haven't reached close enough to our routing
+			// table depth, try every minute instead.
+			DoBootstrap();
+		}
 	}
 
 #if g_log_dht
@@ -3600,8 +3635,9 @@ void DhtImpl::SaveState()
 
 	std::vector<PackedDhtPeer> peer_list(0);
 
-	for(uint i=0; i<_buckets.size(); i++) {
+	for (int i = 0; i < _buckets.size(); i++) {
 		DhtBucket &bucket = *_buckets[i];
+		if (bucket.span < _lowest_span) _lowest_span = bucket.span;
 		for (DhtPeer *peer = bucket.peers.first(); peer; peer=peer->next) {
 			if (peer->num_fail == 0 && peer->id.addr.isv4()) {
 				PackedDhtPeer tmp;
@@ -3621,6 +3657,9 @@ void DhtImpl::SaveState()
 	// CHECK: time(NULL) can be int64....
 	dict->InsertInt("age", (int)time(NULL));
 
+	// save the lowest table depth 
+	dict->InsertInt("table_depth", (int)160 - _lowest_span);
+
 	byte *b = base.Serialize(&len);
 	_save_callback(b, len);
 	free(b);
@@ -3637,6 +3676,8 @@ void DhtImpl::LoadState()
 
 	BencodedDict *dict = base.AsDict(&base);
 	if (dict) {
+
+		_lowest_span = 160 - dict->GetInt("table_depth", 160 - _lowest_span);
 
 		// Load the ID
 		byte* id = (byte*)dict->GetString("id", DHT_ID_SIZE);
