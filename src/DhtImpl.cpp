@@ -2637,7 +2637,7 @@ void DhtImpl::DoBootstrap()
 	// since we're bootstrapping, we want to find nodes as far away from us
 	// as possible, to prolong the search path through the network and fill more
 	// buckets with more nodes. Therefore, flip the first bit of the target.
-	target.id[0] ^= 0x80;
+	target.id[0] ^= 0x80000000;
 
 	DhtPeerID *ids[32];
 	int num = AssembleNodeList(target, ids, sizeof(ids)/sizeof(ids[0]), true);
