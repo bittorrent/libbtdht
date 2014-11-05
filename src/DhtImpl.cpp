@@ -763,11 +763,15 @@ void DhtImpl::DumpBuckets()
 
 		char const* progress_bar = "########";
 
+		char const* marker = "";
+		if (bucket.TestForMatchingPrefix(_my_id)) marker = " <-- _my_id";
+
 		do_log("Bucket %2d: %.8X nodes: [%-8s] replacements: [%-8s], "
-			"span: %d, unpinged: [%-8s]", i
+			"span: %d, unpinged: [%-8s]%s", i
 			, bucket.first.id[0], progress_bar + (8 - main_nodes)
 			, progress_bar + (8 - cache_nodes), bucket.span
-			, progress_bar + (8 - unpinged_nodes));
+			, progress_bar + (8 - unpinged_nodes)
+			, marker);
 
 		for (DhtPeer **peer = &bucket.peers.first(); *peer; peer=&(*peer)->next) {
 			DhtPeer *p = *peer;
@@ -1068,6 +1072,7 @@ void DhtImpl::UpdateError(const DhtPeerID &id, bool force_remove)
 	DhtBucket &bucket = *_buckets[bucket_id];
 
 	for (DhtPeer **peer = &bucket.peers.first(); *peer; peer=&(*peer)->next) {
+
 		DhtPeer *p = *peer;
 		// Check if the peer is already in the bucket
 		if (id != p->id) continue;
@@ -1078,15 +1083,26 @@ void DhtImpl::UpdateError(const DhtPeerID &id, bool force_remove)
 			, format_dht_id(p->id.id));
 #endif
 
-		if (++p->num_fail >= (p->lastContactTime ? FAIL_THRES : FAIL_THRES_NOCONTACT)
+		// rtt is set to INT_MAX until we receive the first response from this node
+		if (++p->num_fail >= (p->rtt != INT_MAX ? FAIL_THRES : FAIL_THRES_NOCONTACT)
 			|| !bucket.replacement_peers.empty()
 			|| force_remove) {
-			// failed plenty of times... delete
+
+			// We get here if the node should be deleted. Which happens if one of
+			// the following criteria is satisfied:
+			//   1. the fail-counter exceeds the limit
+			//   2. there are nodes in the replacement cache ready
+			//      to replace this node.
+			//   3. we force removing it, typically because we received an ICMP
+			//      error indicating the node is down.
+
 #if g_log_dht
 			assert((*peer)->origin >= 0);
 			assert((*peer)->origin < sizeof(g_dht_peertype_count)/sizeof(g_dht_peertype_count[0]));
 			g_dht_peertype_count[(*peer)->origin]--;
 #endif
+			// remove the node from its bucket and move one node from the
+			// replacement cache
 			bucket.peers.unlinknext(peer);
 			if (!bucket.replacement_peers.empty()) {
 				// move one from the replacement_peers instead.
@@ -1109,9 +1125,11 @@ void DhtImpl::UpdateError(const DhtPeerID &id, bool force_remove)
 	// Also check if the peer is in the replacement cache already.
 	for (DhtPeer **peer = &bucket.replacement_peers.first(); *peer; peer=&(*peer)->next) {
 		DhtPeer *p = *peer;
+
 		// Check if the peer is already in the bucket
 		if (id != p->id) continue;
-		if (++p->num_fail >= (p->lastContactTime ? FAIL_THRES : FAIL_THRES_NOCONTACT)
+
+		if (++p->num_fail >= (p->rtt != INT_MAX ? FAIL_THRES : FAIL_THRES_NOCONTACT)
 			|| force_remove) {
 #if g_log_dht
 			assert((*peer)->origin >= 0);
@@ -1150,8 +1168,8 @@ uint DhtImpl::CopyPeersFromBucket(uint bucket_id, DhtPeerID **list
 		if (peer->lastContactTime == 0 || now - peer->first_seen < min_age) {
 			continue;
 		}
-		if (peer->num_fail < (peer->lastContactTime ? FAIL_THRES : FAIL_THRES_NOCONTACT)
-			|| --wantfail >= 0) {
+		
+		if (peer->num_fail == 0 || --wantfail >= 0) {
 
 			// TODO: v6
 			if (!peer->id.addr.isv4())

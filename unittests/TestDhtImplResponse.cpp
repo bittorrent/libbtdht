@@ -366,28 +366,23 @@ TEST_F(dht_impl_response_test, TestSendPings) {
 	// Here, we send a response right away
 	ASSERT_TRUE(impl->ProcessIncoming((byte *) buf, sb.length(), peer_id.addr));
 
-	// Now, ping the same peer, but pretend it is slow and/or doesn't answer
-	DhtRequest *req = impl->SendPing(peer_id);
-	req->_pListener = new DhtRequestListener<DhtImpl>(impl.get()
+	for (int i = 0; i < FAIL_THRES; ++i) {
+		// Now, ping the same peer, but pretend it is slow and/or doesn't answer
+		DhtRequest *req = impl->SendPing(peer_id);
+		req->_pListener = new DhtRequestListener<DhtImpl>(impl.get()
 			, &DhtImpl::OnPingReply);
-	req->time -= 1100;
-	impl->Tick();
-	// Between 1 and 5 second is considered slow, not yet an error
-	ASSERT_TRUE(req->slow_peer);
+		req->time -= 1100;
+		impl->Tick();
+		// Between 1 and 5 second is considered slow, not yet an error
+		ASSERT_TRUE(req->slow_peer);
 
-	// Now pretend it has taken longer than 5 seconds
-	req->time -= 4000;
-	impl->Tick();
+		// Now pretend it has taken longer than 5 seconds
+		req->time -= 4000;
+		impl->Tick();
 
-	// Ensure the error count has increased
-	ASSERT_EQ(1, pTestPeer->num_fail);
-
-	// Next, after the second failure (FAIL_THRES), the node gets removed.
-	req = impl->SendPing(peer_id);
-	req->_pListener = new DhtRequestListener<DhtImpl>(impl.get(),
-			&DhtImpl::OnPingReply);
-	req->time -= 5100;
-	impl->Tick();
+		// Ensure the error count has increased
+		ASSERT_EQ(i + 1, pTestPeer->num_fail);
+	}
 
 	// Make sure our peer has been deleted due to the errors
 	ASSERT_EQ(0, impl->GetNumPeers());

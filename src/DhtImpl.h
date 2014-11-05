@@ -864,13 +864,8 @@ public:
 //
 //--------------------------------------------------------------------------------
 
-#define FAIL_THRES_NOCONTACT 1 // no contact?, lower thres...
-#define FAIL_THRES 2
-
-// TODO: there doesn't seem to be any logic anymore treating buckets
-// that would become empty specially.
-#define FAIL_THRES_BAD 5 // really bad, force delete even if buckets are empty..
-#define FAIL_THRES_BAD_NOCONTACT 1 // no contact ever? delete quickly..
+#define FAIL_THRES_NOCONTACT 2 // no contact?, lower thres...
+#define FAIL_THRES 10
 
 #define CROSBY_E (2*60) // age in second a peer must be before we include them in find nodes
 
