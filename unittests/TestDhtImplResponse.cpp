@@ -344,8 +344,7 @@ TEST_F(dht_impl_response_test, TestSendPings) {
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
 	// Send a NICE (non-bootstrap) ping to our fake node
-	int bucketNo = impl->GetBucket(peer_id.id);
-	impl->PingStalestInBucket(bucketNo);
+	impl->PingStalestNode();
 	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	// check the transaction ID:  length=2
 	Buffer tid;
@@ -1485,7 +1484,9 @@ TEST_F(dht_impl_response_test, TestResponseToPing) {
 	// grab from the socket the emitted message and extract the transaction ID
 	ASSERT_NO_FATAL_FAILURE(fetch_dict());
 	ASSERT_NO_FATAL_FAILURE(expect_query_type());
-	ASSERT_NO_FATAL_FAILURE(expect_command("ping"));
+
+	// we use find_node to ping peers now
+	ASSERT_NO_FATAL_FAILURE(expect_command("find_node"));
 	Buffer tid;
 	tid.b = (byte*)dict->GetString("t" , &tid.len);
 	EXPECT_EQ(4, tid.len) << "transaction ID is wrong size";
