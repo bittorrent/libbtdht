@@ -1070,6 +1070,7 @@ class DhtProcessManager : public DhtLookupNodeList
 
 		void Start();
 		void Next();
+		void Abort();
 };
 
 inline unsigned int DhtProcessManager::AddDhtProcess(DhtProcessBase *process)
@@ -1158,12 +1159,15 @@ class DhtProcessBase
 		DhtID target;
 		smart_ptr<DhtImpl> impl;
 		time_t start_time;
+		bool aborted;
 		DhtProcessManager &processManager;
 
 		virtual void DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 			, const unsigned int transactionID) = 0;
 		virtual void Schedule() = 0;
 		virtual void CompleteThisProcess();
+
+		void Abort();
 
 	public:
 
@@ -1267,7 +1271,6 @@ class DhtBroadcastScheduler : public DhtProcessBase
 
 		// the number of outstanding announces/puts to keep at any given time
 		int outstanding;
-		bool aborted;
 
 		virtual void Schedule();
 
@@ -1281,9 +1284,7 @@ class DhtBroadcastScheduler : public DhtProcessBase
 			, int targets = KADEMLIA_K_ANNOUNCE)
 			: DhtProcessBase(pDhtImpl, dpm, target2, startTime
 			, consumerCallbacks), num_targets(targets), outstanding(0)
-			, aborted(false) {}
-
-		virtual void Abort() { aborted = true; }
+			{}
 
 #ifdef _DEBUG_DHT
 		virtual char const* name() const { return "Broadcast"; }

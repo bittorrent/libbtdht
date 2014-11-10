@@ -23,8 +23,8 @@ typedef void DhtHashFileNameCallback(void *ctx, const byte *info_hash, const byt
 typedef void DhtAddNodesCallback(void *ctx, const byte *info_hash, const byte *peers, uint num_peers);
 typedef void DhtAddNodeResponseCallback(void*& userdata, bool is_response, SockAddr const& addr);
 typedef void DhtScrapeCallback(void *ctx, const byte *target, int downloaders, int seeds);
-typedef void DhtPutCallback(void * ctx, std::vector<char>& buffer, int64 seq, SockAddr src);
-typedef void DhtPutDataCallback(void * ctx, std::vector<char> const& buffer, int64 seq, SockAddr src);
+typedef int DhtPutCallback(void * ctx, std::vector<char>& buffer, int64 seq, SockAddr src);
+typedef int DhtPutDataCallback(void * ctx, std::vector<char> const& buffer, int64 seq, SockAddr src);
 typedef void DhtPutCompletedCallback(void * ctx);
 typedef void DhtLogCallback(char const* str);
 
@@ -80,18 +80,25 @@ public:
 		//pkey points to a 32-byte ed25519 public.
 		const byte * pkey,
 		const byte * skey,
-		//This method is called in DhtSendRPC for Put. 
-		//It takes v (from get responses) as an input and may or may not change v to place in Put messages.
-		DhtPutCallback * put_callback,
+
+		// This method is called in DhtSendRPC for Put. It takes v (from get
+		// responses) as an input and may or may not change v to place in Put
+		// messages. if the callback function returns a non-zero value, the
+		// DhtProcess is aborted and the value is not stored back in the DHT.
+		DhtPutCallback* put_callback,
+
 		//called in CompleteThisProcess
 		DhtPutCompletedCallback * put_completed_callback,
-		// called every time we receive a blob from a node. This cannot be
-		// used to modify and write back the data, this is just a sneak-peek
-		// of what's likely to be in the final blob that's passed to
-		// put_callback
+
+		// called every time we receive a blob from a node. This cannot be used
+		// to modify and write back the data, this is just a sneak-peek of what's
+		// likely to be in the final blob that's passed to put_callback if the
+		// callback function returns a non-zero value, the DhtProcess is aborted
+		// and the value is not stored back in the DHT.
 		DhtPutDataCallback* put_data_callback,
 		void *ctx,
 		int flags = 0,
+
 		// seq is an optional provided monotonically increasing sequence number to be
 		// used in a Put request if the requester is keeping sequence number state
 		// this number will be used if higher than any numbers gotten from peers

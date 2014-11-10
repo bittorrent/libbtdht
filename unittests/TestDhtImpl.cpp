@@ -2,12 +2,13 @@
 #include "utypes.h"
 #include "TestDhtImpl.h"
 
-void put_callback(void* ctx, std::vector<char>& buffer, int64 seq, SockAddr src) {
+int put_callback(void* ctx, std::vector<char>& buffer, int64 seq, SockAddr src) {
 	if (ctx != NULL) {
 		*(reinterpret_cast<int64*>(ctx)) = seq;
 	}
 	char b[] = { '6', ':', 's', 'a', 'm', 'p', 'l', 'e' };
 	buffer.assign(b, b + sizeof(b));
+	return 0;
 }
 
 unsigned int count_set_bits(Buffer &data) {

@@ -4035,6 +4035,11 @@ void DhtProcessManager::Start()
 		_dhtProcesses[0]->Start();
 }
 
+void DhtProcessManager::Abort()
+{
+	_currentProcessNumber = _dhtProcesses.size();
+}
+
 void DhtProcessManager::Next()
 {
 	_currentProcessNumber++;  // increment to the next process
@@ -4057,6 +4062,13 @@ unsigned int DhtProcessBase::process_id() const
 	return uintptr_t(this) + start_time;
 }
 #endif
+
+void DhtProcessBase::Abort()
+{
+	if (aborted) return;
+	aborted = true;
+	processManager.Abort();
+}
 
 void DhtProcessBase::CompleteThisProcess()
 {
@@ -4094,6 +4106,7 @@ DhtProcessBase::DhtProcessBase(DhtImpl *pImpl, DhtProcessManager &dpm
 	, target(target2)
 	, impl(pImpl)
 	, start_time(startTime)
+	, aborted(false)
 	, processManager(dpm)
 {
 	// let the DHT know there is an active process
@@ -4141,6 +4154,13 @@ DhtLookupScheduler::DhtLookupScheduler(DhtImpl* pDhtImpl
 */
 void DhtLookupScheduler::Schedule()
 {
+	if (aborted) {
+		if (totalOutstandingRequests == 0){
+			CompleteThisProcess();
+		}
+		return;
+	}
+
 	int numOutstandingRequestsToClosestNodes = 0;
 	int K = num_targets;
 	int nodeIndex=0;
@@ -4159,6 +4179,13 @@ void DhtLookupScheduler::Schedule()
 			|| numNonSlowRequestsOutstanding < maxOutstandingLookupQueries
 			)
 		) {
+
+		if (aborted) {
+			if (totalOutstandingRequests == 0){
+				CompleteThisProcess();
+			}
+			return;
+		}
 
 		switch (processManager[nodeIndex].queried){
 			case QUERIED_NO: {
@@ -4526,8 +4553,10 @@ void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 			std::vector<char> blk((char*)message.vBuf.b
 				, (char*)message.vBuf.b + message.vBuf.len);
 
-			callbackPointers.putDataCallback(callbackPointers.callbackContext
-				, blk, message.sequenceNum, peer_id.addr);
+			if (callbackPointers.putDataCallback(callbackPointers.callbackContext
+				, blk, message.sequenceNum, peer_id.addr) != 0) {
+				Abort();
+			}
 		}
 	}
 
@@ -4549,6 +4578,13 @@ void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 //*****************************************************************************
 void DhtBroadcastScheduler::Schedule()
 {
+	if (aborted) {
+		if (outstanding == 0){
+			CompleteThisProcess();
+		}
+		return;
+	}
+
 	// Send rpc's up to a maximum of KADEMLIA_K_ANNOUNCE (usually 8).
 	// Do not allow more than KADEMLIA_BROADCAST_OUTSTANDING (usually 4) to be
 	// in flight an any given time.  Do not track "slow peers".  Once a peer times
@@ -5287,8 +5323,11 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	if (callbackPointers.putCallback != NULL
 		&& (signature.empty() || blk.empty())) {
 
-		callbackPointers.putCallback(callbackPointers.callbackContext
-			, blk, seq, processManager.data_blk_source());
+		if (callbackPointers.putCallback(callbackPointers.callbackContext
+			, blk, seq, processManager.data_blk_source()) != 0) {
+			Abort();
+			return;
+		}
 
 		// the buffer has to be greater than zero. The empty string must be
 		// represented by "0:"
@@ -5374,13 +5413,16 @@ void PutDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 	if (message.dhtMessageType == DHT_ERROR
 		&& (message.error_code == LOWER_SEQ
 			|| message.error_code == CAS_MISMATCH)) {
+		if (!aborted) {
+			// don't issue the put twice
+			impl->Put(_pkey, _skey
+				, callbackPointers.putCallback
+				, callbackPointers.putCompletedCallback
+				, callbackPointers.putDataCallback
+				, callbackPointers.callbackContext
+				, _with_cas ? IDht::with_cas : 0, processManager.seq());
+		}
 		Abort();
-		impl->Put(_pkey, _skey
-			, callbackPointers.putCallback
-			, callbackPointers.putCompletedCallback
-			, callbackPointers.putDataCallback
-			, callbackPointers.callbackContext
-			, _with_cas ? IDht::with_cas : 0, processManager.seq());
 
 		// don't call the completion callback twice. Since we just
 		// passed it into a new Put process, it will be called when
