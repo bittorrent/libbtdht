@@ -5101,7 +5101,7 @@ GetDhtProcess::GetDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 	, const CallBackPointers &consumerCallbacks, int maxOutstanding
 	, int flags)
 	: DhtLookupScheduler(pDhtImpl, dpm, target_2, startTime
-		, consumerCallbacks, maxOutstanding, 12) // <-- find 12 nodes, not 8!
+		, consumerCallbacks, maxOutstanding, flags, 12) // <-- find 12 nodes, not 8!
 	, _with_cas(flags & IDht::with_cas)
 {
 	
