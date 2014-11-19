@@ -3947,10 +3947,15 @@ void DhtLookupNodeList::InsertPeer(const DhtPeerID &id, const DhtID &target)
 	// Locate the position where it should be inserted.
 	for(i=0; i<numNodes; i++, ep++) {
 		int r = CompareDhtIDToTarget(ep->id.id, id.id, target);
-		if (r == 0)
-			return; // duplicate ids?
+		if (r == 0 || ep->id.addr.ip_eq(id.addr))
+			return; // duplicate ids or ip address
 		if (r > 0)
 			break; // cur pos > id?
+	}
+
+	for (int ip = i+1; ip < numNodes; ip++) {
+		if (nodes[ip].id.addr.ip_eq(id.addr))
+			return; // duplicate ip address
 	}
 
 	// Bigger than all of them?
