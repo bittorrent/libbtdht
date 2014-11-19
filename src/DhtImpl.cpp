@@ -5235,8 +5235,9 @@ PutDhtProcess::PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 	, const CallBackPointers &consumerCallbacks, int flags)
 	: DhtBroadcastScheduler(pDhtImpl, dpm, target
 		, startTime, consumerCallbacks, 12) // <- put to 12 nodes instead of 8!
-	, _with_cas(flags & IDht::with_cas)
 	, getProc(NULL)
+	, _with_cas(flags & IDht::with_cas)
+	, _put_callback_called(false)
 {
 	signature.clear();
 	char* buf = (char*)this->_id;
@@ -5321,6 +5322,7 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	assert(callbackPointers.putCallback);
 
 	if (callbackPointers.putCallback != NULL
+		&& !_put_callback_called
 		&& (signature.empty() || blk.empty())) {
 
 		if (callbackPointers.putCallback(callbackPointers.callbackContext
@@ -5328,6 +5330,9 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 			Abort();
 			return;
 		}
+
+		// only call the callback once
+		_put_callback_called = true;
 
 		// the buffer has to be greater than zero. The empty string must be
 		// represented by "0:"

@@ -1620,6 +1620,9 @@ class PutDhtProcess : public DhtBroadcastScheduler
 #endif
 	protected:
 		bool _with_cas;
+		// records whether we've called the callback or not. We just want to
+		// call it once!
+		bool _put_callback_called;
 };
 
 //*****************************************************************************
