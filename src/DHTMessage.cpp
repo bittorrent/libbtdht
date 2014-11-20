@@ -45,6 +45,7 @@ void DHTMessage::Init()
 	type = command = NULL;
 	id = NULL;
 	args = NULL;
+	read_only = false;
 	region.first = region.second = NULL;
 	portNum = vote = seed = scrape = noseed = sequenceNum = 0;
 	error_code = 0;
@@ -72,6 +73,7 @@ void DHTMessage::DecodeMessageData(BencodedDict &bDict)
 	transactionID.b = (byte*)bDict.GetString("t", &transactionID.len);
 	version.b = (byte*)bDict.GetString("v", &version.len);
 	external_ip.b = (byte*)bDict.GetString("ip", &external_ip.len);
+	read_only = bDict.GetInt("ro", 0) != 0;
 
 	type = bDict.GetString("y", 1);
 	if (!type)
@@ -175,12 +177,12 @@ void DHTMessage::DecodeQuery(BencodedDict &bDict)
 		vote = args->GetInt("vote", 0);
 		filename.b = (byte*)args->GetString("name", &filename.len);
 	}
-	else if(strcmp(command,"get") == 0){
+	else if (strcmp(command,"get") == 0) {
 		dhtCommand = DHT_QUERY_GET;
 		target.b = (byte*)args->GetString("target", &target.len);
 		if (target.len != 20) _argumentsAreValid = false;
 	}
-	else if(strcmp(command,"put") == 0){
+	else if (strcmp(command,"put") == 0) {
 		dhtCommand = DHT_QUERY_PUT;
 		token.b = (byte*)args->GetString("token", &token.len);
 		vBuf.len = region.second - region.first;
@@ -190,10 +192,16 @@ void DHTMessage::DecodeQuery(BencodedDict &bDict)
 		key.b = (byte*)args->GetString("k", &key.len); // 32 bytes
 		if (key.b && key.len != 32) _argumentsAreValid = false;
 		sequenceNum = args->GetInt("seq", 0);
-		cas = reinterpret_cast<const byte*>(args->GetString("cas", 20));
+		cas = args->GetInt("cas", 0);
 	}
-	else if(strcmp(command,"ping") == 0){
+	else if (strcmp(command,"ping") == 0) {
 		dhtCommand = DHT_QUERY_PING;
+	}
+	else if (strcmp(command, "punch") == 0) {
+		dhtCommand = DHT_QUERY_PUNCH;
+		target_ip.b = (byte*)args->GetString("ip", &target_ip.len);
+		if (target_ip.b == NULL || target_ip.len != 6)
+			_argumentsAreValid = false;
 	}
 	else {
 		// unknown messages with either a 'target'
@@ -257,6 +265,7 @@ void DHTMessage::CopyFrom(DHTMessage &src)
 	signature = src.signature;
 	region = src.region;
 	vBuf = src.vBuf;
+	target_ip = src.target_ip;
 	impliedPort = src.impliedPort;
 	cas = src.cas;
 

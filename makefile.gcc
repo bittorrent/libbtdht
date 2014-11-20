@@ -1,0 +1,340 @@
+#
+# Host detection
+#
+
+include host.mk
+ifeq ($(HOST),)
+$(error "Can't identify host")
+endif
+
+#
+# Target specification
+#
+
+TARGET_ANDROID = android
+
+$(info Host $(HOST))
+ifeq ($(TARGET),)
+$(info Using default target of $(HOST) (same as host))
+TARGET = $(HOST)
+else
+ifneq ($(TARGET),$(HOST_LINUX))
+ifneq ($(TARGET),$(HOST_MAC))
+ifneq ($(TARGET),$(HOST_CYGWIN))
+ifneq ($(TARGET),$(HOST_FREEBSD))
+ifneq ($(TARGET),$(TARGET_ANDROID))
+$(error Invalid target: '$(TARGET)'. Valid targets: $(HOST_LINUX), $(HOST_MAC), $(HOST_CYGWIN), $(HOST_FREEBSD), $(TARGET_ANDROID) (e.g. make TARGET=$(HOST)))
+endif
+endif
+endif
+endif
+endif
+$(info Target $(TARGET))
+endif
+
+#
+# Platform Setup
+#
+
+export TARGET
+include platform.mk
+ifeq ($(PLATFORM_FLAGS),)
+$(error "Can't initialize for target $(TARGET)")
+endif
+
+#
+# Build setup
+#
+
+export CONFIG
+export CHARSET
+export OPTIMIZE
+include buildconfig.mk
+ifeq ($(CONFIG),)
+$(error "Can't initialize configuration (CONFIG)")
+endif
+ifeq ($(CHARSET),)
+$(error "Can't initialize configuration (CHARSET)")
+endif
+ifeq ($(OPTIMIZE),)
+$(error "Can't initialize configuration (OPTIMIZE)")
+endif
+
+#
+# Compile and linkage setup
+#
+
+# Show system on which we build, gcc version and machine name. Will be useful when
+# looking at log output of failed compilation.
+$(info Building on $(shell uname -a))
+$(info gcc version: $(shell $(CC) -dumpversion))
+$(info gcc machine: $(shell $(CC) -dumpmachine))
+$(info )
+
+# Compile flags
+
+# -c - compile/assemble source files, but do not link
+# -MD - output dependencies to a file located with the object file
+# -g - provide debugging information in OS's native format (for gdb)
+# -pipe - use pipes instead of temporary files for comm between compilation stages
+# -Wall - enable (almost) all warnings
+# -Werror - make all warnings into errors
+# -O - optimization level
+DHT_COMMON_FLAGS = \
+	-c \
+	-MD \
+	-g \
+	-pipe \
+	-Wall \
+	-O$(OPTIMIZE)
+
+# -std - specify the language standard
+DHT_CXXONLY_FLAGS = \
+	-std=c++11
+
+ifeq ($(CHARSET),$(CHARSET_UNICODE))
+DHT_COMMON_FLAGS += -D_UNICODE
+endif
+
+ifeq ($(CONFIG),$(CONFIG_DEBUG))
+DHT_COMMON_FLAGS += -D_DEBUG
+endif
+
+OUTDIR_PREFIX = obj-
+# Keep same order of parts as in ut_ce
+OUTDIR = $(OUTDIR_PREFIX)$(CHARSET)-$(CONFIG)-O$(OPTIMIZE)
+
+# Link flags
+
+LD_SYSTEM_SHLIBFLAGS = -lpthread -lm
+
+ifeq ($(TARGET),$(HOST_LINUX))
+# -lrt is for clock_gettime() - see its man page
+LD_SYSTEM_SHLIBFLAGS += -lrt
+endif
+
+# Include all added compile flags in CFLAGS and CXXFLAGS
+DHT_CFLAGS = $(DHT_COMMON_FLAGS) $(PLATFORM_FLAGS)
+DHT_CXXFLAGS = $(DHT_COMMON_FLAGS) $(PLATFORM_FLAGS) $(DHT_CXXONLY_FLAGS)
+# Android doesn't like CFLAGS/CXXFLAGS modified in this file.
+# It may be useful to avoid setting LOCAL_ flags here - see later.
+ifeq ($(TARGET),$(TARGET_ANDROID))
+LOCAL_CFLAGS += $(DHT_CFLAGS)
+LOCAL_CXXFLAGS += $(DHT_CXXFLAGS)
+endif
+
+#
+# Library sources and products
+#
+
+# ut_utils
+
+UTILS_DIR_ROOT = ut_utils
+UTILS_DIR = $(UTILS_DIR_ROOT)
+UTILS_SRC_ROOT = $(UTILS_DIR)/src
+OUTDIR_UTILS = $(OUTDIR)/$(UTILS_DIR_ROOT)
+UTILS_LIBSRCS = $(sort $(addprefix $(UTILS_SRC_ROOT)/, \
+	DecodeEncodedString.cpp \
+	RefBase.cpp \
+	bencoding.cpp \
+	bencparser.cpp \
+	bitfield.cpp \
+	bloom_filter.cpp \
+	get_microseconds.cpp \
+	inet_ntop.cpp \
+	interlock.cpp \
+	snprintf.cpp \
+	sockaddr.cpp \
+	udp_utils.cpp \
+))
+UTILS_LIBOBJS = $(patsubst %.cpp, $(OUTDIR)/%.o, $(UTILS_LIBSRCS))
+UTILS_LIBOBJDIR = $(OUTDIR)/$(UTILS_DIR)
+UTILS_LIBOBJSRCDIR = $(OUTDIR)/$(UTILS_SRC_ROOT)
+UTILS_INCS += -I $(UTILS_SRC_ROOT)
+
+# ut_dht
+
+SRC_DIR = src
+LIBSRCS = $(sort $(addprefix $(SRC_DIR)/, \
+	blockallocator.cpp \
+	crc32c.cpp \
+	dht.cpp \
+	DhtImpl.cpp \
+	DHTMessage.cpp \
+	ExternalIPCounter.cpp \
+))
+INCS += -I src
+
+LIBBASENAME = utdht
+LIBNAME = lib$(LIBBASENAME).so
+LIBOBJDIR = $(OUTDIR)/$(SRC_DIR)
+LIBOBJS = $(patsubst $(SRC_DIR)/%.cpp, $(LIBOBJDIR)/%.o, $(LIBSRCS))
+LIBDESTDIR = $(OUTDIR)
+OBJDESTLIB = $(LIBDESTDIR)/$(LIBNAME)
+UNSTRIPPEDLIBDESTDIR = $(LIBOBJDIR)
+OBJDESTUNSTRIPPEDLIB = $(UNSTRIPPEDLIBDESTDIR)/$(LIBNAME)
+
+LIBRARY_CXXFLAGS = -fPIC
+LIBRARY_BUILDFLAGS = -shared
+
+# Shared object files
+SHARED_OBJS = $(sort \
+	$(LIBOBJS) \
+	$(UTILS_LIBOBJS) \
+)
+
+SHARED_INCS = $(UTILS_INCS) $(INCS)
+
+#
+# Unit tests sources and products
+#
+
+
+GTEST_VERSION = 1.6.0
+GOOGLE_TEST_HOME = $(UTILS_DIR_ROOT)/vendor/gtest-$(GTEST_VERSION)
+GOOGLE_MOCK_HOME = $(UTILS_DIR_ROOT)/vendor/gmock-$(GTEST_VERSION)
+GOOGLE_TEST_DIR = $(GOOGLE_TEST_HOME)/src
+GOOGLE_MOCK_DIR = $(GOOGLE_MOCK_HOME)/src
+SRCS_GOOGLE_TEST = $(addprefix $(GOOGLE_TEST_DIR)/, \
+	gtest-all.cc \
+)
+SRCS_GOOGLE_MOCK = $(addprefix $(GOOGLE_MOCK_DIR)/, \
+	gmock-all.cc \
+	gmock_main.cc \
+)
+OBJS_GOOGLE_TEST = $(patsubst %.cc, $(OUTDIR)/%.o, $(SRCS_GOOGLE_TEST))
+OBJS_GOOGLE_MOCK = $(patsubst %.cc, $(OUTDIR)/%.o, $(SRCS_GOOGLE_MOCK))
+OUTPUT_GOOGLE_TEST_DIR = $(OUTDIR)/$(GOOGLE_TEST_DIR)
+OUTPUT_GOOGLE_MOCK_DIR = $(OUTDIR)/$(GOOGLE_MOCK_DIR)
+
+UNITTESTS_DIR = unittests
+LIBUNITTESTOBJDIR = $(OUTDIR)/$(UNITTESTS_DIR)
+SRCS_TESTS = $(addprefix $(UNITTESTS_DIR)/, \
+	TestDataStore.cpp \
+	TestDhtID.cpp \
+	TestDhtImpl.cpp \
+	TestDhtImplResponse.cpp \
+	TestDhtImplSpeed.cpp \
+	TestDHTMessageObject.cpp \
+	TestDHTRoutingTable.cpp \
+	TestExternalIPCounter.cpp \
+	TestRoutingTable.cpp \
+	TestSecureDhtID.cpp \
+	UnitTestUDPSocket.cpp \
+)
+OBJS_TESTS = $(patsubst %.cpp, $(OUTDIR)/%.o, $(SRCS_TESTS))
+UNITTESTS_EXE_NAME = unit_tests
+UT_EXE_DEST = $(LIBUNITTESTOBJDIR)/$(UNITTESTS_EXE_NAME)
+UNITTESTS_DIR_DEPS = $(filter-out $(wildcard $(LIBUNITTESTOBJDIR)), $(LIBUNITTESTOBJDIR))
+
+SRCS_UNITTESTS = \
+	$(SRCS_GOOGLE_TEST) \
+	$(SRCS_TESTS)
+
+OBJS_UNITTESTS = $(OBJS_TESTS) $(OBJS_GOOGLE_TEST) $(OBJS_GOOGLE_MOCK)
+
+INCLUDE_UNITTESTS = \
+	$(UTILS_INCS)/ \
+	-I$(GOOGLE_TEST_HOME)/include \
+	-I$(GOOGLE_TEST_HOME) \
+	-I$(GOOGLE_MOCK_HOME)/include \
+	-I$(GOOGLE_MOCK_HOME)
+
+LD_COMPONENT_SHLIBFLAGS = -L$(UNSTRIPPEDLIBDESTDIR) -l$(LIBBASENAME)
+LD_SHLIB_FLAGS = $(LD_COMPONENT_SHLIBFLAGS) $(LD_SYSTEM_SHLIBFLAGS)
+
+#
+# Rules
+#
+
+# Build/test rules
+
+.phony: all product test vgtest
+
+all: $(OBJDESTLIB) $(UT_EXE_DEST)
+
+product: $(OBJDESTLIB)
+
+test: $(UT_EXE_DEST)
+	env LD_LIBRARY_PATH=$(UNSTRIPPEDLIBDESTDIR) $<
+
+# Run unit test executable under valgrind
+vgtest: $(UT_EXE_DEST)
+	env LD_LIBRARY_PATH=$(UNSTRIPPEDLIBDESTDIR) valgrind --tool=memcheck --leak-check=yes $<
+
+$(OBJDESTLIB): $(OBJDESTUNSTRIPPEDLIB)
+	strip -S -o $@ $<
+
+$(OBJDESTUNSTRIPPEDLIB): $(SHARED_OBJS) $(filter-out $(wildcard $(UNSTRIPPEDLIBDESTDIR)), $(UNSTRIPPEDLIBDESTDIR))
+	$(CXX) -o $@ $(LIBRARY_BUILDFLAGS) $(SHARED_OBJS)
+
+$(UT_EXE_DEST): $(OBJDESTUNSTRIPPEDLIB) $(OBJS_UNITTESTS) $(UNITTESTS_DIR_DEPS)
+	$(CXX) -o $@ $(OBJS_UNITTESTS) $(LD_SHLIB_FLAGS)
+
+# Output directory creation rules
+
+# $(filter-out $(wildcard $(directorymacro)), $(directorymacro)) establishes
+# a dependency on a directory that doesn't already exist, so that if the
+# directory exists, the associated mkdir command won't be executed,
+# which would prevent a clean no-op when nothing really needs doing.
+
+$(OUTDIR):
+	mkdir -p $@
+
+# ut_utils
+$(UTILS_LIBOBJDIR): $(filter-out $(wildcard $(OUTDIR)), $(OUTDIR))
+	mkdir -p $@
+$(UTILS_LIBOBJSRCDIR): $(filter-out $(wildcard $(OUTDIR)), $(OUTDIR))
+	mkdir -p $@
+
+ifneq ($(UNSTRIPPEDLIBDESTDIR),$(LIBOBJDIR))
+$(UNSTRIPPEDLIBDESTDIR): $(filter-out $(wildcard $(OUTDIR)), $(OUTDIR))
+	mkdir -p $@
+
+endif
+
+$(LIBOBJDIR): $(filter-out $(wildcard $(OUTDIR)), $(OUTDIR))
+	mkdir -p $@
+
+$(LIBUNITTESTOBJDIR): $(filter-out $(wildcard $(OUTDIR)), $(OUTDIR))
+	mkdir -p $@
+
+$(OUTPUT_GOOGLE_TEST_DIR): $(filter-out $(wildcard $(OUTDIR)), $(OUTDIR))
+	mkdir -p $@
+
+$(OUTPUT_GOOGLE_MOCK_DIR): $(filter-out $(wildcard $(OUTDIR)), $(OUTDIR))
+	mkdir -p $@
+
+# Implicit rules
+
+UTILS_DIR_DEPS = $(filter-out $(wildcard $(UTILS_LIBOBJDIR)), $(UTILS_LIBOBJDIR))
+UTILS_DIR_DEPS += $(filter-out $(wildcard $(UTILS_LIBOBJSRCDIR)), $(UTILS_LIBOBJSRCDIR))
+
+LIBOBJS_DIR_DEPS = $(filter-out $(wildcard $(OBJDIR)), $(OBJDIR))
+LIBOBJS_DIR_DEPS += $(filter-out $(wildcard $(LIBOBJDIR)), $(LIBOBJDIR))
+LIBOBJS_DIR_DEPS += $(UTILS_DIR_DEPS)
+
+$(LIBOBJS): $(LIBOBJDIR)/%.o: $(SRC_DIR)/%.cpp $(LIBOBJS_DIR_DEPS)
+	$(CXX) $(DHT_CXXFLAGS) $(SHARED_INCS) $(LIBRARY_CXXFLAGS) -o $@ $<
+
+$(UTILS_LIBOBJS): $(UTILS_LIBOBJSRCDIR)/%.o: $(UTILS_SRC_ROOT)/%.cpp $(UTILS_DIR_DEPS)
+	$(CXX) $(DHT_CXXFLAGS) $(UTILS_INCS) $(LIBRARY_CXXFLAGS) -o $@ $<
+
+$(OBJS_TESTS): $(LIBUNITTESTOBJDIR)/%.o: $(UNITTESTS_DIR)/%.cpp $(UNITTESTS_DIR_DEPS)
+	$(CXX) $(DHT_CXXFLAGS) $(SHARED_INCS) $(INCLUDE_UNITTESTS) -o $@ $< -DGTEST_USE_OWN_TR1_TUPLE=1
+
+$(OBJS_GOOGLE_TEST): $(OUTPUT_GOOGLE_TEST_DIR)/%.o: $(GOOGLE_TEST_DIR)/%.cc $(filter-out $(wildcard $(OUTPUT_GOOGLE_TEST_DIR)), $(OUTPUT_GOOGLE_TEST_DIR))
+	$(CXX) $(DHT_CXXFLAGS) $(SHARED_INCS) $(INCLUDE_UNITTESTS) -o $@ $< -DGTEST_USE_OWN_TR1_TUPLE=1
+
+$(OBJS_GOOGLE_MOCK): $(OUTPUT_GOOGLE_MOCK_DIR)/%.o: $(GOOGLE_MOCK_DIR)/%.cc $(filter-out $(wildcard $(OUTPUT_GOOGLE_MOCK_DIR)), $(OUTPUT_GOOGLE_MOCK_DIR))
+	$(CXX) $(DHT_CXXFLAGS) $(SHARED_INCS) $(INCLUDE_UNITTESTS) -o $@ $< -DGTEST_USE_OWN_TR1_TUPLE=1
+
+# Clean rules
+
+.phony: clean cleanall
+
+clean:
+	rm -rf $(OUTDIR)
+
+cleanall:
+	rm -rf $(OUTDIR_PREFIX)*

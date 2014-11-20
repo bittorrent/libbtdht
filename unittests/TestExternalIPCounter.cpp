@@ -88,16 +88,16 @@ TEST(externalipcounter, trigger)
 	SockAddr sockAddr;
 	external_ip.GetIP(sockAddr);
 
-	ASSERT_TRUE(sockAddr == addr2);
+	ASSERT_EQ(sockAddr, addr2);
 	ASSERT_FALSE(icot.flag);
 
 	external_ip.CountIP(addr2, src_addr3, 60);
 	ASSERT_FALSE(icot.flag);
 
 	external_ip.CountIP(addr3, src_addr3, 60);
-	external_ip.CountIP(addr4, src_addr4, 70);
+	external_ip.CountIP(addr4, src_addr4, 61);
 	external_ip.GetIP(sockAddr);
-	ASSERT_TRUE(sockAddr == addr3);
+	ASSERT_EQ(sockAddr, addr3);
 	ASSERT_TRUE(icot.flag);
 
 }

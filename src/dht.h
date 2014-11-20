@@ -19,12 +19,14 @@ class BencEntity;
 
 // callback types used in the DHT
 typedef void DhtVoteCallback(void *ctx, const byte *target, int const* votes);
-typedef void DhtPartialHashCompletedCallback(void *ctx, const byte *info_hash);
 typedef void DhtHashFileNameCallback(void *ctx, const byte *info_hash, const byte *file_name);
 typedef void DhtAddNodesCallback(void *ctx, const byte *info_hash, const byte *peers, uint num_peers);
 typedef void DhtAddNodeResponseCallback(void*& userdata, bool is_response, SockAddr const& addr);
 typedef void DhtScrapeCallback(void *ctx, const byte *target, int downloaders, int seeds);
-typedef void DhtPutCallback(void * ctx, std::vector<char>& buffer, int64 seq);
+typedef int DhtPutCallback(void * ctx, std::vector<char>& buffer, int64 seq, SockAddr src);
+typedef int DhtPutDataCallback(void * ctx, std::vector<char> const& buffer, int64 seq, SockAddr src);
+typedef void DhtPutCompletedCallback(void * ctx);
+typedef void DhtLogCallback(char const* str);
 
 // asks the client to save the DHT state
 typedef void DhtSaveCallback(const byte* buf, int len);
@@ -78,11 +80,25 @@ public:
 		//pkey points to a 32-byte ed25519 public.
 		const byte * pkey,
 		const byte * skey,
-		//This method is called in DhtSendRPC for Put. 
-		//It takes v (from get responses) as an input and may or may not change v to place in Put messages.
-		DhtPutCallback * put_callback,
+
+		// This method is called in DhtSendRPC for Put. It takes v (from get
+		// responses) as an input and may or may not change v to place in Put
+		// messages. if the callback function returns a non-zero value, the
+		// DhtProcess is aborted and the value is not stored back in the DHT.
+		DhtPutCallback* put_callback,
+
+		//called in CompleteThisProcess
+		DhtPutCompletedCallback * put_completed_callback,
+
+		// called every time we receive a blob from a node. This cannot be used
+		// to modify and write back the data, this is just a sneak-peek of what's
+		// likely to be in the final blob that's passed to put_callback if the
+		// callback function returns a non-zero value, the DhtProcess is aborted
+		// and the value is not stored back in the DHT.
+		DhtPutDataCallback* put_data_callback,
 		void *ctx,
 		int flags = 0,
+
 		// seq is an optional provided monotonically increasing sequence number to be
 		// used in a Put request if the requester is keeping sequence number state
 		// this number will be used if higher than any numbers gotten from peers
@@ -90,8 +106,6 @@ public:
 
 	virtual void AnnounceInfoHash(
 		const byte *info_hash,
-		int info_hash_len,
-		DhtPartialHashCompletedCallback *partial_callback,
 		DhtAddNodesCallback *addnodes_callback,
 		DhtPortCallback* pcb,
 		cstr file_name,
@@ -129,6 +143,12 @@ public:
 	virtual void Initialize(UDPSocketInterface *, UDPSocketInterface *) = 0;
 	virtual bool IsEnabled() = 0;
 	virtual void ForceRefresh() = 0;
+	// do not respond to queries - for mobile nodes with data constraints
+	virtual void SetReadOnly(bool readOnly) = 0;
+	virtual void SetPingFrequency(int seconds) = 0;
+	virtual void SetPingBatching(int num_pings) = 0;
+	virtual void EnableQuarantine(bool e) = 0;
+
 	virtual bool ProcessIncoming(byte *buffer, size_t len, const SockAddr& addr) = 0;
 #ifdef _DEBUG_MEM_LEAK
 	virtual int FreeRequests() = 0;
@@ -150,7 +170,6 @@ public:
 	virtual int GetBootstrapState() = 0;
 	virtual int GetRate() = 0;
 	virtual int GetQuota() = 0;
-	virtual int GetNumOutstandingAddNodes() = 0;
 	virtual int GetProbeRate() = 0;
 	virtual int GetNumPeersTracked() = 0;
 	virtual void Restart() = 0;
@@ -163,7 +182,9 @@ public:
 };
 
 smart_ptr<IDht> create_dht(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_socket_mgr
-	, DhtSaveCallback* save, DhtLoadCallback* load);
+	, DhtSaveCallback* save, DhtLoadCallback* load, ExternalIPCounter* eip = NULL);
+
+void set_log_callback(DhtLogCallback* log);
 
 #endif //__DHT_H__
 

@@ -43,6 +43,13 @@ inline void ed25519_callback(unsigned char * sig, const unsigned char * v,
 	}
 }
 
+inline bool ed25519_verify(const unsigned char *signature,
+		const unsigned char *message, unsigned long long message_len,
+		const unsigned char *key)
+{
+	return true;
+}
+
 class dht_impl_test : public dht_test {
 	protected:
 		SockAddr bind_addr;
@@ -75,6 +82,8 @@ class dht_impl_test : public dht_test {
 			impl = new DhtImpl(&socket4, &socket6);
 			impl->SetSHACallback(&sha1_callback);
 			impl->SetEd25519SignCallback(&ed25519_callback);
+			impl->SetEd25519VerifyCallback(&ed25519_verify);
+			impl->EnableQuarantine(false);
 
 			peer_id.id.id[0] = '1111'; // 1111
 			peer_id.id.id[1] = 'BBBB'; // BBBB
@@ -89,6 +98,19 @@ class dht_impl_test : public dht_test {
 
 			response_token = "20_byte_reply_token.";
 			v = "sample";
+		}
+
+		void add_node(char const* id) {
+
+			extern void CopyBytesToDhtID(DhtID &id, const byte *b);
+
+			// add one peer whose first_seen is old enough to include in a node
+			// response
+			DhtPeerID tmp;
+			CopyBytesToDhtID(tmp.id, (const byte*)id);
+			tmp.addr.set_port(128);
+			tmp.addr.set_addr4(0xf0f0f0f0);
+			impl->Update(tmp, IDht::DHT_ORIGIN_UNKNOWN, true, 10);
 		}
 
 		virtual void TearDown() override {
@@ -124,7 +146,7 @@ class dht_impl_test : public dht_test {
 		}
 
 		void fetch_dict() {
-			std::string benc_message = socket4.GetSentDataAsString();
+			std::string benc_message = socket4.GetSentDataAsString(socket4.numPackets()-1);
 			// should not store expected dict in a BencodedDict because if the output
 			// is somehow not a dict that will trigger a non-unittest assert, and we
 			// wish to handle that case ourselves
@@ -194,6 +216,15 @@ class dht_impl_test : public dht_test {
 			ASSERT_NO_FATAL_FAILURE(expect_ip());
 		}
 
+		bool test_transaction_id(const char* id, int id_len) {
+			Buffer tid;
+			tid.b = (unsigned char*)dict->GetString("t", &tid.len);
+			if (tid.b == NULL) return false;
+			if (id_len != tid.len) return false;
+
+			return memcmp((const void*)tid.b, (const void *)id, id_len) == 0;
+		}
+
 		void expect_transaction_id(const char* id, int id_len) {
 			Buffer tid;
 			tid.b = (unsigned char*)dict->GetString("t", &tid.len);
@@ -241,13 +272,11 @@ class dht_impl_test : public dht_test {
 			EXPECT_FALSE(memcmp(value, v_out.b, value_len)) << "ERROR: v is wrong";
 		}
 
-		void expect_cas(const unsigned char* cas) {
+		void expect_cas(uint64 expected_cas) {
 			ASSERT_NO_FATAL_FAILURE(get_reply());
-			Buffer cas_buf;
-			cas_buf.b = (unsigned char*)reply->GetString("cas", &cas_buf.len);
-			ASSERT_TRUE(cas_buf.b);
-			EXPECT_EQ(20, cas_buf.len);
-			EXPECT_FALSE(memcmp(cas, cas_buf.b, 20)) << "ERROR: wrong cas";
+			uint64 cas;
+			cas = reply->GetInt("cas", 0);
+			EXPECT_EQ(expected_cas, cas);
 		}
 
 		void expect_target() {

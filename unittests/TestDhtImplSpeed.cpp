@@ -161,7 +161,7 @@ TEST_F(dht_impl_speed_test, Announce_ReplyWithNodes_Speed) {
 	// put a peer into the dht for it to work with
 	peer_id.addr.set_port(('8' << 8) + '8'); // 88
 	peer_id.addr.set_addr4('aaaa'); // aaaa
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
@@ -175,7 +175,7 @@ TEST_F(dht_impl_speed_test, Announce_ReplyWithNodes_Speed) {
 		// *****************************************************
 		// make the dht emit an announce message (the get_peers rpc)
 		// *****************************************************
-		impl->DoAnnounce(target, 20, NULL, &AddNodesCallbackDummy::Callback, NULL,
+		impl->DoAnnounce(target, &AddNodesCallbackDummy::Callback, NULL,
 				filenameTxt.c_str(), NULL, 0);
 		ASSERT_NO_FATAL_FAILURE(fetch_dict());
 		ASSERT_NO_FATAL_FAILURE(expect_query_type());
