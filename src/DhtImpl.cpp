@@ -3487,6 +3487,7 @@ void DhtImpl::Restart() {
 	RandomizeWriteToken();
 	RandomizeWriteToken();
 	_dht_enabled = old_g_dht_enabled;
+	_closing = !_dht_enabled;
 }
 
 bool DhtImpl::handleICMP(UDPSocketInterface *socket, byte *buffer, size_t len, const SockAddr& addr)
