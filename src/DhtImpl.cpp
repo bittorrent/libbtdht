@@ -2196,9 +2196,7 @@ bool DhtImpl::ProcessQueryGet(DHTMessage &message, DhtPeerID &peerID,
 		keyToReturn.b = mutableStoreIterator->second.value.key;
 		sequenceNum = mutableStoreIterator->second.value.sequenceNum;
 		mutableStoreIterator->second.lastUse = time(NULL);
-	}
-	else if (message.key.len == 0)
-	{
+	} else if (message.key.len == 0) {
 		// no key, look in the immutable table with the same target
 		DataStore<DhtID, std::vector<byte> >::pair_iterator immutableStoreIterator;
 		immutableStoreIterator = _immutablePutStore.FindInList(targetId, time(NULL), hashPtr);
@@ -3163,6 +3161,31 @@ void DhtImpl::Put(const byte * pkey, const byte * skey
 		callbacks, flags);
 		dpm->AddDhtProcess(putProc); // add announce second
 	}
+	dpm->Start();
+}
+
+void DhtImpl::ImmutablePut(byte * id, const byte * data, size_t data_len,
+			DhtPutCompletedCallback* put_completed_callback, void *ctx) {
+	sha1_hash h = _sha_callback(data, data_len);
+	assert(id != nullptr);
+	if (id != nullptr) {
+		memcpy(id, h.value, DHT_ID_SIZE);
+	}
+	DhtID target;
+	CopyBytesToDhtID(target, h.value);
+	DhtPeerID *ids[32];
+	int num = AssembleNodeList(target, ids, lenof(ids));
+
+	DhtProcessManager *dpm = new DhtProcessManager(ids, num, target);
+
+	CallBackPointers callbacks;
+	callbacks.putCompletedCallback = put_completed_callback;
+	DhtProcessBase* getProc = GetDhtProcess::Create(this, *dpm, target
+		, callbacks, 0, KADEMLIA_LOOKUP_OUTSTANDING);
+	dpm->AddDhtProcess(getProc);
+	DhtProcessBase* putProc = ImmutablePutDhtProcess::Create(this, *dpm, data,
+			data_len, callbacks);
+	dpm->AddDhtProcess(putProc);
 	dpm->Start();
 }
 
@@ -5306,6 +5329,61 @@ void PutDhtProcess::Sign(std::vector<char> &signature, std::vector<char> v, byte
 	signature.assign(sig, sig+64);
 }
 
+//*****************************************************************************
+//
+// ImmutablePutDhtProcess			immutable put
+//
+//*****************************************************************************
+ImmutablePutDhtProcess::ImmutablePutDhtProcess(DhtImpl* pDhtImpl
+	, DhtProcessManager &dpm
+	, byte const* data
+	, size_t data_len
+	, time_t startTime
+	, const CallBackPointers &consumerCallbacks)
+	: DhtBroadcastScheduler(pDhtImpl, dpm, target
+		, startTime, consumerCallbacks, 12)
+{
+	char* buf = (char*)this->_id;
+	memcpy(buf, pDhtImpl->_my_id_bytes, DHT_ID_SIZE);
+	_data.assign(data, data + data_len);
+
+#if defined(_DEBUG_DHT_VERBOSE)
+	debug_log("[%u] NEW IPUT process", process_id());
+#endif
+
+#if g_log_dht
+	dht_log("ImmutablePutDhtProcess,instantiated,id,%d,time,%d\n", target.id[0],
+			get_milliseconds());
+#endif
+}
+
+DhtProcessBase* ImmutablePutDhtProcess::Create(DhtImpl* pDhtImpl,
+		DhtProcessManager &dpm, byte const* data, size_t data_len,
+		CallBackPointers &cbPointers)
+{
+	return new ImmutablePutDhtProcess(pDhtImpl, dpm, data, data_len, time(NULL),
+			cbPointers);
+}
+
+void ImmutablePutDhtProcess::Start()
+{
+#if g_log_dht
+	dht_log("ImmutablePutDhtProcess,start_announce,id,%d,time,%d\n",
+			target.id[0], get_microseconds());
+#endif
+	processManager.SetAllQueriedStatus(QUERIED_NO);
+	DhtProcessBase::Start();
+}
+ 
+ImmutablePutDhtProcess::~ImmutablePutDhtProcess()
+{
+}
+
+bool ImmutablePutDhtProcess::Filter(DhtFindNodeEntry const& e)
+{
+	return no_put_support(e) || e.token.b == NULL;
+}
+
 bool DhtImpl::Verify(byte const * signature, byte const * message, int message_length, byte *pkey, int64 seq) {
 	unsigned char buf[1500];
 	int index = sprintf(reinterpret_cast<char*>(buf), MUTABLE_PAYLOAD_FORMAT, seq);
@@ -5459,7 +5537,92 @@ void PutDhtProcess::CompleteThisProcess()
 	signature.clear();
 
 #if g_log_dht
-	dht_log("PutDhtProcess,complete_announce,id,%d,time,%d\n", target.id[0]
+	dht_log("PutDhtProcess,completed,id,%d,time,%d\n", target.id[0]
+		, get_milliseconds());
+#endif
+
+	if (callbackPointers.putCompletedCallback)
+		callbackPointers.putCompletedCallback(callbackPointers.callbackContext);
+
+	// never call this twice
+	callbackPointers.putCompletedCallback = NULL;
+
+	DhtProcessBase::CompleteThisProcess();
+}
+
+//*****************************************************************************
+//
+// ImmutablePutDhtProcess		immutable put
+//
+//*****************************************************************************
+
+void ImmutablePutDhtProcess::ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags) {
+	if (message.dhtMessageType != DHT_RESPONSE) {
+		impl->UpdateError(peer_id, flags & ICMP_ERROR);
+	}
+	if (message.dhtMessageType == DHT_ERROR) {
+		Abort();
+
+		// don't call the completion callback twice. Since we just
+		// passed it into a new Put process, it will be called when
+		// it completes
+		callbackPointers.putCompletedCallback = NULL;
+	}
+
+#if defined(_DEBUG_DHT_VERBOSE)
+	debug_log("[%u] <-- PUT tid=%d", process_id(), Read32(message.transactionID.b));
+#endif
+}
+
+void ImmutablePutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID) {
+	static const int buf_len = 1500;
+	unsigned char buf[buf_len];
+	smart_buffer sb(reinterpret_cast<unsigned char*>(buf), buf_len);
+
+	sb("d1:ad");
+	sb("2:id20:")((byte*)this->_id, DHT_ID_SIZE);
+	sb("5:token")("%d:", int(nodeInfo.token.len));
+	sb(reinterpret_cast<unsigned char*>(nodeInfo.token.b),
+			int(nodeInfo.token.len));
+	sb("1:v")("%d:", int(_data.size()));
+	sb(reinterpret_cast<const unsigned char*>(&(_data[0])), _data.size());
+	sb("e1:q3:put");
+	impl->put_is_read_only(sb);
+	sb("1:t%d:", 4)(reinterpret_cast<const unsigned char*>(&transactionID), 4);
+	const unsigned char * dht_utversion = impl->get_version();
+	sb("1:v4:%c%c%c%c", dht_utversion[0], dht_utversion[1], dht_utversion[2],
+			dht_utversion[3]);
+	sb("1:y1:qe");
+	int64 len = sb.length();
+	
+	// send the query
+	if (len < 0) {
+		do_log("DHT put blob exceeds %i byte maximum size! blk size: %lu", buf_len,
+				_data.size());
+		return;
+	}
+
+#ifdef _DEBUG_DHT
+	if (impl->_lookup_log)
+		fprintf(impl->_lookup_log, "[%u] [%u] [%s]: IPUT -> %s\n"
+			, uint(get_milliseconds()), process_id(), name(), print_sockaddr(nodeInfo.id.addr).c_str());
+#endif
+
+#if defined(_DEBUG_DHT_VERBOSE)
+	debug_log("[%u] --> IPUT %s tid=%d", process_id()
+		, hexify(this->_id), transactionID);
+#endif
+	instrument_log('>', "iput", 'q', sb.length(), transactionID);
+	impl->SendTo(nodeInfo.id.addr, buf, len);
+}
+
+void ImmutablePutDhtProcess::CompleteThisProcess() {
+	// why would this ever be set for a non-FindNodes process?
+	assert(callbackPointers.processListener == nullptr);
+	assert(callbackPointers.addnodesCallback == nullptr);
+
+#if g_log_dht
+	dht_log("ImmutablePutDhtProcess,completed,id,%d,time,%d\n", target.id[0]
 		, get_milliseconds());
 #endif
 

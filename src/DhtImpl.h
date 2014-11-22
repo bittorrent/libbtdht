@@ -1625,6 +1625,34 @@ class PutDhtProcess : public DhtBroadcastScheduler
 		bool _put_callback_called;
 };
 
+class ImmutablePutDhtProcess : public DhtBroadcastScheduler
+{
+	protected:
+		virtual void ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags);
+		virtual void DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID);
+		virtual void CompleteThisProcess();
+
+		virtual bool Filter(DhtFindNodeEntry const& e);
+
+	public:
+
+		byte _id[DHT_ID_SIZE];
+		std::vector<byte> _data;
+
+		ImmutablePutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
+				const byte * data, size_t data_len, time_t startTime,
+				const CallBackPointers &consumerCallbacks);
+		~ImmutablePutDhtProcess();
+		virtual void Start();
+
+		static DhtProcessBase* Create(DhtImpl* pDhtImpl, DhtProcessManager &dpm,
+			byte const * data, size_t len, CallBackPointers &cbPointers);
+
+#ifdef _DEBUG_DHT
+		virtual char const* name() const { return "ImmutablePut"; }
+#endif
+};
+
 //*****************************************************************************
 //
 // ScrapeDhtProcess		get_peers with scrape
@@ -1750,6 +1778,9 @@ public:
 		, DhtPutDataCallback* put_data_callback
 		, void *ctx, int flags = 0
 		, int64 seq = 0);
+
+	void ImmutablePut(byte * id, const byte * data, size_t data_len,
+			DhtPutCompletedCallback* put_completed_callback, void *ctx);
 
 	void AnnounceInfoHash(const byte *info_hash,
 		DhtAddNodesCallback *addnodes_callback, DhtPortCallback* pcb, cstr file_name,

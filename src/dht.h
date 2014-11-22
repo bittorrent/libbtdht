@@ -104,6 +104,13 @@ public:
 		// this number will be used if higher than any numbers gotten from peers
 		int64 seq = 0) = 0;
 
+	virtual void ImmutablePut(
+			byte * id,
+			const byte * data,
+			size_t data_len,
+			DhtPutCompletedCallback* put_completed_callback = nullptr,
+			void *ctx = nullptr) = 0;
+
 	virtual void AnnounceInfoHash(
 		const byte *info_hash,
 		DhtAddNodesCallback *addnodes_callback,
