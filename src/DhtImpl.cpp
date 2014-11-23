@@ -3164,13 +3164,9 @@ void DhtImpl::Put(const byte * pkey, const byte * skey
 	dpm->Start();
 }
 
-void DhtImpl::ImmutablePut(byte * id, const byte * data, size_t data_len,
+sha1_hash DhtImpl::ImmutablePut(const byte * data, size_t data_len,
 			DhtPutCompletedCallback* put_completed_callback, void *ctx) {
 	sha1_hash h = _sha_callback(data, data_len);
-	assert(id != nullptr);
-	if (id != nullptr) {
-		memcpy(id, h.value, DHT_ID_SIZE);
-	}
 	DhtID target;
 	CopyBytesToDhtID(target, h.value);
 	DhtPeerID *ids[32];
@@ -3187,6 +3183,7 @@ void DhtImpl::ImmutablePut(byte * id, const byte * data, size_t data_len,
 			data_len, callbacks);
 	dpm->AddDhtProcess(putProc);
 	dpm->Start();
+	return h;
 }
 
 /**

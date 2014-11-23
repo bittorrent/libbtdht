@@ -1779,7 +1779,7 @@ public:
 		, void *ctx, int flags = 0
 		, int64 seq = 0);
 
-	void ImmutablePut(byte * id, const byte * data, size_t data_len,
+	sha1_hash ImmutablePut(const byte * data, size_t data_len,
 			DhtPutCompletedCallback* put_completed_callback, void *ctx);
 
 	void AnnounceInfoHash(const byte *info_hash,
