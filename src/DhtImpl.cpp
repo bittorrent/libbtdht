@@ -3059,7 +3059,7 @@ void DhtImpl::OnPingReply(void* &userdata, const DhtPeerID &peer_id
 		uint num_nodes = nodes.len / node_size;
 		// Insert all peers into my internal list.
 #if defined(_DEBUG_DHT_VERBOSE)
-		debug_log("[%u] <-- adding %d new nodes", process_id(), num_nodes);
+		debug_log("<-- adding %d new nodes", num_nodes);
 #endif
 		while (num_nodes != 0) {
 			DhtPeerID peer;
