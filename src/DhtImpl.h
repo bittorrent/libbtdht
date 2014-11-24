@@ -1776,6 +1776,7 @@ public:
 	bool handleICMP(UDPSocketInterface *socket, byte *buffer, size_t len, const SockAddr& addr);
 
 	void Close() { _closing = true; }
+	bool Closing() { return _closing; }
 	void Shutdown();
 	void Tick();
 	void Enable(bool enabled, int rate);

@@ -4127,7 +4127,6 @@ unsigned int DhtProcessBase::process_id() const
 
 void DhtProcessBase::Abort()
 {
-	if (aborted) return;
 	aborted = true;
 	processManager.Abort();
 }
@@ -4191,7 +4190,7 @@ DhtLookupScheduler::DhtLookupScheduler(DhtImpl* pDhtImpl
 	, time_t startTime, const CallBackPointers &consumerCallbacks
 	, int maxOutstanding, int fl, int targets)
 	: DhtProcessBase(pDhtImpl, dpm, target2
-		, startTime,consumerCallbacks)
+		, startTime, consumerCallbacks)
 	, num_targets(targets)
 	, maxOutstandingLookupQueries(maxOutstanding)
 	, numNonSlowRequestsOutstanding(0)
@@ -4216,6 +4215,19 @@ DhtLookupScheduler::DhtLookupScheduler(DhtImpl* pDhtImpl
 */
 void DhtLookupScheduler::Schedule()
 {
+	// Don't let processes run for too long while closing
+	// assumption is the application doesn't want to linger too long after
+	// receiving the quit command
+	// Don't call Abort() so that the next process will get a chance to run
+	// this is important for allowing a Put to execute after a long running Get
+	if (impl->Closing() && time(NULL) - start_time >= 15) {
+		aborted = true;
+
+#if defined(_DEBUG_DHT_VERBOSE)
+		debug_log("[%u] Process ran for too long, aborting", process_id());
+#endif
+	}
+
 	if (aborted) {
 		if (totalOutstandingRequests == 0){
 			CompleteThisProcess();
@@ -4251,6 +4263,7 @@ void DhtLookupScheduler::Schedule()
 
 		switch (processManager[nodeIndex].queried){
 			case QUERIED_NO: {
+				if (aborted) break;
 				IssueQuery(nodeIndex);
 				// NOTE: break is intentionally omitted here
 			}
@@ -4310,6 +4323,8 @@ void DhtLookupScheduler::Schedule()
 */
 void DhtLookupScheduler::IssueOneAdditionalQuery()
 {
+	if (aborted) return;
+
 	for(int x=0; x<processManager.size(); ++x){
 		if(processManager[x].queried == QUERIED_NO){
 			IssueQuery(x);
