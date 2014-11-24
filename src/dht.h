@@ -26,6 +26,7 @@ typedef void DhtScrapeCallback(void *ctx, const byte *target, int downloaders, i
 typedef int DhtPutCallback(void * ctx, std::vector<char>& buffer, int64 seq, SockAddr src);
 typedef int DhtPutDataCallback(void * ctx, std::vector<char> const& buffer, int64 seq, SockAddr src);
 typedef void DhtPutCompletedCallback(void * ctx);
+typedef void DhtGetCallback(void* ctx, std::vector<char> const& buffer);
 typedef void DhtLogCallback(char const* str);
 
 // asks the client to save the DHT state
@@ -109,6 +110,9 @@ public:
 			size_t data_len,
 			DhtPutCompletedCallback* put_completed_callback = nullptr,
 			void *ctx = nullptr) = 0;
+
+	virtual void ImmutableGet(sha1_hash target, DhtGetCallback* cb
+		, void* ctx = nullptr) = 0;
 
 	virtual void AnnounceInfoHash(
 		const byte *info_hash,

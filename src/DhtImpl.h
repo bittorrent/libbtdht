@@ -933,27 +933,30 @@ class CallBackPointers
 		CallBackPointers();
 
 		void* callbackContext;
-		IDhtProcessCallbackListener *processListener;
-		DhtAddNodesCallback *addnodesCallback;
-		DhtScrapeCallback *scrapeCallback;
-		DhtVoteCallback *voteCallback;
-		DhtHashFileNameCallback *filenameCallback;
-		DhtPortCallback *portCallback;
-		DhtPutCallback * putCallback;
-		DhtPutCompletedCallback * putCompletedCallback;
-		DhtPutDataCallback * putDataCallback;
+		IDhtProcessCallbackListener* processListener;
+		DhtAddNodesCallback* addnodesCallback;
+		DhtScrapeCallback* scrapeCallback;
+		DhtVoteCallback* voteCallback;
+		DhtHashFileNameCallback* filenameCallback;
+		DhtPortCallback* portCallback;
+		DhtPutCallback* putCallback;
+		DhtPutCompletedCallback* putCompletedCallback;
+		DhtPutDataCallback* putDataCallback;
+		DhtGetCallback* getCallback;
 };
 
-inline CallBackPointers::CallBackPointers() : callbackContext(NULL),
-	processListener(NULL),
-	addnodesCallback(NULL),
-	scrapeCallback(NULL),
-	voteCallback(NULL),
-	filenameCallback(NULL),
-	portCallback(NULL),
-	putCallback(NULL),
-	putCompletedCallback(NULL),
-	putDataCallback(NULL)
+inline CallBackPointers::CallBackPointers()
+	: callbackContext(NULL)
+	, processListener(NULL)
+	, addnodesCallback(NULL)
+	, scrapeCallback(NULL)
+	, voteCallback(NULL)
+	, filenameCallback(NULL)
+	, portCallback(NULL)
+	, putCallback(NULL)
+	, putCompletedCallback(NULL)
+	, putDataCallback(NULL)
+	, getCallback(NULL)
 {}
 
 //*****************************************************************************
@@ -1783,6 +1786,9 @@ public:
 	sha1_hash ImmutablePut(const byte * data, size_t data_len,
 			DhtPutCompletedCallback* put_completed_callback, void *ctx);
 
+	void ImmutableGet(sha1_hash target, DhtGetCallback* cb
+		, void* ctx = nullptr);
+
 	void AnnounceInfoHash(const byte *info_hash,
 		DhtAddNodesCallback *addnodes_callback, DhtPortCallback* pcb, cstr file_name,
 		void *ctx, int flags);
@@ -1796,7 +1802,7 @@ public:
 	void SetEd25519SignCallback(Ed25519SignCallback* cb);
 	void SetPacketCallback(DhtPacketCallback* cb);
 
-	void AddNode(const SockAddr& addr, void* userdata, uint origin);
+	void AddNode(const SockAddr& addr, void* uerdata, uint origin);
 	void AddBootstrapNode(SockAddr const& addr);
 
 	void DumpBuckets();

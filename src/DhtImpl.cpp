@@ -3172,8 +3172,9 @@ void DhtImpl::Put(const byte * pkey, const byte * skey
 	dpm->Start();
 }
 
-sha1_hash DhtImpl::ImmutablePut(const byte * data, size_t data_len,
-			DhtPutCompletedCallback* put_completed_callback, void *ctx) {
+sha1_hash DhtImpl::ImmutablePut(const byte * data, size_t data_len
+	, DhtPutCompletedCallback* put_completed_callback, void *ctx)
+{
 	sha1_hash h = _sha_callback(data, data_len);
 	DhtID target;
 	CopyBytesToDhtID(target, h.value);
@@ -3184,6 +3185,8 @@ sha1_hash DhtImpl::ImmutablePut(const byte * data, size_t data_len,
 
 	CallBackPointers callbacks;
 	callbacks.putCompletedCallback = put_completed_callback;
+	callbacks.callbackContext = ctx;
+
 	DhtProcessBase* getProc = GetDhtProcess::Create(this, *dpm, target
 		, callbacks, 0, KADEMLIA_LOOKUP_OUTSTANDING);
 	dpm->AddDhtProcess(getProc);
@@ -3192,6 +3195,26 @@ sha1_hash DhtImpl::ImmutablePut(const byte * data, size_t data_len,
 	dpm->AddDhtProcess(putProc);
 	dpm->Start();
 	return h;
+}
+
+void DhtImpl::ImmutableGet(sha1_hash target, DhtGetCallback* cb
+	, void* ctx)
+{
+	DhtID target_id;
+	CopyBytesToDhtID(target_id, target.value);
+	DhtPeerID *ids[32];
+	int num = AssembleNodeList(target_id, ids, lenof(ids));
+
+	DhtProcessManager *dpm = new DhtProcessManager(ids, num, target_id);
+
+	CallBackPointers callbacks;
+	callbacks.getCallback = cb;
+	callbacks.callbackContext = ctx;
+
+	DhtProcessBase* getProc = GetDhtProcess::Create(this, *dpm, target_id
+		, callbacks, 0, KADEMLIA_LOOKUP_OUTSTANDING);
+	dpm->AddDhtProcess(getProc);
+	dpm->Start();
 }
 
 /**
@@ -4565,7 +4588,7 @@ void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 	DhtFindNodeEntry *dfnh = ProcessMetadataAndPeer(peer_id, message, flags);
 	if (dfnh == NULL) return;
 
-	//We are looking for the response message with the maximum seq number.
+	//i We are looking for the response message with the maximum seq number.
 	if (message.sequenceNum >= processManager.seq()
 		&& message.signature.len > 0
 		&& message.vBuf.len > 0
@@ -4592,6 +4615,21 @@ void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 				Abort();
 			}
 		}
+	}
+
+	if (callbackPointers.getCallback && message.vBuf.len > 0) {
+
+		// This is an immutable get, without a put associated with it.
+		// if we got a data response, there's no need to continue, every
+		// response is guaranteed to be identical, so just abort
+		std::vector<char> blk((char*)message.vBuf.b
+			, (char*)message.vBuf.b + message.vBuf.len);
+
+		callbackPointers.getCallback(callbackPointers.callbackContext, blk);
+
+		// avoid having the callback called twice
+		callbackPointers.getCallback = NULL;
+		Abort();
 	}
 
 	if (_with_cas) {
@@ -4723,7 +4761,7 @@ FindNodeDhtProcess::FindNodeDhtProcess(DhtImpl* pDhtImpl
 	, const CallBackPointers &consumerCallbacks, int maxOutstanding
 	, int flags)
 	: DhtLookupScheduler(pDhtImpl,dpm,target2,startTime
-		,consumerCallbacks,maxOutstanding, flags)
+		, consumerCallbacks,maxOutstanding, flags)
 {
 	DhtIDToBytes(target_bytes, target);
 #if g_log_dht
