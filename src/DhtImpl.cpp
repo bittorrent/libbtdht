@@ -187,6 +187,7 @@ DhtImpl::DhtImpl(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_so
 	_peers_tracked = 0;
 	_dht_enabled = false;
 	_dht_read_only = false;
+	_closing = false;
 	_udp_socket_mgr = NULL;
 	_udp6_socket_mgr = NULL;
 	_dht_busy = 0;
@@ -366,6 +367,7 @@ void DhtImpl::Enable(bool enabled, int rate)
 	if (_dht_enabled != enabled) {
 		_dht_enabled = enabled;
 		_dht_bootstrap = not_bootstrapped;
+		_closing = !enabled;
 	}
 
 #ifdef _DEBUG_DHT
@@ -2645,6 +2647,8 @@ void DhtImpl::GenRandomIDInBucket(DhtID &target, DhtBucket *bucket)
 
 void DhtImpl::DoBootstrap()
 {
+	if (_closing) return;
+
 #ifdef _DEBUG_DHT
 	debug_log("start bootstrap");
 
@@ -2869,6 +2873,8 @@ int count_nodes(DhtBucketList& l)
 
 uint DhtImpl::PingStalestNode()
 {
+	if (_closing) return 0;
+
 	// first we need to figure out which order the buckets are, from closest
 	// to us from farthest away from us. The span is a proxy for this, larger
 	// span means farther away.
@@ -3080,6 +3086,8 @@ void DhtImpl::OnPingReply(void* &userdata, const DhtPeerID &peer_id
 void DhtImpl::AddNode(const SockAddr& addr, void* userdata, uint origin)
 {
 	assert(!addr.isv6());
+
+	if (_closing) return;
 
 	DhtPeerID peer_id;
 	peer_id.addr = addr;
@@ -3499,6 +3507,7 @@ void DhtImpl::Restart() {
 	RandomizeWriteToken();
 	RandomizeWriteToken();
 	_dht_enabled = old_g_dht_enabled;
+	_closing = !_dht_enabled;
 }
 
 bool DhtImpl::handleICMP(UDPSocketInterface *socket, byte *buffer, size_t len, const SockAddr& addr)

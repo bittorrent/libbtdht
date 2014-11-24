@@ -1756,6 +1756,7 @@ public:
 	bool handleReadEvent(UDPSocketInterface *socket, byte *buffer, size_t len, const SockAddr& addr);
 	bool handleICMP(UDPSocketInterface *socket, byte *buffer, size_t len, const SockAddr& addr);
 
+	void Close() { _closing = true; }
 	void Shutdown();
 	void Tick();
 	void Enable(bool enabled, int rate);
@@ -1910,6 +1911,7 @@ public:
 	bool _allow_new_job;
 	bool _dht_enabled;
 	bool _dht_read_only;
+	bool _closing; // app is closing, don't initiate bootstrap
 
 	int _dht_peers_count;
 	int _refresh_buckets_counter;	// Number of seconds since the last bucket was operated upon

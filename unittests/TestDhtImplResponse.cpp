@@ -2384,7 +2384,7 @@ TEST_F(dht_impl_response_test, DoFindNodesWithMultipleNodesInDHT) {
 			"No transaction IDs were emitted, test can not continue.";
 
 	// send the same node info back from both queried nodes
-	std::string compact_node("WWWWWXXXXXYYYYYZZZZZaaaa88");
+	std::string compact_node("WWWWWXXXXXYYYYYZZZZZcaac88");
 	len = bencoder(message, 1024)
 		.d()
 			("r").d()
@@ -2427,6 +2427,7 @@ TEST_F(dht_impl_response_test, DoFindNodesWithMultipleNodesInDHT) {
 	// address and port that were returned to the dht
 	// in the response to it's initial query (aaaa88)
 	// *****************************************************
+	compact_node = std::string((char*)peer_id_buffer.b, peer_id_buffer.len) + "aaaa88";
 	len = bencoder(message, 1024)
 		.d()
 			("r").d()
@@ -2438,7 +2439,7 @@ TEST_F(dht_impl_response_test, DoFindNodesWithMultipleNodesInDHT) {
 		.e() ();
 	socket4.Reset();
 	DhtPeerID secondPeerID;
-	secondPeerID.addr.set_addr4('aaaa'); // aaaa
+	secondPeerID.addr.set_addr4('caac'); // "caac"
 	secondPeerID.addr.set_port(('8' << 8) + '8'); //88
 	impl->ProcessIncoming(message, len, secondPeerID.addr);
 
@@ -2548,18 +2549,18 @@ TEST_F(dht_impl_response_test, Announce_ReplyWithMultipleNodes) {
 	// transaction ID extracted above and include a token
 	// *****************************************************
 	const char* compactIPs[] = {"bbbb..", "cccc..", "dddd..", "eeee..", "ffff..",
-		"gggg..", "hhhh..", "iiii..", "bbbb..", "cccc..", "dddd..", "eeee..",
-		"ffff..", "gggg..", "hhhh..", "iiii.."};
+		"gggg..", "hhhh..", "iiii..", "bbbc..", "cccd..", "ddde..", "eeef..",
+		"fffg..", "gggh..", "hhhi..", "iiij.."};
 
 	// make a string of 8 compact nodes (based on what was designed above)
 	std::string nearest_node("zzzzzzzzzzzzzzzzzzAAbbbb..zzzzzzzzzzzzzzzzzzBBcccc"
 			"..zzzzzzzzzzzzzzzzzzCCdddd..zzzzzzzzzzzzzzzzzzDDeeee..zzzzzzzzzzzzzzzzzz"
 			"EEffff..zzzzzzzzzzzzzzzzzzFFgggg..zzzzzzzzzzzzzzzzzzGGhhhh.."
 			"zzzzzzzzzzzzzzzzzzHHiiii..");
-	std::string closer_nodes("zzzzzzzzzzzzzzzzzzzybbbb..zzzzzzzzzzzzzzzzzzzxcccc"
-			"..zzzzzzzzzzzzzzzzzzzwdddd..zzzzzzzzzzzzzzzzzzzveeee.."
-			"zzzzzzzzzzzzzzzzzzzuffff..zzzzzzzzzzzzzzzzzzztgggg.."
-			"zzzzzzzzzzzzzzzzzzzshhhh..zzzzzzzzzzzzzzzzzzzriiii..");
+	std::string closer_nodes("zzzzzzzzzzzzzzzzzzzybbbc..zzzzzzzzzzzzzzzzzzzxcccd"
+			"..zzzzzzzzzzzzzzzzzzzwddde..zzzzzzzzzzzzzzzzzzzveeef.."
+			"zzzzzzzzzzzzzzzzzzzufffg..zzzzzzzzzzzzzzzzzzztgggh.."
+			"zzzzzzzzzzzzzzzzzzzshhhi..zzzzzzzzzzzzzzzzzzzriiij..");
 	// construct the message bytes for sending just the near nodes
 	len = bencoder(message, 1024)
 		.d()
