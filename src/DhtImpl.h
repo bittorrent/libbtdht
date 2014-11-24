@@ -39,6 +39,9 @@ inline void dht_log(char const* fmt, ...) {}
 
 class BencEntity;
 class DhtImpl;
+class DhtID;
+
+void CopyBytesToDhtID(DhtID &id, const byte *b);
 
 //--------------------------------------------------------------------------------
 //
@@ -50,9 +53,19 @@ class DhtID
 {
 public:
 	DhtID(){ memset(id, 0, sizeof(id));}
+	DhtID(sha1_hash const& hash)
+	{
+		CopyBytesToDhtID(*this, hash.value);
+	}
+
 	uint32 id[DHT_ID_WORDCOUNT];
 
 	unsigned int GetBit(unsigned int index);
+
+	DhtID& operator=(sha1_hash const& lhs)
+	{
+		CopyBytesToDhtID(*this, lhs.value);
+	}
 
 	bool operator <(const DhtID &n) const {
 		for(uint i=0; i<DHT_ID_WORDCOUNT; i++) {
@@ -71,7 +84,6 @@ public:
 	}
 };
 
-
 const char *format_dht_id(const DhtID &id);
 
 /**
@@ -86,7 +98,6 @@ inline unsigned int DhtID::GetBit(unsigned int bitIndex)
 	return (id[wordIndex] >> (bitIndex & 0x1f)) & 0x00000001;
 }
 
-void CopyBytesToDhtID(DhtID &id, const byte *b);
 int CompareDhtIDToTarget(const DhtID &a, const DhtID &b, const DhtID &target);
 int CompareDhtID(const DhtID &a, const DhtID &b);
 int CompareDhtIDBytes(const DhtID &a, const DhtID &b, int num);

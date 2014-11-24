@@ -2025,7 +2025,6 @@ bool DhtImpl::ProcessQueryPut(DHTMessage &message, DhtPeerID &peerID,
 		int packetSize) {
 	unsigned char buf[8192];
 	smart_buffer sb(buf, sizeof(buf));
-	DhtID targetDhtID;
 
 	// read the token
 	if (!message.token.len) {
@@ -2077,7 +2076,7 @@ bool DhtImpl::ProcessQueryPut(DHTMessage &message, DhtPeerID &peerID,
 
 		// at this point, the put request has been verified
 		// store the data under a sha1 hash of the entire public key
-		CopyBytesToDhtID(targetDhtID, _sha_callback((const byte*)message.key.b, message.key.len).value);
+		DhtID targetDhtID = _sha_callback((const byte*)message.key.b, message.key.len);
 		PairContainerBase<MutableData>* containerPtr = NULL;
 		if (_mutablePutStore.AddKeyToList(addrHashPtr, targetDhtID, &containerPtr, time(NULL)) == NEW_ITEM) {
 			// this is new to the store, set the sequence num, copy the 'v' bytes, store the signature and key
@@ -2133,7 +2132,7 @@ bool DhtImpl::ProcessQueryPut(DHTMessage &message, DhtPeerID &peerID,
 		// make a hash of the address for the DataStores to use to record usage of an item
 		const sha1_hash addrHashPtr = _sha_callback((const byte*)peerID.addr.get_hash_key(), peerID.addr.get_hash_key_len());
 
-		CopyBytesToDhtID(targetDhtID, _sha_callback((const byte*)message.vBuf.b, message.vBuf.len).value);
+		DhtID targetDhtID = _sha_callback((const byte*)message.vBuf.b, message.vBuf.len);
 		PairContainerBase<std::vector<byte> >* containerPtr = NULL;
 		// if the data length is 0 then this is a new container, copy the bytes to it.
 		if (_immutablePutStore.AddKeyToList(addrHashPtr, targetDhtID, &containerPtr, time(NULL)) == NEW_ITEM) {
@@ -3120,11 +3119,7 @@ void DhtImpl::Vote(void *ctx_ptr, const sha1_hash* info_hash, int vote, DhtVoteC
 	memcpy(buf, info_hash->value, DHT_ID_SIZE);
 	memcpy(buf + DHT_ID_SIZE, "rating", 6);
 	sha1_hash target = _sha_callback(buf, sizeof(buf));
-
-	DhtID id;
-	CopyBytesToDhtID(id, target.value);
-
-	DoVote(id, vote, callb, ctx_ptr);
+	DoVote(target, vote, callb, ctx_ptr);
 	_allow_new_job = false;
 }
 
@@ -3139,9 +3134,7 @@ void DhtImpl::Put(const byte * pkey, const byte * skey
 		? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA
 		: KADEMLIA_LOOKUP_OUTSTANDING;
 
-	sha1_hash pkey_hash = _sha_callback(pkey, 32);
-	DhtID target;
-	CopyBytesToDhtID(target, pkey_hash.value);
+	DhtID target = _sha_callback(pkey, 32);
 
 	DhtPeerID *ids[32];
 	int num = AssembleNodeList(target, ids, lenof(ids));
@@ -3181,8 +3174,7 @@ sha1_hash DhtImpl::ImmutablePut(const byte * data, size_t data_len
 	tmp.insert(tmp.begin(), prefix, prefix + len);
 	sha1_hash h = _sha_callback(&tmp[0], tmp.size());
 
-	DhtID target;
-	CopyBytesToDhtID(target, h.value);
+	DhtID target = h;
 	DhtPeerID *ids[32];
 	int num = AssembleNodeList(target, ids, lenof(ids));
 
@@ -3205,8 +3197,7 @@ sha1_hash DhtImpl::ImmutablePut(const byte * data, size_t data_len
 void DhtImpl::ImmutableGet(sha1_hash target, DhtGetCallback* cb
 	, void* ctx)
 {
-	DhtID target_id;
-	CopyBytesToDhtID(target_id, target.value);
+	DhtID target_id = target;
 	DhtPeerID *ids[32];
 	int num = AssembleNodeList(target_id, ids, lenof(ids));
 
@@ -4644,10 +4635,7 @@ void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 		// response is guaranteed to be identical, so just abort
 
 		// make sure the response actually matches what we were looking for
-		sha1_hash result_hash = impl->_sha_callback(message.vBuf.b, message.vBuf.len);
-		DhtID result_hash_id;
-		CopyBytesToDhtID(result_hash_id, result_hash.value);
-
+		DhtID result_hash_id = impl->_sha_callback(message.vBuf.b, message.vBuf.len);
 		if (result_hash_id == target) {
 
 			std::vector<char> blk((char*)message.vBuf.b
