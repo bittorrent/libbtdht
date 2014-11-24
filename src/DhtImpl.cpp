@@ -4588,7 +4588,7 @@ void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 	DhtFindNodeEntry *dfnh = ProcessMetadataAndPeer(peer_id, message, flags);
 	if (dfnh == NULL) return;
 
-	//i We are looking for the response message with the maximum seq number.
+	// We are looking for the response message with the maximum seq number.
 	if (message.sequenceNum >= processManager.seq()
 		&& message.signature.len > 0
 		&& message.vBuf.len > 0
@@ -4625,11 +4625,19 @@ void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 		std::vector<char> blk((char*)message.vBuf.b
 			, (char*)message.vBuf.b + message.vBuf.len);
 
-		callbackPointers.getCallback(callbackPointers.callbackContext, blk);
+		// make sure the response actually matches what we were looking for
+		sha1_hash result_hash = impl->_sha_callback(message.vBuf.b, message.vBuf.len);
+		DhtID result_hash_id;
+		CopyBytesToDhtID(result_hash_id, result_hash.value);
 
-		// avoid having the callback called twice
-		callbackPointers.getCallback = NULL;
-		Abort();
+		if (result_hash_id == target) {
+
+			callbackPointers.getCallback(callbackPointers.callbackContext, blk);
+
+			// avoid having the callback called twice
+			callbackPointers.getCallback = NULL;
+			Abort();
+		}
 	}
 
 	if (_with_cas) {
@@ -5292,6 +5300,14 @@ void GetDhtProcess::CompleteThisProcess()
 	}
 #endif
 
+	if (callbackPointers.getCallback) {
+		callbackPointers.getCallback(callbackPointers.callbackContext
+			, std::vector<char>());
+
+		// never call this twice
+		callbackPointers.getCallback = NULL;
+	}
+
 	DhtProcessBase::CompleteThisProcess();
 }
 
@@ -5585,11 +5601,12 @@ void PutDhtProcess::CompleteThisProcess()
 		, get_milliseconds());
 #endif
 
-	if (callbackPointers.putCompletedCallback)
+	if (callbackPointers.putCompletedCallback) {
 		callbackPointers.putCompletedCallback(callbackPointers.callbackContext);
 
-	// never call this twice
-	callbackPointers.putCompletedCallback = NULL;
+		// never call this twice
+		callbackPointers.putCompletedCallback = NULL;
+	}
 
 	DhtProcessBase::CompleteThisProcess();
 }

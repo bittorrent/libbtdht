@@ -1802,7 +1802,7 @@ public:
 	void SetEd25519SignCallback(Ed25519SignCallback* cb);
 	void SetPacketCallback(DhtPacketCallback* cb);
 
-	void AddNode(const SockAddr& addr, void* uerdata, uint origin);
+	void AddNode(const SockAddr& addr, void* userdata, uint origin);
 	void AddBootstrapNode(SockAddr const& addr);
 
 	void DumpBuckets();
