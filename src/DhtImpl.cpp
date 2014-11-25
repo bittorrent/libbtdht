@@ -3175,7 +3175,12 @@ void DhtImpl::Put(const byte * pkey, const byte * skey
 sha1_hash DhtImpl::ImmutablePut(const byte * data, size_t data_len
 	, DhtPutCompletedCallback* put_completed_callback, void *ctx)
 {
-	sha1_hash h = _sha_callback(data, data_len);
+	std::vector<byte> tmp(data_len + 10);
+	int len = snprintf((char*)&tmp[0], int(tmp.size()), "%d:%.*s"
+		, data_len, data_len, data);
+	tmp.resize(len);
+	sha1_hash h = _sha_callback(&tmp[0], tmp.size());
+
 	DhtID target;
 	CopyBytesToDhtID(target, h.value);
 	DhtPeerID *ids[32];
@@ -4622,8 +4627,6 @@ void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 		// This is an immutable get, without a put associated with it.
 		// if we got a data response, there's no need to continue, every
 		// response is guaranteed to be identical, so just abort
-		std::vector<char> blk((char*)message.vBuf.b
-			, (char*)message.vBuf.b + message.vBuf.len);
 
 		// make sure the response actually matches what we were looking for
 		sha1_hash result_hash = impl->_sha_callback(message.vBuf.b, message.vBuf.len);
@@ -4631,6 +4634,9 @@ void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 		CopyBytesToDhtID(result_hash_id, result_hash.value);
 
 		if (result_hash_id == target) {
+
+			std::vector<char> blk((char*)message.vBuf.b
+				, (char*)message.vBuf.b + message.vBuf.len);
 
 			callbackPointers.getCallback(callbackPointers.callbackContext, blk);
 
