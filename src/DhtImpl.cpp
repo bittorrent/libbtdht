@@ -3175,10 +3175,10 @@ void DhtImpl::Put(const byte * pkey, const byte * skey
 sha1_hash DhtImpl::ImmutablePut(const byte * data, size_t data_len
 	, DhtPutCompletedCallback* put_completed_callback, void *ctx)
 {
-	std::vector<byte> tmp(data_len + 10);
-	int len = snprintf((char*)&tmp[0], int(tmp.size()), "%d:%.*s"
-		, int(data_len), int(data_len), data);
-	tmp.resize(len);
+	std::vector<byte> tmp(data, data + data_len);
+	char prefix[10];
+	int len = snprintf(prefix, sizeof(prefix), "%d:", int(data_len));
+	tmp.insert(tmp.begin(), prefix, prefix + len);
 	sha1_hash h = _sha_callback(&tmp[0], tmp.size());
 
 	DhtID target;
