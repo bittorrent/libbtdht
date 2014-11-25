@@ -5621,14 +5621,6 @@ void ImmutablePutDhtProcess::ImplementationSpecificReplyProcess(void *userdata, 
 	if (message.dhtMessageType != DHT_RESPONSE) {
 		impl->UpdateError(peer_id, flags & ICMP_ERROR);
 	}
-	if (message.dhtMessageType == DHT_ERROR) {
-		Abort();
-
-		// don't call the completion callback twice. Since we just
-		// passed it into a new Put process, it will be called when
-		// it completes
-		callbackPointers.putCompletedCallback = NULL;
-	}
 
 #if defined(_DEBUG_DHT_VERBOSE)
 	debug_log("[%u] <-- PUT tid=%d", process_id(), Read32(message.transactionID.b));
