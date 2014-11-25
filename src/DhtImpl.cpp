@@ -3177,7 +3177,7 @@ sha1_hash DhtImpl::ImmutablePut(const byte * data, size_t data_len
 {
 	std::vector<byte> tmp(data_len + 10);
 	int len = snprintf((char*)&tmp[0], int(tmp.size()), "%d:%.*s"
-		, data_len, data_len, data);
+		, int(data_len), int(data_len), data);
 	tmp.resize(len);
 	sha1_hash h = _sha_callback(&tmp[0], tmp.size());
 

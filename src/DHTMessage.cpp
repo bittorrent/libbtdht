@@ -197,12 +197,14 @@ void DHTMessage::DecodeQuery(BencodedDict &bDict)
 	else if (strcmp(command,"ping") == 0) {
 		dhtCommand = DHT_QUERY_PING;
 	}
+#if USE_HOLEPUNCH
 	else if (strcmp(command, "punch") == 0) {
 		dhtCommand = DHT_QUERY_PUNCH;
 		target_ip.b = (byte*)args->GetString("ip", &target_ip.len);
 		if (target_ip.b == NULL || target_ip.len != 6)
 			_argumentsAreValid = false;
 	}
+#endif
 	else {
 		// unknown messages with either a 'target'
 		// or an 'info-hash' argument are treated
