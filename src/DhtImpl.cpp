@@ -971,7 +971,7 @@ void DhtImpl::SendPunch(SockAddr const& dst, SockAddr const& punchee)
 	unsigned char target_ip[20];
 	int len = punchee.compact(target_ip, true);
 	assert(len == 6);
-	sb("d1:ad2:id20:")(_my_id_bytes, DHT_ID_SIZE)
+	sb("d1:ad2:id20:")(DHT_ID_SIZE, _my_id_bytes)
 		("2:ip6:")(target_ip, 6)("e1:q5:punch");
 	put_is_read_only(sb);
 	sb("1:t4:....");
@@ -996,7 +996,7 @@ DhtRequest *DhtImpl::SendPing(const DhtPeerID &peer_id) {
 		, print_sockaddr(peer_id.addr).c_str());
 #endif
 
-	sb("d1:ad2:id20:")(_my_id_bytes, DHT_ID_SIZE)("e1:q4:ping");
+	sb("d1:ad2:id20:")(DHT_ID_SIZE, _my_id_bytes)("e1:q4:ping");
 	put_is_read_only(sb);
 	put_transaction_id(sb, Buffer((byte*)&req->tid, 4));
 	put_version(sb);
@@ -1048,8 +1048,8 @@ DhtRequest *DhtImpl::SendFindNode(const DhtPeerID &peer_id) {
 		, print_sockaddr(peer_id.addr).c_str());
 #endif
 
-	sb("d1:ad2:id20:")(_my_id_bytes, DHT_ID_SIZE);
-	sb("6:target20:")(target_bytes, DHT_ID_SIZE);
+	sb("d1:ad2:id20:")(DHT_ID_SIZE, _my_id_bytes);
+	sb("6:target20:")(DHT_ID_SIZE, target_bytes);
 	sb("e1:q9:find_node");
 	put_is_read_only(sb);
 	put_transaction_id(sb, Buffer((byte*)&req->tid, 4));
@@ -1828,7 +1828,7 @@ bool DhtImpl::ProcessQueryAnnouncePeer(DHTMessage& message, DhtPeerID &peerID,
 	// Send a simple reply with my ID
 	sb("d");
 	AddIP(sb, message.id, peerID.addr);
-	sb("1:rd2:id20:")(_my_id_bytes, DHT_ID_SIZE)("e");
+	sb("1:rd2:id20:")(DHT_ID_SIZE, _my_id_bytes)("e");
 	put_transaction_id(sb, message.transactionID);
 	put_version(sb);
 	sb("1:y1:re");
@@ -1886,12 +1886,12 @@ bool DhtImpl::ProcessQueryGetPeers(DHTMessage &message, DhtPeerID &peerID,
 			else downloaders.add(h);
 		}
 
-		sb("4:BFpe256:")(downloaders.get_set(), 256);
-		sb("4:BFsd256:")(seeds.get_set(), 256);
+		sb("4:BFpe256:")(256, downloaders.get_set());
+		sb("4:BFsd256:")(256, seeds.get_set());
 	}
 
 	GenerateWriteToken(&ttoken, peerID);
-	sb("2:id20:")(_my_id_bytes, DHT_ID_SIZE);
+	sb("2:id20:")(DHT_ID_SIZE, _my_id_bytes);
 
 	if (message.filename.len) {
 		int len = (message.filename.len>50) ? 50 : message.filename.len;
@@ -1914,7 +1914,7 @@ bool DhtImpl::ProcessQueryGetPeers(DHTMessage &message, DhtPeerID &peerID,
 	assert(size <= mtu);
 
 	BuildFindNodesPacket(sb, info_hash_id, mtu - size, peerID.addr);
-	sb("5:token20:")(ttoken.value, DHT_ID_SIZE);
+	sb("5:token20:")(DHT_ID_SIZE, ttoken.value);
 
 #if defined(_DEBUG_DHT)
 	char const* temp = format_dht_id(info_hash_id);
@@ -1929,7 +1929,7 @@ bool DhtImpl::ProcessQueryGetPeers(DHTMessage &message, DhtPeerID &peerID,
 		if (n > 0) {
 			sb("6:valuesl");
 			for(uint i=0; i!=n; i++) {
-				sb("6:")((*sc)[i].ip, 4)((*sc)[i].port, 2);
+				sb("6:")(4, (*sc)[i].ip)(2, (*sc)[i].port);
 			}
 			sb("e");
 		}
@@ -1964,7 +1964,7 @@ bool DhtImpl::ProcessQueryFindNode(DHTMessage &message, DhtPeerID &peerID,
 	sb("d");
 	AddIP(sb, message.id, peerID.addr);
 	
-	sb("1:rd2:id20:")(_my_id_bytes, DHT_ID_SIZE);
+	sb("1:rd2:id20:")(DHT_ID_SIZE, _my_id_bytes);
 	int size = sb.length() // written so far
 		+ 7 + message.transactionID.len + 18; // tail (t, v and y)
 
@@ -1994,7 +1994,7 @@ bool DhtImpl::ProcessQueryFindNode(DHTMessage &message, DhtPeerID &peerID,
 
 void DhtImpl::send_put_response(smart_buffer& sb, Buffer& transaction_id,
 		int packetSize, const DhtPeerID &peerID) {
-	sb("d1:rd2:id20:")(_my_id_bytes, DHT_ID_SIZE)("e");
+	sb("d1:rd2:id20:")(DHT_ID_SIZE, _my_id_bytes)("e");
 
 	put_transaction_id(sb, transaction_id);
 	put_version(sb);
@@ -2010,7 +2010,7 @@ void DhtImpl::send_put_response(smart_buffer& sb, Buffer& transaction_id,
 		char const* error_message) {
 	assert(error_message != NULL);
 	sb("d1:eli%ue%u:%se", error_code, (unsigned int)strlen(error_message), error_message);
-	sb("1:rd2:id20:")(_my_id_bytes, DHT_ID_SIZE)("e");
+	sb("1:rd2:id20:")(DHT_ID_SIZE, _my_id_bytes)("e");
 
 	put_transaction_id(sb, transaction_id);
 	put_version(sb);
@@ -2222,7 +2222,7 @@ bool DhtImpl::ProcessQueryGet(DHTMessage &message, DhtPeerID &peerID,
 
 	// start the output info
 	sb("d1:rd");
-	sb("2:id20:")(_my_id_bytes, DHT_ID_SIZE);
+	sb("2:id20:")(DHT_ID_SIZE, _my_id_bytes);
 
 	if (keyToReturn.len) {	// add a "key" field to the response, if there is one
 		sb("1:k%d:", int(keyToReturn.len))(keyToReturn);
@@ -2241,7 +2241,7 @@ bool DhtImpl::ProcessQueryGet(DHTMessage &message, DhtPeerID &peerID,
 	}
 
 	GenerateWriteToken(&ttoken, peerID);
-	sb("5:token20:")(ttoken.value, DHT_ID_SIZE);
+	sb("5:token20:")(DHT_ID_SIZE, ttoken.value);
 
 	if (valueToReturn.len) {	// add a "v" field to the response, if there is one
 		sb("1:v")(valueToReturn);
@@ -2289,7 +2289,7 @@ bool DhtImpl::ProcessQueryVote(DHTMessage &message, DhtPeerID &peerID,
 	// Send my own ID
 	sb("d");
 	AddIP(sb, message.id, peerID.addr);
-	sb("1:rd2:id20:")(_my_id_bytes, DHT_ID_SIZE);
+	sb("1:rd2:id20:")(DHT_ID_SIZE, _my_id_bytes);
 
 	if (message.vote > 5) message.vote = 5;
 	else if (message.vote < 0) message.vote = 0;
@@ -2320,7 +2320,7 @@ bool DhtImpl::ProcessQueryPing(DHTMessage &message, DhtPeerID &peerID,
 	sb("d");
 	AddIP(sb, message.id, peerID.addr);
 
-	sb("1:rd2:id20:")(_my_id_bytes, DHT_ID_SIZE)("e");
+	sb("1:rd2:id20:")(DHT_ID_SIZE, _my_id_bytes)("e");
 
 	put_transaction_id(sb, message.transactionID);
 	put_version(sb);
@@ -4790,8 +4790,8 @@ void FindNodeDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	smart_buffer sb(buf, sizeof(buf));
 
 	// The find_node rpc
-	sb("d1:ad2:id20:")(impl->_my_id_bytes, DHT_ID_SIZE);
-	sb("6:target20:")(target_bytes, DHT_ID_SIZE);
+	sb("d1:ad2:id20:")(DHT_ID_SIZE, impl->_my_id_bytes);
+	sb("6:target20:")(DHT_ID_SIZE, target_bytes);
 	sb("e1:q9:find_node");
 	impl->put_is_read_only(sb);
 	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4));
@@ -4973,7 +4973,7 @@ void GetPeersDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	sb("d1:ad");
 
 	int args_len = gpArgumenterPtr->BuildArgumentBytes((byte*)rpcArgsBuf, bufLen);
-	sb((byte*)rpcArgsBuf, args_len);
+	sb(args_len, (byte*)rpcArgsBuf);
 
 	sb("e1:q9:get_peers");
 	impl->put_is_read_only(sb);
@@ -5127,7 +5127,7 @@ void AnnounceDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	sb("d1:ad");
 
 	int args_len = announceArgumenterPtr->BuildArgumentBytes((byte*)rpcArgsBuf, bufLen);
-	sb((byte*)rpcArgsBuf, args_len);
+	sb(args_len, (byte*)rpcArgsBuf);
 	sb("e1:q13:announce_peer");
 	impl->put_is_read_only(sb);
 	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4));
@@ -5245,12 +5245,12 @@ void GetDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	unsigned char buf[bufLen];
 	smart_buffer sb(buf, bufLen);
 
-	sb("d1:ad2:id20:")((byte*)this->_id, DHT_ID_SIZE)("6:target20:");
+	sb("d1:ad2:id20:")(DHT_ID_SIZE, (byte*)this->_id)("6:target20:");
 
 	byte targetAsID[DHT_ID_SIZE];
 
 	DhtIDToBytes(targetAsID, target);
-	sb(targetAsID, DHT_ID_SIZE);
+	sb(DHT_ID_SIZE, targetAsID);
 	sb("e1:q3:get");
 	impl->put_is_read_only(sb);
 	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4));
@@ -5519,20 +5519,18 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	if (_with_cas) {
 		sb("3:casi%" PRIu64 "e", nodeInfo.cas);
 	}
-	sb("2:id20:")((byte*)this->_id, DHT_ID_SIZE);
-	sb("1:k32:")((byte*)this->_pkey, 32);
+	sb("2:id20:")(DHT_ID_SIZE, (byte const*)this->_id);
+	sb("1:k32:")(32, (byte*)this->_pkey);
 	sb("3:seqi%" PRIu64 "e", seq);
-	sb("3:sig64:")((byte*)&signature[0], 64);
+	sb("3:sig64:")(64, (byte const*)&signature[0]);
 	sb("5:token")("%d:", int(nodeInfo.token.len));
-	sb(reinterpret_cast<unsigned char*>(nodeInfo.token.b),
-			int(nodeInfo.token.len));
-	sb("1:v")(reinterpret_cast<unsigned char*>(&blk[0]), blk.size());
+	sb(nodeInfo.token.len, (byte const*)nodeInfo.token.b);
+	sb("1:v")(blk.size(), (byte const*)&blk[0]);
 	sb("e1:q3:put");
 	impl->put_is_read_only(sb);
-	sb("1:t%d:", 4)(reinterpret_cast<const unsigned char*>(&transactionID), 4);
-	const unsigned char * dht_utversion = impl->get_version();
-	sb("1:v4:%c%c%c%c", dht_utversion[0], dht_utversion[1], dht_utversion[2],
-			dht_utversion[3]);
+	sb("1:t4:")(4, (byte const*)&transactionID);
+	byte const* dht_utversion = impl->get_version();
+	sb("1:v4:")(4, dht_utversion);
 	sb("1:y1:qe");
 	int64 len = sb.length();
 
@@ -5633,24 +5631,23 @@ void ImmutablePutDhtProcess::ImplementationSpecificReplyProcess(void *userdata, 
 #endif
 }
 
-void ImmutablePutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID) {
+void ImmutablePutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
+	, const unsigned int transactionID)
+{
 	static const int buf_len = 1500;
 	unsigned char buf[buf_len];
 	smart_buffer sb(reinterpret_cast<unsigned char*>(buf), buf_len);
 
 	sb("d1:ad");
-	sb("2:id20:")((byte*)this->_id, DHT_ID_SIZE);
-	sb("5:token")("%d:", int(nodeInfo.token.len));
-	sb(reinterpret_cast<unsigned char*>(nodeInfo.token.b),
-			int(nodeInfo.token.len));
-	sb("1:v")("%d:", int(_data.size()));
-	sb(reinterpret_cast<const unsigned char*>(&(_data[0])), _data.size());
+	sb("2:id20:")(DHT_ID_SIZE, (byte*)this->_id);
+	sb("5:token%d:", int(nodeInfo.token.len));
+	sb(nodeInfo.token.len, (byte const*)nodeInfo.token.b);
+	sb("1:v%d:", int(_data.size()))(_data.size(), (byte const*)&_data[0]);
 	sb("e1:q3:put");
 	impl->put_is_read_only(sb);
-	sb("1:t%d:", 4)(reinterpret_cast<const unsigned char*>(&transactionID), 4);
-	const unsigned char * dht_utversion = impl->get_version();
-	sb("1:v4:%c%c%c%c", dht_utversion[0], dht_utversion[1], dht_utversion[2],
-			dht_utversion[3]);
+	sb("1:t4:")(4, (byte const*)&transactionID);
+	byte const* dht_utversion = impl->get_version();
+	sb("1:v4:")(4, dht_utversion);
 	sb("1:y1:qe");
 	int64 len = sb.length();
 	
@@ -5774,8 +5771,8 @@ void VoteDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	smart_buffer sb(buf, sizeof(buf));
 
 	// The vote rpc
-	sb("d1:ad2:id20:")(impl->_my_id_bytes, DHT_ID_SIZE);
-	sb("6:target20:")(target_bytes, DHT_ID_SIZE);
+	sb("d1:ad2:id20:")(DHT_ID_SIZE, impl->_my_id_bytes);
+	sb("6:target20:")(DHT_ID_SIZE, target_bytes);
 	sb("5:token%d:", int(nodeInfo.token.len))(nodeInfo.token);
 	sb("4:votei%de", voteValue)("e1:q4:vote");
 	impl->put_is_read_only(sb);

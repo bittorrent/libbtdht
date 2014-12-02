@@ -354,10 +354,9 @@ TEST_F(dht_impl_response_test, TestSendPings) {
 	// specify and send the fake response
 	unsigned char buf[256];
 	smart_buffer sb(buf, 256);
-	sb("d1:rd2:id20:")((const unsigned char*)(peer_id.id.id), 20);
+	sb("d1:rd2:id20:")(20, (const byte*)peer_id.id.id);
 	sb("e1:t%lu:", tid.len)(tid);
-	sb((const unsigned char*)("1:v4:UTê`1:y1:re"),
-			strlen("1:v4:UTê`1:y1:re"));
+	sb("1:v4:UTê`1:y1:re");
 
 	// -2 means we think we have completed bootstrapping
 	impl->_dht_bootstrap = -2;

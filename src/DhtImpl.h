@@ -8,6 +8,8 @@
 #include <string.h> // for memcmp
 #include <vector>
 #include <map>
+#include <string>
+#include <array>
 #include <algorithm> // for min_element
 #include <stdarg.h> // for va_start etc.
 
@@ -190,7 +192,10 @@ public:
 		va_end(list);
 		return *this;
 	}
-	smart_buffer& operator() (unsigned char const* value, int64 len) {
+
+	// It's critical that this overload is distinct from the format string
+	// overload. Otherwise they are too similar and error prone
+	smart_buffer& operator() (int64 len, unsigned char const* value) {
 		assert(buffer + len < end);
 		if (buffer + len >= end) return *this;
 
@@ -223,7 +228,18 @@ public:
 		return *this;
 	}
 	smart_buffer& operator() (Buffer const& value) {
-		return (*this)(value.b, value.len);
+		return (*this)(value.len, value.b);
+	}
+	template <size_t N>
+	smart_buffer& operator() (std::array<char, N> const& value) {
+		return (*this)(N, (byte const*)value.data());
+	}
+	template <size_t N>
+	smart_buffer& operator() (std::array<unsigned char, N> const& value) {
+		return (*this)(N, (byte const*)value.data());
+	}
+	smart_buffer& operator() (std::string const& value) {
+		return (*this)(value.size(), (byte const*)&value[0]);
 	}
 
 	unsigned char const * begin() const {
