@@ -2189,14 +2189,18 @@ bool DhtImpl::ProcessQueryGet(DHTMessage &message, DhtPeerID &peerID,
 	if (mutableStoreIterator != _mutablePutStore.end()) {
 		// we have found a match in the mutable table
 		assert(mutableStoreIterator->first == targetId);
-		valueToReturn.len = mutableStoreIterator->second.value.v.size();
-		valueToReturn.b = &(mutableStoreIterator->second.value.v.front());
-		signatureToReturn.len = sizeof(mutableStoreIterator->second.value.signature);
-		signatureToReturn.b = (byte*)(mutableStoreIterator->second.value.signature);
-		keyToReturn.len = sizeof(mutableStoreIterator->second.value.key);
-		keyToReturn.b = mutableStoreIterator->second.value.key;
 		sequenceNum = mutableStoreIterator->second.value.sequenceNum;
-		mutableStoreIterator->second.lastUse = time(NULL);
+		if (message.sequenceNum == 0 || sequenceNum > message.sequenceNum) {
+			// the sender either didn't specify a minimum sequence number or
+			// ours is bigger than theirs
+			valueToReturn.len = mutableStoreIterator->second.value.v.size();
+			valueToReturn.b = &(mutableStoreIterator->second.value.v.front());
+			signatureToReturn.len = sizeof(mutableStoreIterator->second.value.signature);
+			signatureToReturn.b = (byte*)(mutableStoreIterator->second.value.signature);
+			keyToReturn.len = sizeof(mutableStoreIterator->second.value.key);
+			keyToReturn.b = mutableStoreIterator->second.value.key;
+			mutableStoreIterator->second.lastUse = time(NULL);
+		}
 	} else if (message.key.len == 0) {
 		// no key, look in the immutable table with the same target
 		DataStore<DhtID, std::vector<byte> >::pair_iterator immutableStoreIterator;
@@ -5256,6 +5260,8 @@ void GetDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	sb(DHT_ID_SIZE, targetAsID);
 	sb("e1:q3:get");
 	impl->put_is_read_only(sb);
+	if (processManager.seq() > 0)
+		sb("3:seqi%" PRIu64 "e", processManager.seq());
 	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4));
 	impl->put_version(sb);
 	sb("1:y1:qe");

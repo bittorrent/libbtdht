@@ -181,6 +181,7 @@ void DHTMessage::DecodeQuery(BencodedDict &bDict)
 		dhtCommand = DHT_QUERY_GET;
 		target.b = (byte*)args->GetString("target", &target.len);
 		if (target.len != 20) _argumentsAreValid = false;
+		sequenceNum = args->GetInt("seq", 0);
 	}
 	else if (strcmp(command,"put") == 0) {
 		dhtCommand = DHT_QUERY_PUT;

@@ -171,6 +171,74 @@ TEST_F(dht_impl_test, TestFindNodeRPC_ipv4) {
 			(const void *)"abcdefghij0123456789", 20));
 }
 
+TEST_F(dht_impl_test, TestGetRPC_min_seq) {
+	std::getchar();
+	impl->Enable(true, 0);
+	init_dht_id();
+	add_node("abababababababababab");
+
+	// put a mutable item for us to get
+	std::vector<unsigned char> token;
+	fetch_token(token);
+	len = bencoder(message, 1024)
+		.d()
+			("a").d()
+				("id")("abcdefghij0123456789")
+				("k")("12345678901234567890123456789012")
+				("seq")(int64(2))
+				("sig")("1234567890123456789012345678901234567890123456789012345678901234")
+				("token")(token)
+				("v")("mutable get test").e()
+			("q")("put")
+			("t")("aa")
+			("y")("q")
+		.e() ();
+
+	impl->ProcessIncoming(message, len, bind_addr);
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_response_type());
+	expect_transaction_id("aa", 2);
+
+	// issue a get but specify the same seq, the node should omit the value in the response
+	sha1_hash target = sha1_callback(
+			reinterpret_cast<const unsigned char*>("12345678901234567890123456789012"), 32);
+	Buffer hashInfo;
+	hashInfo.b = (unsigned char*)target.value;
+	hashInfo.len = 20;
+
+	len = bencoder(message, 1024)
+		.d()
+			("a").d()
+				("id")("abcdefghij0123456789")
+				("seq")(int64(2))
+				("target")(hashInfo.b, hashInfo.len).e()
+			("q")("get")
+			("t")("aa")
+			("y")("q")
+		.e() ();
+	// parse and send the message constructed above
+	socket4.Reset();
+	impl->ProcessIncoming(message, len, bind_addr);
+
+	do {
+		ASSERT_NO_FATAL_FAILURE(fetch_dict());
+		socket4.popPacket();
+	} while (!test_transaction_id("aa", 2));
+
+	ASSERT_NO_FATAL_FAILURE(expect_response_type());
+	expect_transaction_id("aa", 2);
+	expect_reply_id();
+	// check that there is a token
+	Buffer tok;
+	reply->GetString("token", &tok.len);
+	EXPECT_TRUE(tok.len) << "There should have been a token of non-zero length";
+
+	// check that there is no v
+	Buffer value;
+	value.b = (unsigned char*)reply->GetString("v", &value.len);
+	ASSERT_EQ(0, value.len) << "Got a value when none was expected";
+}
+
 TEST_F(dht_impl_test, TestPutRPC_ipv4) {
 	// prepare the object for use
 	impl->Enable(true, 0);
