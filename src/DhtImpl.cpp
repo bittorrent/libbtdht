@@ -2159,7 +2159,7 @@ bool DhtImpl::ProcessQueryGet(DHTMessage &message, DhtPeerID &peerID,
 	Buffer signatureToReturn;
 	Buffer keyToReturn;
 	DataStore<DhtID, MutableData>::pair_iterator mutableStoreIterator;
-	uint64 sequenceNum = 0;
+	int64 sequenceNum = 0;
 	// if there is no target, there is nothing to do
 	if (message.target.len == 0){
 		Account(DHT_INVALID_PQ_BAD_GET_TARGET, packetSize);
@@ -5473,7 +5473,7 @@ bool DhtImpl::Verify(byte const * signature, byte const * message, int message_l
 void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	, const unsigned int transactionID)
 {
-	uint64 seq = processManager.seq() + 1;
+	int64 seq = processManager.seq() + 1;
 	// note that blk is returned by reference
 	// we want a copy that the put callback can modify
 	std::vector<char>& blk = processManager.get_data_blk();

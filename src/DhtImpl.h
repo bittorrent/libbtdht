@@ -1002,7 +1002,7 @@ class DhtLookupNodeList
 		static void FreeNodeEntry(DhtFindNodeEntry &ent) { if (ent.token.b) free(ent.token.b); }
 
 	protected:
-		uint64 seq_max;
+		int64 seq_max;
 		std::vector<char> data_blk;
 		SockAddr src_ip;
 
@@ -1018,8 +1018,8 @@ class DhtLookupNodeList
 		void SetAllQueriedStatus(QueriedStatus status);
 		void SetNodeIds(DhtPeerID** ids, unsigned int numId, const DhtID &target);
 		void CompactList();
-		uint64 seq() { return seq_max; }
-		void set_seq(uint64 sq) {seq_max = sq;}
+		int64 seq() { return seq_max; }
+		void set_seq(int64 sq) {seq_max = sq;}
 		void set_data_blk(byte * v, int v_len, SockAddr src);
 		std::vector<char> &get_data_blk() { return data_blk; }
 		char * get_data_blk(size_t & len) { len = data_blk.size(); return &data_blk[0]; }	

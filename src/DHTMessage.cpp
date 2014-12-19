@@ -181,7 +181,7 @@ void DHTMessage::DecodeQuery(BencodedDict &bDict)
 		dhtCommand = DHT_QUERY_GET;
 		target.b = (byte*)args->GetString("target", &target.len);
 		if (target.len != 20) _argumentsAreValid = false;
-		sequenceNum = args->GetInt("seq", 0);
+		sequenceNum = args->GetInt64("seq", 0);
 	}
 	else if (strcmp(command,"put") == 0) {
 		dhtCommand = DHT_QUERY_PUT;
@@ -192,7 +192,7 @@ void DHTMessage::DecodeQuery(BencodedDict &bDict)
 		if (signature.b && signature.len != 64) _argumentsAreValid = false;
 		key.b = (byte*)args->GetString("k", &key.len); // 32 bytes
 		if (key.b && key.len != 32) _argumentsAreValid = false;
-		sequenceNum = args->GetInt("seq", 0);
+		sequenceNum = args->GetInt64("seq", 0);
 		cas = args->GetInt("cas", 0);
 	}
 	else if (strcmp(command,"ping") == 0) {
