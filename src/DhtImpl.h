@@ -699,8 +699,20 @@ public:
 
 #if g_log_dht
 	uint origin;
-	DhtPeer() { origin = 0; }
 #endif
+
+	DhtPeer()
+		: subPrefixInt(0)
+		, subPrefixPositionBit(0)
+		, num_fail(0)
+		, lastContactTime(0)
+		, rtt(INT_MAX)
+		, first_seen(0)
+		, next(NULL)
+#if g_log_dht
+		, origin(0)
+#endif
+	{}
 };
 
 /**

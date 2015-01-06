@@ -6242,7 +6242,7 @@ bool DhtBucket::FindReplacementCandidate(DhtImpl* pDhtImpl
 		}
 		// if the rtt of the candidate node is not shorter than 1/2 the rtt of the node
 		// identified for replacement, then it is not suitable to put in the list
-		if (candidate.rtt > (replaceCandidate->rtt >> 1))
+		if (replaceCandidate && candidate.rtt > (replaceCandidate->rtt >> 1))
 			return false;
 	} else {
 		// the sub-prefix is not represented in the bucket, but another one (or more) is
