@@ -65,6 +65,7 @@ public:
 	DhtID& operator=(sha1_hash const& lhs)
 	{
 		CopyBytesToDhtID(*this, lhs.value);
+		return *this;
 	}
 
 	bool operator <(const DhtID &n) const {
