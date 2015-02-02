@@ -25,7 +25,9 @@ enum DHTCommands
 	DHT_QUERY_VOTE,
 	DHT_QUERY_GET,
 	DHT_QUERY_PUT,
+#if USE_HOLEPUNCH
 	DHT_QUERY_PUNCH
+#endif
 };
 
 class BencodedDict;
@@ -113,7 +115,7 @@ public:
 	int noseed;
 	int scrape;
 	bool read_only;
-	uint64 sequenceNum;  // 'seq' for mutable put
+	int64 sequenceNum;  // 'seq' for mutable put
 	int impliedPort;
 
 	// expected current sequence number for compare-and-swap operations

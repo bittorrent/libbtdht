@@ -2,12 +2,13 @@
 #include "utypes.h"
 #include "TestDhtImpl.h"
 
-void put_callback(void* ctx, std::vector<char>& buffer, int64 seq, SockAddr src) {
+int put_callback(void* ctx, std::vector<char>& buffer, int64 seq, SockAddr src) {
 	if (ctx != NULL) {
 		*(reinterpret_cast<int64*>(ctx)) = seq;
 	}
 	char b[] = { '6', ':', 's', 'a', 'm', 'p', 'l', 'e' };
 	buffer.assign(b, b + sizeof(b));
+	return 0;
 }
 
 unsigned int count_set_bits(Buffer &data) {
@@ -123,6 +124,8 @@ TEST_F(dht_impl_test, TestGetPeersRPC_ipv4) {
 	impl->Enable(true, 0);
 	init_dht_id();
 
+	add_node("abcdefghij0101010101");
+
 	// specify, parse, and send the message
 	std::string testData("d1:ad2:id20:abcdefghij01010101019:info_hash"
 			"20:mnopqrstuvwxyz123456e1:q9:get_peers1:t2:aa1:y1:qe");
@@ -130,14 +133,14 @@ TEST_F(dht_impl_test, TestGetPeersRPC_ipv4) {
 	expect_transaction_id("aa", 2);
 	expect_reply_id();
 
-	// in the test environment there are no peers.  There should however be a node - this one
+	// in the test environment there is exactly one node.
 	// expect back the id provided in the query, ip=zzzz port=xx (since the querying node and this node are the same in this test)
 	Buffer nodes;
 	nodes.b = (unsigned char*)reply->GetString("nodes", &nodes.len);
 	ASSERT_EQ(26, nodes.len) << "ERROR:  The length of the 26 unsigned char"
 		" node info extracted from the response arguments is the wrong size";
 	EXPECT_FALSE(memcmp((const void*)nodes.b,
-			(const void *)"abcdefghij0101010101zzzzxx", nodes.len));
+			(const void *)"abcdefghij0101010101", 20));
 
 	// check that there is a token
 	Buffer token;
@@ -150,6 +153,8 @@ TEST_F(dht_impl_test, TestFindNodeRPC_ipv4) {
 	impl->Enable(true, 0);
 	init_dht_id();
 
+	add_node("abcdefghij0123456789");
+
 	// specify, parse, and send the message
 	std::string testData("d1:ad2:id20:abcdefghij01234567896:target"
 			"20:mnopqrstuvwxyz123456e1:q9:find_node1:t2:aa1:y1:qe");
@@ -157,20 +162,88 @@ TEST_F(dht_impl_test, TestFindNodeRPC_ipv4) {
 	expect_transaction_id("aa", 2);
 	expect_reply_id();
 	
-	// There should be a single node - this one
-	// expect back the id provided in the query, ip=zzzz port=xx (since the querying node and this node are the same in this test)
+	// There should be a single node, the one added above
 	Buffer nodes;
 	nodes.b = (unsigned char*)reply->GetString("nodes", &nodes.len);
 	ASSERT_EQ(26, nodes.len) << "ERROR:  The length of the 26 unsigned char"
 		" node info extracted from the response arguments is the wrong size";
 	EXPECT_FALSE(memcmp((const void*)nodes.b,
-			(const void *)"abcdefghij0123456789zzzzxx", nodes.len));
+			(const void *)"abcdefghij0123456789", 20));
+}
+
+TEST_F(dht_impl_test, TestGetRPC_min_seq) {
+	std::getchar();
+	impl->Enable(true, 0);
+	init_dht_id();
+	add_node("abababababababababab");
+
+	// put a mutable item for us to get
+	std::vector<unsigned char> token;
+	fetch_token(token);
+	len = bencoder(message, 1024)
+		.d()
+			("a").d()
+				("id")("abcdefghij0123456789")
+				("k")("12345678901234567890123456789012")
+				("seq")(int64(2))
+				("sig")("1234567890123456789012345678901234567890123456789012345678901234")
+				("token")(token)
+				("v")("mutable get test").e()
+			("q")("put")
+			("t")("aa")
+			("y")("q")
+		.e() ();
+
+	impl->ProcessIncoming(message, len, bind_addr);
+	ASSERT_NO_FATAL_FAILURE(fetch_dict());
+	ASSERT_NO_FATAL_FAILURE(expect_response_type());
+	expect_transaction_id("aa", 2);
+
+	// issue a get but specify the same seq, the node should omit the value in the response
+	sha1_hash target = sha1_callback(
+			reinterpret_cast<const unsigned char*>("12345678901234567890123456789012"), 32);
+	Buffer hashInfo;
+	hashInfo.b = (unsigned char*)target.value;
+	hashInfo.len = 20;
+
+	len = bencoder(message, 1024)
+		.d()
+			("a").d()
+				("id")("abcdefghij0123456789")
+				("seq")(int64(2))
+				("target")(hashInfo.b, hashInfo.len).e()
+			("q")("get")
+			("t")("aa")
+			("y")("q")
+		.e() ();
+	// parse and send the message constructed above
+	socket4.Reset();
+	impl->ProcessIncoming(message, len, bind_addr);
+
+	do {
+		ASSERT_NO_FATAL_FAILURE(fetch_dict());
+		socket4.popPacket();
+	} while (!test_transaction_id("aa", 2));
+
+	ASSERT_NO_FATAL_FAILURE(expect_response_type());
+	expect_transaction_id("aa", 2);
+	expect_reply_id();
+	// check that there is a token
+	Buffer tok;
+	reply->GetString("token", &tok.len);
+	EXPECT_TRUE(tok.len) << "There should have been a token of non-zero length";
+
+	// check that there is no v
+	Buffer value;
+	value.b = (unsigned char*)reply->GetString("v", &value.len);
+	ASSERT_EQ(0, value.len) << "Got a value when none was expected";
 }
 
 TEST_F(dht_impl_test, TestPutRPC_ipv4) {
 	// prepare the object for use
 	impl->Enable(true, 0);
 	init_dht_id();
+	add_node("abababababababababab");
 
 	// put a peer into the dht for it to work with
 	impl->Update(peer_id, 0, false);
@@ -237,6 +310,8 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_cas) {
 	impl->Enable(true, 0);
 	init_dht_id();
 
+	add_node("abababababababababab");
+
 	// put a peer into the dht for it to work with
 	impl->Update(peer_id, 0, false);
 
@@ -295,8 +370,7 @@ TEST_F(dht_impl_test, TestPutRPC_ipv4_seq_fail) {
 	impl->Enable(true, 0);
 	init_dht_id();
 
-	// put a peer into the dht for it to work with
-	impl->Update(peer_id, 0, false);
+	add_node("ababababababababababab");
 
 	DhtID target;
 	target.id[0] = 'FFFF'; // FFFF
@@ -766,6 +840,8 @@ TEST_F(dht_impl_test, TestFutureCmdAsFindNode01_ipv4) {
 	impl->Enable(true, 0);
 	init_dht_id();
 
+	add_node("abcdefghij0123456789");
+
 	// specify, parse, and send the message
 	// Set a TARGET with a 'future_cmd' command in this test
 	// it sould be treated as a find_node command
@@ -782,7 +858,7 @@ TEST_F(dht_impl_test, TestFutureCmdAsFindNode01_ipv4) {
 	ASSERT_EQ(26, nodes.len) << "ERROR:  The length of the 26 unsigned char"
 		" node info extracted from the response arguments is the wrong size";
 	EXPECT_FALSE(memcmp((const void*)nodes.b,
-			(const void *)"abcdefghij0123456789zzzzxx", nodes.len));
+			(const void *)"abcdefghij0123456789", 20));
 }
 
 TEST_F(dht_impl_test, TestFutureCmdAsFindNode02_ipv4) {
@@ -791,6 +867,7 @@ TEST_F(dht_impl_test, TestFutureCmdAsFindNode02_ipv4) {
 	// as a find node to not block future extensions
 	impl->Enable(true, 0);
 	init_dht_id();
+	add_node("abcdefghij0123456789");
 
 	// specify, parse, and send the message
 	// Set an INFO_HASH with a 'future_cmd' command in this test
@@ -808,7 +885,7 @@ TEST_F(dht_impl_test, TestFutureCmdAsFindNode02_ipv4) {
 	ASSERT_EQ(26, nodes.len) << "ERROR:  The length of the 26 unsigned char"
 		" node info extracted from the response arguments is the wrong size";
 	EXPECT_FALSE(memcmp((const void*)nodes.b,
-			(const void *)"abcdefghij0123456789zzzzxx", nodes.len));
+			(const void *)"abcdefghij0123456789", 20));
 }
 
 TEST_F(dht_impl_test, TestUnknownCmdNotProcessed_ipv4) {
@@ -860,6 +937,7 @@ TEST_F(dht_impl_test, TestImmutablePutRPC_ipv4) {
 TEST_F(dht_impl_test, TestImmutableGetRPC_ipv4) {
 	impl->Enable(true, 0);
 	init_dht_id();
+	add_node("abababababababababab");
 
 	std::vector<unsigned char> token;
 	fetch_token(token);

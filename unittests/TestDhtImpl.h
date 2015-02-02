@@ -83,6 +83,7 @@ class dht_impl_test : public dht_test {
 			impl->SetSHACallback(&sha1_callback);
 			impl->SetEd25519SignCallback(&ed25519_callback);
 			impl->SetEd25519VerifyCallback(&ed25519_verify);
+			impl->EnableQuarantine(false);
 
 			peer_id.id.id[0] = '1111'; // 1111
 			peer_id.id.id[1] = 'BBBB'; // BBBB
@@ -97,6 +98,19 @@ class dht_impl_test : public dht_test {
 
 			response_token = "20_byte_reply_token.";
 			v = "sample";
+		}
+
+		void add_node(char const* id) {
+
+			extern void CopyBytesToDhtID(DhtID &id, const byte *b);
+
+			// add one peer whose first_seen is old enough to include in a node
+			// response
+			DhtPeerID tmp;
+			CopyBytesToDhtID(tmp.id, (const byte*)id);
+			tmp.addr.set_port(128);
+			tmp.addr.set_addr4(0xf0f0f0f0);
+			impl->Update(tmp, IDht::DHT_ORIGIN_UNKNOWN, true, 10);
 		}
 
 		virtual void TearDown() override {

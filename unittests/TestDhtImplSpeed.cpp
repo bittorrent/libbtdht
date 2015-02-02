@@ -161,7 +161,7 @@ TEST_F(dht_impl_speed_test, Announce_ReplyWithNodes_Speed) {
 	// put a peer into the dht for it to work with
 	peer_id.addr.set_port(('8' << 8) + '8'); // 88
 	peer_id.addr.set_addr4('aaaa'); // aaaa
-	impl->Update(peer_id, 0, false);
+	impl->Update(peer_id, 0, true, 10);
 	Buffer peer_id_buffer;
 	peer_id_buffer.len = 20;
 	peer_id_buffer.b = (byte*)&peer_id.id.id[0];
