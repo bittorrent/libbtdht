@@ -172,7 +172,6 @@ TEST_F(dht_impl_test, TestFindNodeRPC_ipv4) {
 }
 
 TEST_F(dht_impl_test, TestGetRPC_min_seq) {
-	std::getchar();
 	impl->Enable(true, 0);
 	init_dht_id();
 	add_node("abababababababababab");
