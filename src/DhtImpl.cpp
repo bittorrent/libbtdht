@@ -1226,7 +1226,7 @@ int DhtImpl::AssembleNodeList(const DhtID &target, DhtPeerID** ids
 	num += FindNodes(target, ids + num, numwant - num, 0, 0);
 	assert(num <= numwant);
 	assert(num >= 0);
-	if (num < numwant || bootstrap) {
+	if (num < numwant && bootstrap) {
 
 		// if bootstrap is true, bootstrap routers take precedence over
 		// the other nodes
@@ -1256,10 +1256,6 @@ int DhtImpl::AssembleNodeList(const DhtID &target, DhtPeerID** ids
 			ids[num] = &_temp_nodes[c];
 			++num;
 		}
-		assert(num <= numwant);
-		assert(num >= 0);
-		// And 8 definitely good ones.
-		num += FindNodes(target, ids + num, numwant - num, 0, 0);
 		assert(num <= numwant);
 		assert(num >= 0);
 	}
