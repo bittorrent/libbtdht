@@ -194,6 +194,7 @@ DhtImpl::DhtImpl(UDPSocketInterface *udp_socket_mgr, UDPSocketInterface *udp6_so
 
 	_dht_bootstrap = not_bootstrapped;
 	_dht_bootstrap_failed = 0;
+	_bootstrap_attempts = 0;
 	_allow_new_job = false;
 	_refresh_buckets_counter = -1;
 	_dht_peers_count = 0;
@@ -2648,6 +2649,8 @@ void DhtImpl::DoBootstrap()
 {
 	if (_closing) return;
 
+	++_bootstrap_attempts;
+
 #ifdef _DEBUG_DHT
 	debug_log("start bootstrap");
 
@@ -3236,6 +3239,18 @@ void DhtImpl::SetRate(int bytes_per_second)
 	_dht_rate = bytes_per_second;
 }
 
+int DhtImpl::CalculateLowestBucketSpan()
+{
+	int lowest_span = 160;
+	for (int i = 0; i < _buckets.size(); i++) {
+		DhtBucket &bucket = *_buckets[i];
+		if (bucket.span < lowest_span && bucket.peers.first() != NULL)
+			lowest_span = bucket.span;
+	}
+
+	return lowest_span;
+}
+
 /**
  * This is a tick function that should be called periodically.
  */
@@ -3302,13 +3317,6 @@ void DhtImpl::Tick()
 		_5min_counter = 0;
 		RandomizeWriteToken();
 		ExpirePeersFromStore(time(NULL) - 30 * 60);
-		if (_dht_peers_count < 8) {
-			_dht_bootstrap = not_bootstrapped;
-#ifdef _DEBUG_DHT
-			debug_log("5 minute counter, %d peers [bootstrap=%d]"
-				, _dht_peers_count, _dht_bootstrap);
-#endif
-		}
 		_immutablePutStore.UpdateUsage(time(NULL));
 		_mutablePutStore.UpdateUsage(time(NULL));
 
@@ -3372,22 +3380,24 @@ void DhtImpl::Tick()
 
 		_allow_new_job = true;
 
-		int lowest_span = 160;
-		for (int i = 0; i < _buckets.size(); i++) {
-			DhtBucket &bucket = *_buckets[i];
-			if (bucket.span < lowest_span && bucket.peers.first() != NULL)
-				lowest_span = bucket.span;
-		}
+		int lowest_span = CalculateLowestBucketSpan();
 
 		if (lowest_span < _lowest_span) _lowest_span = lowest_span;
 
 		time_t now = time(NULL);
 
-		if ((lowest_span > _lowest_span + 1
-				&& now - _last_self_refresh > 60)
-			|| (now - _last_self_refresh > 10 * 60)
+		// if there's more than 3 levels to the deepest level we've seen
+		// keep bootstrapping, but not too often. Back off gradually to
+		// not keep hammering the bootstrap server when we can't get a foot hold
+		// in the DHT anyway.
+		// if we haven't reached the lowest span, the retries are:
+		// 1, 2, 4, 8 etc. minutes
+		// if we have fewer than 10 nodes, the retry intervals are:
+		// 2, 4, 8, 16 etc. minutes
+		if ((lowest_span > _lowest_span + 3
+				&& now - _last_self_refresh > 60 * (1 << _bootstrap_attempts))
 			|| (_dht_peers_count < 10
-				&& now - _last_self_refresh > 60)) {
+				&& now - _last_self_refresh > 2 * 60 * (1 << _bootstrap_attempts))) {
 
 			// it's been 10 minutes since our last bootstrap attempt, issue
 			// another one. If we haven't reached close enough to our routing
@@ -3705,8 +3715,12 @@ void DhtImpl::SaveState()
 	// CHECK: time(NULL) can be int64....
 	dict->InsertInt("age", (int)time(NULL));
 
+	// don't save the lowest span we loaded, save the lowest span we've seen
+	// this session.
+	int lowest_span = CalculateLowestBucketSpan();
+
 	// save the lowest table depth 
-	dict->InsertInt("table_depth", (int)160 - _lowest_span);
+	dict->InsertInt("table_depth", (int)160 - lowest_span);
 
 	byte *b = base.Serialize(&len);
 	_save_callback(b, len);

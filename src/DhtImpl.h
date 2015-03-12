@@ -1849,6 +1849,7 @@ public:
 	void DumpBuckets();
 	void DumpTracked();
 
+	int CalculateLowestBucketSpan();
 
 	int GetProbeQuota();
 	bool CanAddNode();
@@ -1949,11 +1950,19 @@ public:
 #define MAX_PEERS (4*1000*1000)
 	int _peers_tracked;
 	time_t _last_self_refresh;
+	// this is different than _dht_bootstrap_failed. This counts the number of
+	// times we've tried to bootstrap. It's not reset just because the bootstrap
+	// server responds. This is used to gradually back-off our aggressiveness
+	// of trying to bootstrap, to eventually give up.
+	int _bootstrap_attempts;
 
 	uint32 _cur_token[2];
 	uint32 _prev_token[2];
 	int _dht_bootstrap; // Possible states in enum below
-	int _dht_bootstrap_failed; // a counter used to compute the back-off time for bootstrap re-tries
+
+	// a counter used to compute the back-off time for bootstrap re-tries
+	// it's reset when we get a response from the bootstrap server.
+	int _dht_bootstrap_failed;
 	int _dht_busy;
 	bool _allow_new_job;
 	bool _dht_enabled;
