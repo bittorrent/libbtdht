@@ -1174,15 +1174,13 @@ uint DhtImpl::CopyPeersFromBucket(uint bucket_id, DhtPeerID **list
 	time_t now = time(nullptr);
 	for (DhtPeer *peer = bucket.first(); peer && n < numwant; peer=peer->next) {
 
-		// if lastContactTime is 0, it means we have never sent any query and seen
-		// a response from this peer. i.e. it's automatically filtered when
-		// pulling out peers from the bucket. We need to ping it first and see
-		// that it's alive
-		if (peer->lastContactTime == 0 || now - peer->first_seen < min_age) {
+		if (now - peer->first_seen < min_age) {
 			continue;
 		}
-		
-		if (peer->num_fail == 0 || --wantfail >= 0) {
+
+		// if lastContactTime is 0, it means we have never sent any query and seen
+		// a response from this peer.
+		if ((peer->lastContactTime != 0 && peer->num_fail == 0) || --wantfail >= 0) {
 
 			// TODO: v6
 			if (!peer->id.addr.isv4())
