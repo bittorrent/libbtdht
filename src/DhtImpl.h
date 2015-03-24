@@ -2108,7 +2108,7 @@ public:
 	uint FindNodes(const DhtID &target, DhtPeerID **list, uint numwant, int wantfail, time_t min_age);
 
 	// uses FindNodes to assemble a list of nodes
-	int AssembleNodeList(const DhtID &target, DhtPeerID** ids, int numwant, bool force_bootstrap = false);
+	int AssembleNodeList(const DhtID &target, DhtPeerID** ids, int numwant, bool bootstrap = false);
 
 #ifdef _DEBUG_MEM_LEAK
 	int clean_up_dht_request();

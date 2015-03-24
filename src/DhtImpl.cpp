@@ -1217,19 +1217,23 @@ void FindNClosestToTarget( DhtPeerID *src[], uint srcCount, DhtPeerID *dest[]
 int DhtImpl::AssembleNodeList(const DhtID &target, DhtPeerID** ids
 	, int numwant, bool bootstrap)
 {
+	// assemble a minimum of one bucket's worth or the requested count
+	// whichever is lower
+	int const minwant = (std::min)(8, numwant);
+
 	// Find 8 good ones or bad ones (in case there are no good ones)
-	int num = FindNodes(target, ids, (std::min)(8, numwant), (std::min)(8, numwant), 0);
+	int num = FindNodes(target, ids, minwant, minwant, 0);
 	assert(num <= numwant);
 	assert(num >= 0);
 	// And 8 definitely good ones.
 	num += FindNodes(target, ids + num, numwant - num, 0, 0);
 	assert(num <= numwant);
 	assert(num >= 0);
-	if (num < numwant && bootstrap) {
-
-		// if bootstrap is true, bootstrap routers take precedence over
-		// the other nodes
-		if (bootstrap && _bootstrap_routers.size() > numwant - num) {
+	// Only add the bootstrap servers if this is an explicit bootstrap or exponential
+	// backoff is not in effect. This is important to avoid hammering the bootstrap servers
+	// if the user's internet connection is broken such that it cannot receive responses.
+	if (num < minwant && (bootstrap || _dht_bootstrap < bootstrap_error_received)) {
+		if (_bootstrap_routers.size() > numwant - num) {
 			num = numwant - _bootstrap_routers.size();
 			assert(num <= numwant);
 			assert(num >= 0);
