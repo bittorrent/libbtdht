@@ -3635,7 +3635,7 @@ bool DhtImpl::ProcessIncoming(byte *buffer, size_t len, const SockAddr& addr)
 	}
 
 #if defined(_DEBUG_DHT_INSTRUMENT)
-	if (message.type) {
+	if (message.type && message.transactionID.b && message.transactionID.len >= sizeof(uint32)) {
 		instrument_log('<', message.command, message.type[0], len, Read32(message.transactionID.b));
 	}
 #endif
