@@ -5208,6 +5208,7 @@ GetDhtProcess::GetDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 	: DhtLookupScheduler(pDhtImpl, dpm, target_2, startTime
 		, consumerCallbacks, maxOutstanding, flags, 12) // <-- find 12 nodes, not 8!
 	, _with_cas(flags & IDht::with_cas)
+	, retries(0)
 {
 	
 	char* buf = (char*)this->_id;
@@ -5326,6 +5327,29 @@ void GetDhtProcess::CompleteThisProcess()
 			, print_version(processManager[i].client, processManager[i].version));
 	}
 #endif
+
+	if (processManager.size() < 8 && !aborted && retries++ < 2) {
+		// we got less than a bucket's worth of replies
+		// we obviously didn't get a good set of peers to query, so try again
+#if defined(_DEBUG_DHT_VERBOSE)
+		debug_log("[%u] Restarting process", process_id());
+#endif
+		for (int i = 0; i < processManager.size(); ++i) {
+			// CompactList resets the queried state to QUERIED_NO, since we're
+			// going to restart we need to set the state back to REPLIED
+			// so we don't query the nodes again
+			// The reason we don't just do the restart before compacting the list
+			// is because we want to allow for retrying failed nodes. The hope is
+			// that truely dead nodes will get removed from the routing table by
+			// the time we do the second restart.
+			processManager[i].queried = QUERIED_REPLIED;
+		}
+		DhtPeerID *ids[32];
+		int num = impl->AssembleNodeList(target, ids, lenof(ids));
+		processManager.SetNodeIds(ids, num, target);
+		Schedule();
+		return;
+	}
 
 	if (callbackPointers.getCallback) {
 		callbackPointers.getCallback(callbackPointers.callbackContext

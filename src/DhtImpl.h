@@ -1599,6 +1599,9 @@ class GetDhtProcess : public DhtLookupScheduler
 {
 	protected:
 		bool _with_cas;
+		// Keep a count of the number of times the process has been restarted to
+		// avoid a potential infinite loop
+		byte retries;
 		virtual void DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID);
 		virtual void ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags);
 		virtual void CompleteThisProcess();
