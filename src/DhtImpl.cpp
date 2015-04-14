@@ -3144,6 +3144,11 @@ void DhtImpl::Put(const byte * pkey, const byte * skey
 	DhtPeerID *ids[32];
 	int num = AssembleNodeList(target, ids, lenof(ids));
 
+	if (num == 0) {
+		put_completed_callback(ctx);
+		return;
+	}
+
 	DhtProcessManager *dpm = new DhtProcessManager(ids, num, target);
 	dpm->set_seq(seq);
 
