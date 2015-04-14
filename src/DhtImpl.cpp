@@ -579,6 +579,7 @@ bool ValidateEncoding( const void * data, uint len )
 		byte *b = dict.Serialize(&parselen);
 		if (b) {
 			bReturn = (memcmp(data, b, len) == 0);
+			assert(bReturn);
 			free(b);
 		}
 	}
@@ -3828,6 +3829,14 @@ void DhtImpl::CountExternalIPReport(const SockAddr& addr, const SockAddr& voter 
 	}
 }
 
+bool DhtImpl::IsBootstrap(const SockAddr& addr)
+{
+	for (auto const& router : _bootstrap_routers)
+		if (addr.ip_eq(router))
+			return true;
+	return false;
+}
+
 /**
 	Update the internal DHT tables with an id.  Generally, the algorithm attempts to add
 	a candidate node to the main node list.  If not sucessful, the list is examined in more
@@ -3891,6 +3900,10 @@ DhtPeer* DhtImpl::Update(const DhtPeerID &id, uint origin, bool seen, int rtt)
 	if (bucket_id < 0) {
 		return NULL;
 	}
+
+	// Don't allow bootstrap servers into the rounting table
+	if (IsBootstrap(id.addr))
+		return NULL;
 
 	DhtBucket &bucket = *_buckets[bucket_id];
 
@@ -4557,7 +4570,9 @@ DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(
 
 				// Check if it's identical to myself?
 				// Don't add myself to my internal list of peers.
-				if (!(peer.id == impl->_my_id) && peer.addr.get_port() != 0) {
+				if (!(peer.id == impl->_my_id)
+					&& peer.addr.get_port() != 0
+					&& !impl->IsBootstrap(peer.addr)) {
 
 					impl->Update(peer, IDht::DHT_ORIGIN_FROM_PEER, false);
 

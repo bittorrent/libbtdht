@@ -1866,6 +1866,8 @@ public:
 	int GetNumPutItems();
 	void CountExternalIPReport( const SockAddr& addr, const SockAddr& voter );
 
+	bool IsBootstrap(const SockAddr& addr);
+
 
 	//--------------------------------------------------------------------------------
 
