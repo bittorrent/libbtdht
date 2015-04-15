@@ -48,6 +48,18 @@ void ExternalIPCounter::Rotate()
 	_voterFilter.clear();
 }
 
+void ExternalIPCounter::NetworkChanged()
+{
+	// Force a rotation after the next vote
+	_TotalVotes = EXTERNAL_IP_HEAT_MAX_VOTES;
+	// Our IP likely changed so give minimal weight to previous votes
+	for (auto& m : _map)
+		m.second = 1;
+	// peers who already voted may have legitmatly changed their vote
+	// so don't filter them
+	_voterFilter.clear();
+}
+
 void ExternalIPCounter::Reset()
 {
        _TotalVotes = 0;
@@ -71,8 +83,6 @@ void ExternalIPCounter::CountIP( const SockAddr& addr, int weight ) {
 	if(! _HeatStarted)
 		_HeatStarted = time(NULL);
 
-	Rotate();
-
 	// attempt to insert this vote
 	std::pair<candidate_map::iterator, bool> inserted = _map.insert(std::make_pair(addr, weight));
 
@@ -87,6 +97,8 @@ void ExternalIPCounter::CountIP( const SockAddr& addr, int weight ) {
 	if(addr.isv6() && (_winnerV6 == _map.end() || inserted.first->second > _winnerV6->second))
 		_winnerV6 = inserted.first;
 	_TotalVotes += weight;
+
+	Rotate();
 }
 
 void ExternalIPCounter::CountIP( const SockAddr& addr, const SockAddr& voter, int weight ) {
@@ -94,8 +106,6 @@ void ExternalIPCounter::CountIP( const SockAddr& addr, const SockAddr& voter, in
 
 	if (is_ip_local(voter))
 		return;
-
-	Rotate();
 
 	// Accept an empty voter address.
 	if ( ! voter.is_addr_any() ) {

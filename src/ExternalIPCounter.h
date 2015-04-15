@@ -31,6 +31,8 @@ public:
 
 	void SetHeatStarted(time_t t) { _HeatStarted = t; }
 
+	void NetworkChanged();
+
 	void Reset();
 
 private:
