@@ -22,7 +22,9 @@ void ExternalIPCounter::Rotate()
 		byte last_winner[4];
 		_winnerV4->first.compact(ip_winner, false);
 		_last_winner4.compact(last_winner, false);
-		if(memcmp(ip_winner, last_winner, 4) && _ip_change_observer){
+		// don't invoke the observer if last_votes is zero, that means this is the first
+		// IP we've seen
+		if(_last_votes4 && memcmp(ip_winner, last_winner, 4) && _ip_change_observer){
 			_ip_change_observer->on_ip_change(_winnerV4->first);
 		}
 		_last_winner4 = _winnerV4->first;
@@ -33,7 +35,7 @@ void ExternalIPCounter::Rotate()
 		byte last_winner[16];
 		_winnerV6->first.compact(ip_winner, false);
 		_last_winner6.compact(last_winner, false);
-		if(memcmp(ip_winner, last_winner, 16) && _ip_change_observer){
+		if(_last_votes6 && memcmp(ip_winner, last_winner, 16) && _ip_change_observer){
 			_ip_change_observer->on_ip_change(_winnerV6->first);
 		}
 		_last_winner6 = _winnerV6->first;
