@@ -207,7 +207,7 @@ public:
 
 	// It's critical that this overload is distinct from the format string
 	// overload. Otherwise they are too similar and error prone
-	smart_buffer& operator() (int64 len, unsigned char const* value) {
+	smart_buffer& operator() (size_t len, unsigned char const* value) {
 		assert(buffer + len < end);
 		if (buffer + len >= end) return *this;
 
