@@ -37,14 +37,14 @@ inline std::vector<byte> make_random_key_20() {
 }
 
 inline void ed25519_callback(unsigned char * sig, const unsigned char * v,
-		unsigned long long size, const unsigned char * key) {
+		size_t size, const unsigned char * key) {
 	for(int i = 0; i < 64; i++) {
 		sig[i] = 'a';
 	}
 }
 
 inline bool ed25519_verify(const unsigned char *signature,
-		const unsigned char *message, unsigned long long message_len,
+		const unsigned char *message, size_t message_len,
 		const unsigned char *key)
 {
 	return true;
