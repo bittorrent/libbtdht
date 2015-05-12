@@ -1,4 +1,4 @@
-import dpkt, bencode, struct, traceback, sys, argparse
+import dpkt, bencode, struct, traceback, sys, argparse, socket
 
 listMax = 40
 
@@ -6,18 +6,19 @@ bad = 0
 no_version = 0
 
 non_ut = {}
-versions = {}
+versionIps = {}
 
 def bootstrapCount(fp):
-    global no_version, bad, non_ut, versions
+    global no_version, bad, non_ut, versionIps
 
     pcap = dpkt.pcap.Reader(fp)
-    
+
+    i = 0
     for ts, buf in pcap:
         eth = dpkt.ethernet.Ethernet(buf)
         ip = eth.data
         tcp = ip.data
-        
+
         try:
             decoded = bencode.bdecode(tcp.data)
         except:
@@ -33,16 +34,25 @@ def bootstrapCount(fp):
             try: non_ut[version] += 1
             except: non_ut[version] = 1
             continue
-        
+
+        #Read the version
         version = version[2:]        
         unpackedVersion = struct.unpack('>H', version)
         unpackedVersion = unpackedVersion[0]
         
-        try: versions[unpackedVersion] += 1
-        except: versions[unpackedVersion] = 1
+        #Get the remote IP address
+        src_ip_addr_str = socket.inet_ntoa(ip.src)
 
-        sys.stdout.write(".")
-        sys.stdout.flush()
+        #Add it to the structured map.
+        try: versionIps[unpackedVersion][src_ip_addr_str] += 1
+        except: 
+            try: versionIps[unpackedVersion][src_ip_addr_str] = 1
+            except: versionIps[unpackedVersion] = { src_ip_addr_str: 1 }
+        
+        i += 1
+        if (i % 100) == 0:
+            sys.stdout.write(".")
+            sys.stdout.flush()
         
         """
         print '============================'
@@ -82,11 +92,10 @@ if __name__ == '__main__':
     try: bootstrapCount(fp)
     except: 
         traceback.print_exc()
-        exit(1)
     
     versionPairs = []
-    for k,v in versions.iteritems():
-        versionPairs.append([k, v])
+    for build, ipMap in versionIps.iteritems():
+        versionPairs.append([build, sum(ipMap.values()), len(ipMap)])
 
     print
     print "======================================================"
@@ -95,7 +104,7 @@ if __name__ == '__main__':
     vpSorted = sorted(versionPairs, key=lambda pair: pair[1], reverse=True)
     for idx, pair in enumerate(vpSorted):
         if idx > listMax: break
-        print "Build " + str(pair[0]) + ":\t" + str(pair[1])
+        print "Build " + str(pair[0]) + ":\t" + str(pair[1]) + " (" + str(pair[2]) + " unique IPs)"
 
     nonUtPairs = []
     for k,v in non_ut.iteritems():
