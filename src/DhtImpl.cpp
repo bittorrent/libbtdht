@@ -3115,6 +3115,47 @@ void DhtImpl::AddNode(const SockAddr& addr, void* userdata, uint origin)
 void DhtImpl::AddBootstrapNode(SockAddr const& addr)
 {
 	_bootstrap_routers.push_back(addr);
+
+	for(int i = 0; i < _buckets.size(); i++) {
+		DhtBucket& bucket = *_buckets[i];
+
+		for (DhtPeer **peer = &bucket.peers.first(); *peer; peer=&(*peer)->next) {
+			DhtPeer *p = *peer;
+
+			if (addr != p->id.addr) continue;
+
+#ifdef _DEBUG_DHT
+			debug_log("found bootstrap node in routing table, purging");
+#endif
+
+			// remove the router from its bucket and move one node from the
+			// replacement cache
+			bucket.peers.unlinknext(peer);
+			if (!bucket.replacement_peers.empty()) {
+				// move one from the replacement_peers instead.
+				bucket.peers.enqueue(bucket.replacement_peers.PopBestNode(p->GetSubprefixInt()));
+			}
+			_dht_peer_allocator.Free(p);
+			_dht_peers_count--;
+			assert(_dht_peers_count >= 0);
+		}
+
+		// Also check if the router is in the replacement cache already.
+		for (DhtPeer **peer = &bucket.replacement_peers.first(); *peer; peer=&(*peer)->next) {
+			DhtPeer *p = *peer;
+
+			if (addr != p->id.addr) continue;
+
+#ifdef _DEBUG_DHT
+			debug_log("found bootstrap node in replacement queue, purging");
+#endif
+
+			bucket.replacement_peers.unlinknext(peer);
+			_dht_peer_allocator.Free(p);
+			_dht_peers_count--;
+			assert(_dht_peers_count >= 0);
+		}
+	}
 }
 
 void DhtImpl::Vote(void *ctx_ptr, const sha1_hash* info_hash, int vote, DhtVoteCallback* callb)
