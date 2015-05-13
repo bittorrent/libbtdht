@@ -5,11 +5,12 @@ listMax = 40
 bad = 0
 no_version = 0
 
-non_ut = {}
+nonUtIps = {}
 versionIps = {}
+bandwidth = { "in":{}, "out":{}, "bad":{ "noId":0, "notEncoded":0 } }
 
 def bootstrapCount(fp):
-    global no_version, bad, non_ut, versionIps
+    global no_version, bad, nonUtIps, versionIps
 
     pcap = dpkt.pcap.Reader(fp)
 
@@ -19,20 +20,46 @@ def bootstrapCount(fp):
         ip = eth.data
         tcp = ip.data
 
+        #Get the remote IP address and location identifier
+        try:
+            src_ip_addr_str = socket.inet_ntoa(ip.src)
+            locId = src_ip_addr_str + ":" + str(tcp.sport)
+        except:
+            try: bandwidth["bad"]["noId"] += len(tcp.data)
+            except: pass
+            continue
+
         try:
             decoded = bencode.bdecode(tcp.data)
         except:
+            bandwidth["bad"]["notEncoded"] += len(tcp.data)
+
             bad += 1
             continue
         
         version = decoded.get("v")
         if not version:
+            #No version, we assume it's outbound.  Change the locId
+            src_ip_addr_str = socket.inet_ntoa(ip.dst)
+            locId = src_ip_addr_str + ":" + str(tcp.dport)
+
+            #Set outbound bandwidth
+            try: bandwidth["out"][locId] += len(tcp.data)
+            except: bandwidth["out"][locId] = len(tcp.data)
+
             no_version += 1
             continue
+        
+        #We have a version, we assume it's inbound.
+        try: bandwidth["in"][locId] += len(tcp.data)
+        except: bandwidth["in"][locId] = len(tcp.data)
 
         if version[0:2] != "UT":
-            try: non_ut[version] += 1
-            except: non_ut[version] = 1
+            try: nonUtIps[version][locId] += 1
+            except: 
+                try: nonUtIps[version][locId] = 1
+                except: nonUtIps[version] = { locId: 1 }
+
             continue
 
         #Read the version
@@ -40,14 +67,11 @@ def bootstrapCount(fp):
         unpackedVersion = struct.unpack('>H', version)
         unpackedVersion = unpackedVersion[0]
         
-        #Get the remote IP address
-        src_ip_addr_str = socket.inet_ntoa(ip.src)
-
         #Add it to the structured map.
-        try: versionIps[unpackedVersion][src_ip_addr_str] += 1
+        try: versionIps[unpackedVersion][locId] += 1
         except: 
-            try: versionIps[unpackedVersion][src_ip_addr_str] = 1
-            except: versionIps[unpackedVersion] = { src_ip_addr_str: 1 }
+            try: versionIps[unpackedVersion][locId] = 1
+            except: versionIps[unpackedVersion] = { locId: 1 }
         
         i += 1
         if (i % 100) == 0:
@@ -95,7 +119,11 @@ if __name__ == '__main__':
     
     versionPairs = []
     for build, ipMap in versionIps.iteritems():
-        versionPairs.append([build, sum(ipMap.values()), len(ipMap)])
+        bandwidthOut = 0
+        for locId in ipMap.keys():
+            bandwidthOut += bandwidth["out"].get(locId, 0)
+
+        versionPairs.append([build, sum(ipMap.values()), len(ipMap), bandwidthOut])
 
     print
     print "======================================================"
@@ -104,11 +132,26 @@ if __name__ == '__main__':
     vpSorted = sorted(versionPairs, key=lambda pair: pair[1], reverse=True)
     for idx, pair in enumerate(vpSorted):
         if idx > listMax: break
-        print "Build " + str(pair[0]) + ":\t" + str(pair[1]) + " (" + str(pair[2]) + " unique IPs)"
+
+        ver = pair[0]
+        out = pair[3]
+        outPer = out / pair[1]
+        ratio = round(float(pair[1])/pair[2], 2)
+
+        print "Build " + str(ver) + ":\t\t" +\
+            str(pair[1]) + " // " +\
+            str(pair[2]) + " unique // " +\
+            str(ratio) + " ratio // " +\
+            str(out) + " out // " +\
+            str(outPer) + " per request"
 
     nonUtPairs = []
-    for k,v in non_ut.iteritems():
-        nonUtPairs.append([k, v])
+    for build, ipMap in nonUtIps.iteritems():
+        bandwidthOut = 0
+        for locId in ipMap.keys():
+            bandwidthOut += bandwidth["out"].get(locId, 0)
+
+        nonUtPairs.append([build, sum(ipMap.values()), len(ipMap), bandwidthOut])
 
     print
     print "======================================================"
@@ -119,13 +162,22 @@ if __name__ == '__main__':
         if idx > listMax: break
         
         ver = pair[0]
+        out = pair[3]
+        outPer = out / pair[1]
+        ratio = round(pair[1]/pair[2], 2)
+
         try: 
             unpackedVersion = struct.unpack('>H', ver[2:])
             ver = ver[0:2] + str(unpackedVersion[0])
         except:
-            ver = "Unknown " + ver.strip()
+            ver = "??? " + ver.strip()
             
-        print str(ver) + ":    \t" + str(pair[1])
+        print "Build " + str(ver) + ":\t\t" +\
+            str(pair[1]) + " // " +\
+            str(pair[2]) + " unique // " +\
+            str(ratio) + " ratio // " +\
+            str(out) + " out // " +\
+            str(outPer) + " per request"
 
     print
     print "======================================================"
@@ -136,3 +188,5 @@ if __name__ == '__main__':
     
     print
     print
+
+    print bandwidth["bad"]
