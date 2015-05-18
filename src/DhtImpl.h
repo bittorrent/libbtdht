@@ -207,7 +207,7 @@ public:
 
 	// It's critical that this overload is distinct from the format string
 	// overload. Otherwise they are too similar and error prone
-	smart_buffer& operator() (int64 len, unsigned char const* value) {
+	smart_buffer& operator() (size_t len, unsigned char const* value) {
 		assert(buffer + len < end);
 		if (buffer + len >= end) return *this;
 
@@ -1599,6 +1599,9 @@ class GetDhtProcess : public DhtLookupScheduler
 {
 	protected:
 		bool _with_cas;
+		// Keep a count of the number of times the process has been restarted to
+		// avoid a potential infinite loop
+		byte retries;
 		virtual void DhtSendRPC(const DhtFindNodeEntry &nodeInfo, const unsigned int transactionID);
 		virtual void ImplementationSpecificReplyProcess(void *userdata, const DhtPeerID &peer_id, DHTMessage &message, uint flags);
 		virtual void CompleteThisProcess();
@@ -1863,6 +1866,8 @@ public:
 	int GetNumPutItems();
 	void CountExternalIPReport( const SockAddr& addr, const SockAddr& voter );
 
+	bool IsBootstrap(const SockAddr& addr);
+
 
 	//--------------------------------------------------------------------------------
 
@@ -2108,7 +2113,7 @@ public:
 	uint FindNodes(const DhtID &target, DhtPeerID **list, uint numwant, int wantfail, time_t min_age);
 
 	// uses FindNodes to assemble a list of nodes
-	int AssembleNodeList(const DhtID &target, DhtPeerID** ids, int numwant, bool force_bootstrap = false);
+	int AssembleNodeList(const DhtID &target, DhtPeerID** ids, int numwant, bool bootstrap = false);
 
 #ifdef _DEBUG_MEM_LEAK
 	int clean_up_dht_request();

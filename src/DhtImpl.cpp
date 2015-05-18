@@ -579,6 +579,7 @@ bool ValidateEncoding( const void * data, uint len )
 		byte *b = dict.Serialize(&parselen);
 		if (b) {
 			bReturn = (memcmp(data, b, len) == 0);
+			assert(bReturn);
 			free(b);
 		}
 	}
@@ -1217,19 +1218,23 @@ void FindNClosestToTarget( DhtPeerID *src[], uint srcCount, DhtPeerID *dest[]
 int DhtImpl::AssembleNodeList(const DhtID &target, DhtPeerID** ids
 	, int numwant, bool bootstrap)
 {
+	// assemble a minimum of one bucket's worth or the requested count
+	// whichever is lower
+	int const minwant = (std::min)(8, numwant);
+
 	// Find 8 good ones or bad ones (in case there are no good ones)
-	int num = FindNodes(target, ids, (std::min)(8, numwant), (std::min)(8, numwant), 0);
+	int num = FindNodes(target, ids, minwant, minwant, 0);
 	assert(num <= numwant);
 	assert(num >= 0);
 	// And 8 definitely good ones.
 	num += FindNodes(target, ids + num, numwant - num, 0, 0);
 	assert(num <= numwant);
 	assert(num >= 0);
-	if (num < numwant && bootstrap) {
-
-		// if bootstrap is true, bootstrap routers take precedence over
-		// the other nodes
-		if (bootstrap && _bootstrap_routers.size() > numwant - num) {
+	// Only add the bootstrap servers if this is an explicit bootstrap or exponential
+	// backoff is not in effect. This is important to avoid hammering the bootstrap servers
+	// if the user's internet connection is broken such that it cannot receive responses.
+	if (num < minwant && (bootstrap || _dht_bootstrap < bootstrap_error_received)) {
+		if (_bootstrap_routers.size() > numwant - num) {
 			num = numwant - _bootstrap_routers.size();
 			assert(num <= numwant);
 			assert(num >= 0);
@@ -3110,6 +3115,47 @@ void DhtImpl::AddNode(const SockAddr& addr, void* userdata, uint origin)
 void DhtImpl::AddBootstrapNode(SockAddr const& addr)
 {
 	_bootstrap_routers.push_back(addr);
+
+	for(int i = 0; i < _buckets.size(); i++) {
+		DhtBucket& bucket = *_buckets[i];
+
+		for (DhtPeer **peer = &bucket.peers.first(); *peer; peer=&(*peer)->next) {
+			DhtPeer *p = *peer;
+
+			if (addr != p->id.addr) continue;
+
+#ifdef _DEBUG_DHT
+			debug_log("found bootstrap node in routing table, purging");
+#endif
+
+			// remove the router from its bucket and move one node from the
+			// replacement cache
+			bucket.peers.unlinknext(peer);
+			if (!bucket.replacement_peers.empty()) {
+				// move one from the replacement_peers instead.
+				bucket.peers.enqueue(bucket.replacement_peers.PopBestNode(p->GetSubprefixInt()));
+			}
+			_dht_peer_allocator.Free(p);
+			_dht_peers_count--;
+			assert(_dht_peers_count >= 0);
+		}
+
+		// Also check if the router is in the replacement cache already.
+		for (DhtPeer **peer = &bucket.replacement_peers.first(); *peer; peer=&(*peer)->next) {
+			DhtPeer *p = *peer;
+
+			if (addr != p->id.addr) continue;
+
+#ifdef _DEBUG_DHT
+			debug_log("found bootstrap node in replacement queue, purging");
+#endif
+
+			bucket.replacement_peers.unlinknext(peer);
+			_dht_peer_allocator.Free(p);
+			_dht_peers_count--;
+			assert(_dht_peers_count >= 0);
+		}
+	}
 }
 
 void DhtImpl::Vote(void *ctx_ptr, const sha1_hash* info_hash, int vote, DhtVoteCallback* callb)
@@ -3139,6 +3185,11 @@ void DhtImpl::Put(const byte * pkey, const byte * skey
 
 	DhtPeerID *ids[32];
 	int num = AssembleNodeList(target, ids, lenof(ids));
+
+	if (num == 0) {
+		put_completed_callback(ctx);
+		return;
+	}
 
 	DhtProcessManager *dpm = new DhtProcessManager(ids, num, target);
 	dpm->set_seq(seq);
@@ -3631,7 +3682,7 @@ bool DhtImpl::ProcessIncoming(byte *buffer, size_t len, const SockAddr& addr)
 	}
 
 #if defined(_DEBUG_DHT_INSTRUMENT)
-	if (message.type) {
+	if (message.type && message.transactionID.b && message.transactionID.len >= sizeof(uint32)) {
 		instrument_log('<', message.command, message.type[0], len, Read32(message.transactionID.b));
 	}
 #endif
@@ -3819,6 +3870,14 @@ void DhtImpl::CountExternalIPReport(const SockAddr& addr, const SockAddr& voter 
 	}
 }
 
+bool DhtImpl::IsBootstrap(const SockAddr& addr)
+{
+	for (auto const& router : _bootstrap_routers)
+		if (addr.ip_eq(router))
+			return true;
+	return false;
+}
+
 /**
 	Update the internal DHT tables with an id.  Generally, the algorithm attempts to add
 	a candidate node to the main node list.  If not sucessful, the list is examined in more
@@ -3882,6 +3941,10 @@ DhtPeer* DhtImpl::Update(const DhtPeerID &id, uint origin, bool seen, int rtt)
 	if (bucket_id < 0) {
 		return NULL;
 	}
+
+	// Don't allow bootstrap servers into the rounting table
+	if (IsBootstrap(id.addr))
+		return NULL;
 
 	DhtBucket &bucket = *_buckets[bucket_id];
 
@@ -4548,7 +4611,9 @@ DhtFindNodeEntry* DhtLookupScheduler::ProcessMetadataAndPeer(
 
 				// Check if it's identical to myself?
 				// Don't add myself to my internal list of peers.
-				if (!(peer.id == impl->_my_id) && peer.addr.get_port() != 0) {
+				if (!(peer.id == impl->_my_id)
+					&& peer.addr.get_port() != 0
+					&& !impl->IsBootstrap(peer.addr)) {
 
 					impl->Update(peer, IDht::DHT_ORIGIN_FROM_PEER, false);
 
@@ -5204,6 +5269,7 @@ GetDhtProcess::GetDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 	: DhtLookupScheduler(pDhtImpl, dpm, target_2, startTime
 		, consumerCallbacks, maxOutstanding, flags, 12) // <-- find 12 nodes, not 8!
 	, _with_cas(flags & IDht::with_cas)
+	, retries(0)
 {
 	
 	char* buf = (char*)this->_id;
@@ -5322,6 +5388,29 @@ void GetDhtProcess::CompleteThisProcess()
 			, print_version(processManager[i].client, processManager[i].version));
 	}
 #endif
+
+	if (processManager.size() < 8 && !aborted && retries++ < 2) {
+		// we got less than a bucket's worth of replies
+		// we obviously didn't get a good set of peers to query, so try again
+#if defined(_DEBUG_DHT_VERBOSE)
+		debug_log("[%u] Restarting process", process_id());
+#endif
+		for (int i = 0; i < processManager.size(); ++i) {
+			// CompactList resets the queried state to QUERIED_NO, since we're
+			// going to restart we need to set the state back to REPLIED
+			// so we don't query the nodes again
+			// The reason we don't just do the restart before compacting the list
+			// is because we want to allow for retrying failed nodes. The hope is
+			// that truely dead nodes will get removed from the routing table by
+			// the time we do the second restart.
+			processManager[i].queried = QUERIED_REPLIED;
+		}
+		DhtPeerID *ids[32];
+		int num = impl->AssembleNodeList(target, ids, lenof(ids));
+		processManager.SetNodeIds(ids, num, target);
+		Schedule();
+		return;
+	}
 
 	if (callbackPointers.getCallback) {
 		callbackPointers.getCallback(callbackPointers.callbackContext

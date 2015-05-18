@@ -97,7 +97,7 @@ TEST(externalipcounter, trigger)
 	external_ip.CountIP(addr3, src_addr3, 60);
 	external_ip.CountIP(addr4, src_addr4, 61);
 	external_ip.GetIP(sockAddr);
-	ASSERT_EQ(sockAddr, addr3);
+	ASSERT_EQ(sockAddr, addr4);
 	ASSERT_TRUE(icot.flag);
 
 }

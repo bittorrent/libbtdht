@@ -22,7 +22,9 @@ void ExternalIPCounter::Rotate()
 		byte last_winner[4];
 		_winnerV4->first.compact(ip_winner, false);
 		_last_winner4.compact(last_winner, false);
-		if(memcmp(ip_winner, last_winner, 4) && _ip_change_observer){
+		// don't invoke the observer if last_votes is zero, that means this is the first
+		// IP we've seen
+		if(_last_votes4 && memcmp(ip_winner, last_winner, 4) && _ip_change_observer){
 			_ip_change_observer->on_ip_change(_winnerV4->first);
 		}
 		_last_winner4 = _winnerV4->first;
@@ -33,7 +35,7 @@ void ExternalIPCounter::Rotate()
 		byte last_winner[16];
 		_winnerV6->first.compact(ip_winner, false);
 		_last_winner6.compact(last_winner, false);
-		if(memcmp(ip_winner, last_winner, 16) && _ip_change_observer){
+		if(_last_votes6 && memcmp(ip_winner, last_winner, 16) && _ip_change_observer){
 			_ip_change_observer->on_ip_change(_winnerV6->first);
 		}
 		_last_winner6 = _winnerV6->first;
@@ -45,6 +47,18 @@ void ExternalIPCounter::Rotate()
 	_winnerV4 = _map.end();
 	_HeatStarted = time(NULL);
 	_TotalVotes = 0;
+	_voterFilter.clear();
+}
+
+void ExternalIPCounter::NetworkChanged()
+{
+	// Force a rotation after the next vote
+	_TotalVotes = EXTERNAL_IP_HEAT_MAX_VOTES;
+	// Our IP likely changed so give minimal weight to previous votes
+	for (auto& m : _map)
+		m.second = 1;
+	// peers who already voted may have legitmatly changed their vote
+	// so don't filter them
 	_voterFilter.clear();
 }
 
@@ -71,8 +85,6 @@ void ExternalIPCounter::CountIP( const SockAddr& addr, int weight ) {
 	if(! _HeatStarted)
 		_HeatStarted = time(NULL);
 
-	Rotate();
-
 	// attempt to insert this vote
 	std::pair<candidate_map::iterator, bool> inserted = _map.insert(std::make_pair(addr, weight));
 
@@ -87,6 +99,8 @@ void ExternalIPCounter::CountIP( const SockAddr& addr, int weight ) {
 	if(addr.isv6() && (_winnerV6 == _map.end() || inserted.first->second > _winnerV6->second))
 		_winnerV6 = inserted.first;
 	_TotalVotes += weight;
+
+	Rotate();
 }
 
 void ExternalIPCounter::CountIP( const SockAddr& addr, const SockAddr& voter, int weight ) {
@@ -94,8 +108,6 @@ void ExternalIPCounter::CountIP( const SockAddr& addr, const SockAddr& voter, in
 
 	if (is_ip_local(voter))
 		return;
-
-	Rotate();
 
 	// Accept an empty voter address.
 	if ( ! voter.is_addr_any() ) {

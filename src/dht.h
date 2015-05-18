@@ -47,11 +47,11 @@ typedef sha1_hash DhtSHACallback(byte const* buf, int len);
 
 // callback to ed25519 crypto_sign_open used for message verification
 typedef bool Ed25519VerifyCallback(const unsigned char *signature,
-		const unsigned char *message, unsigned long long message_len,
+		const unsigned char *message, size_t message_len,
 		const unsigned char *key);
 
 typedef void Ed25519SignCallback(unsigned char *signature,
-		const unsigned char *message, unsigned long long message_len,
+		const unsigned char *message, size_t message_len,
 		const unsigned char *key);
 
 /**
