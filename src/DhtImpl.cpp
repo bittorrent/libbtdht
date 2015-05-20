@@ -3138,6 +3138,11 @@ void DhtImpl::AddBootstrapNode(SockAddr const& addr)
 			_dht_peer_allocator.Free(p);
 			_dht_peers_count--;
 			assert(_dht_peers_count >= 0);
+
+			// If at the end of the peers list, bail
+			if (*peer == nullptr) {
+				break;
+			}
 		}
 
 		// Also check if the router is in the replacement cache already.
@@ -3154,6 +3159,12 @@ void DhtImpl::AddBootstrapNode(SockAddr const& addr)
 			_dht_peer_allocator.Free(p);
 			_dht_peers_count--;
 			assert(_dht_peers_count >= 0);
+
+
+			// If at the end of the replacement peers list, bail
+			if (*peer == nullptr) {
+				break;
+			}
 		}
 	}
 }
