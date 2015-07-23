@@ -936,7 +936,7 @@ struct DhtFindNodeEntry {
 	// atomic writes. Once we have modified the blob we found on the DHT
 	// and are writing it back, we echo this sequence number back to make
 	// sure nonody else has writtent to it since we read it.
-	uint64 cas;
+	int64 cas;
 
 	// the two letter client version from the DHT messages
 	char client[2];

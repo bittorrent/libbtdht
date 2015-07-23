@@ -121,7 +121,7 @@ public:
 	// expected current sequence number for compare-and-swap operations
 	// if the blob we're about to overwrite has a different sequence number than
 	// this, the write must fail and be retried.
-	uint64 cas;
+	int64 cas;
 
 	Buffer filename;
 	Buffer infoHash;
