@@ -22,7 +22,7 @@
 #include <limits>
 
 #define lenof(x) (sizeof(x)/sizeof(x[0]))
-const char MUTABLE_PAYLOAD_FORMAT[] = "3:seqi%" PRIu64 "e1:v";
+const char MUTABLE_PAYLOAD_FORMAT[] = "3:seqi%" PRId64 "e1:v";
 
 const int MESSAGE_TOO_BIG = 205;
 const int INVALID_SIGNATURE = 206;
@@ -2236,7 +2236,7 @@ bool DhtImpl::ProcessQueryGet(DHTMessage &message, DhtPeerID &peerID,
 	// to reach the next level of nodes
 	BuildFindNodesPacket(sb, targetId, mtu - size, peerID.addr, true);
 
-	sb("3:seqi%" PRIu64 "e", sequenceNum);
+	sb("3:seqi%" PRId64 "e", sequenceNum);
 
 	if (signatureToReturn.len) {
 		// add a "sig" field to the response, if there is one
@@ -4701,7 +4701,7 @@ void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 
 #ifdef _DEBUG_DHT
 		if (impl->_lookup_log)
-			fprintf(impl->_lookup_log, "[%u] [%u] [%s]: BLOB (seq: %" PRIu64 ")\n"
+			fprintf(impl->_lookup_log, "[%u] [%u] [%s]: BLOB (seq: %" PRId64 ")\n"
 				, uint(get_milliseconds()), process_id(), name(), message.sequenceNum);
 #endif
 
@@ -5346,7 +5346,7 @@ void GetDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	sb("e1:q3:get");
 	impl->put_is_read_only(sb);
 	if (processManager.seq() > 0)
-		sb("3:seqi%" PRIu64 "e", processManager.seq());
+		sb("3:seqi%" PRId64 "e", processManager.seq());
 	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4));
 	impl->put_version(sb);
 	sb("1:y1:qe");
@@ -5634,11 +5634,11 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	sb("d1:ad");
 
 	if (_with_cas) {
-		sb("3:casi%" PRIu64 "e", nodeInfo.cas);
+		sb("3:casi%" PRId64 "e", nodeInfo.cas);
 	}
 	sb("2:id20:")(DHT_ID_SIZE, (byte const*)this->_id);
 	sb("1:k32:")(32, (byte*)this->_pkey);
-	sb("3:seqi%" PRIu64 "e", seq);
+	sb("3:seqi%" PRId64 "e", seq);
 	sb("3:sig64:")(64, (byte const*)&signature[0]);
 	sb("5:token")("%d:", int(nodeInfo.token.len));
 	sb(nodeInfo.token.len, (byte const*)nodeInfo.token.b);
