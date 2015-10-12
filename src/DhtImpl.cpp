@@ -575,13 +575,9 @@ bool ValidateEncoding( const void * data, uint len )
 	BencodedDict dict;
 	bool bReturn = false;
 	if( BencEntity::Parse((const byte*) data, dict, ((const byte*) data ) + len)) {
-		size_t parselen = 0;
-		byte *b = dict.Serialize(&parselen);
-		if (b) {
-			bReturn = (memcmp(data, b, len) == 0);
-			assert(bReturn);
-			free(b);
-		}
+		std::string b = dict.Serialize();
+		bReturn = (memcmp(data, b.c_str(), len) == 0);
+		assert(bReturn);
 	}
 	assert(bReturn);
 	return bReturn;
@@ -3766,7 +3762,6 @@ void DhtImpl::SaveState()
 		}
 	}
 
-	size_t len;
 	BencEntityMem beM;
 	if (peer_list.empty()) beM.SetMemOwn(NULL, 0);
 	else beM.SetMemOwn(&peer_list[0], peer_list.size() * sizeof(PackedDhtPeer));
@@ -3782,9 +3777,8 @@ void DhtImpl::SaveState()
 	// save the lowest table depth 
 	dict->InsertInt("table_depth", (int)160 - lowest_span);
 
-	byte *b = base.Serialize(&len);
-	_save_callback(b, len);
-	free(b);
+	std::string b = base.Serialize();
+	_save_callback((const byte*)b.c_str(), b.size());
 }
 
 void DhtImpl::LoadState()
