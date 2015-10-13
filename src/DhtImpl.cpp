@@ -577,9 +577,7 @@ bool ValidateEncoding( const void * data, uint len )
 	if( BencEntity::Parse((const byte*) data, dict, ((const byte*) data ) + len)) {
 		std::string b = dict.Serialize();
 		bReturn = (memcmp(data, b.c_str(), len) == 0);
-		assert(bReturn);
 	}
-	assert(bReturn);
 	return bReturn;
 }
 
