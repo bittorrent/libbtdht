@@ -15,6 +15,7 @@
 typedef sha1_hash SHACallback(byte const* buf, int len);
 
 struct ip_change_observer {
+	virtual ~ip_change_observer() {}
 	virtual void on_ip_change(SockAddr const & new_ip) = 0;
 };
 
