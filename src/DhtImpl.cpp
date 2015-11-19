@@ -279,8 +279,8 @@ DhtImpl::~DhtImpl()
 		}
 		_dht_bucket_allocator.Free(_buckets[i]);
 	}
-	for (std::vector<StoredContainer>::iterator it = _peer_store.begin(); it != _peer_store.end(); it++) {
-		free(it->file_name);
+	for (auto& peer: _peer_store) {
+		free(peer.file_name);
 	}
 }
 
@@ -3786,8 +3786,6 @@ void DhtImpl::LoadState()
 
 	_load_callback(&base);
 
-	int num_loaded = 0;
-
 	BencodedDict *dict = base.AsDict(&base);
 	if (dict) {
 
@@ -3832,7 +3830,6 @@ void DhtImpl::LoadState()
 					nodes += sizeof(PackedDhtPeer);
 					nodes_len -= sizeof(PackedDhtPeer);
 					Update(peer, IDht::DHT_ORIGIN_UNKNOWN, false);
-					++num_loaded;
 				}
 			}
 		}
@@ -6141,7 +6138,7 @@ DhtPeer* DhtBucketList::PopBestNode(int desiredSubPrefix)
 	the prefix bits of nodes that can be stored in the bucket.  If the node
 	does not belong in the bucket, FALSE is returned.
 */
-bool DhtBucket::TestForMatchingPrefix(const DhtID &id)
+bool DhtBucket::TestForMatchingPrefix(const DhtID &id) const
 {
 	if (span == 0)
 		return false; // error condition..
