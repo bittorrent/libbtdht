@@ -3786,6 +3786,10 @@ void DhtImpl::LoadState()
 
 	_load_callback(&base);
 
+#if defined(_DEBUG_DHT)
+	int num_loaded = 0;
+#endif
+
 	BencodedDict *dict = base.AsDict(&base);
 	if (dict) {
 
@@ -3830,6 +3834,9 @@ void DhtImpl::LoadState()
 					nodes += sizeof(PackedDhtPeer);
 					nodes_len -= sizeof(PackedDhtPeer);
 					Update(peer, IDht::DHT_ORIGIN_UNKNOWN, false);
+#if defined(_DEBUG_DHT)
+					++num_loaded;
+#endif
 				}
 			}
 		}
