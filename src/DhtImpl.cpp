@@ -5333,16 +5333,17 @@ void GetDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	unsigned char buf[bufLen];
 	smart_buffer sb(buf, bufLen);
 
-	sb("d1:ad2:id20:")(DHT_ID_SIZE, (byte*)this->_id)("6:target20:");
+	sb("d1:ad2:id20:")(DHT_ID_SIZE, (byte*)this->_id);
+
+	if (processManager.seq() > 0)
+		sb("3:seqi%" PRId64 "e", processManager.seq());
 
 	byte targetAsID[DHT_ID_SIZE];
 
 	DhtIDToBytes(targetAsID, target);
-	sb(DHT_ID_SIZE, targetAsID);
+	sb("6:target20:")(DHT_ID_SIZE, targetAsID);
 	sb("e1:q3:get");
 	impl->put_is_read_only(sb);
-	if (processManager.seq() > 0)
-		sb("3:seqi%" PRId64 "e", processManager.seq());
 	impl->put_transaction_id(sb, Buffer((byte*)&transactionID, 4));
 	impl->put_version(sb);
 	sb("1:y1:qe");
@@ -5577,7 +5578,7 @@ bool DhtImpl::Verify(byte const * signature, byte const * message, int message_l
 void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 	, const unsigned int transactionID)
 {
-	int64 seq = processManager.seq() + 1;
+	int64 seq = processManager.seq();
 	// note that blk is returned by reference
 	// we want a copy that the put callback can modify
 	std::vector<char>& blk = processManager.get_data_blk();
@@ -5595,6 +5596,9 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 
 		// only call the callback once
 		_put_callback_called = true;
+
+		// the callback may have updated the sequence number
+		processManager.set_seq(seq);
 
 		// the buffer has to be greater than zero. The empty string must be
 		// represented by "0:"
