@@ -2,7 +2,8 @@
 #include "utypes.h"
 #include "TestDhtImpl.h"
 
-int put_callback(void* ctx, std::vector<char>& buffer, int64 seq, SockAddr src) {
+int put_callback(void* ctx, std::vector<char>& buffer, int64& seq, SockAddr src) {
+	++seq;
 	if (ctx != NULL) {
 		*(reinterpret_cast<int64*>(ctx)) = seq;
 	}
@@ -1073,7 +1074,6 @@ TEST_F(dht_impl_test, TestMultipleImmutablePutAndGetRPC_ipv4) {
 
 	// get the data out and see that it matches what was put
 	BencEntity* entity;
-	Buffer serialized_entity;
 	for(int x = 0; x < 5; ++x) {
 		len = bencoder(message, 1024)
 			.d()
@@ -1092,9 +1092,8 @@ TEST_F(dht_impl_test, TestMultipleImmutablePutAndGetRPC_ipv4) {
 		get_reply();
 		entity = reply->Get("v");
 		ASSERT_TRUE(entity);
-		serialized_entity.b = SerializeBencEntity(entity, &serialized_entity.len);
-		EXPECT_FALSE(memcmp(putValues[x].c_str(), serialized_entity.b,
-					serialized_entity.len));
+		std::string serialized_entity = SerializeBencEntity(entity);
+		EXPECT_EQ(putValues[x], serialized_entity);
 		EXPECT_FALSE(reply->GetString("key"));
 		EXPECT_FALSE(reply->GetString("sig"));
 	}
