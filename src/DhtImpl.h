@@ -1837,6 +1837,9 @@ public:
 
 	void SetId(byte new_id_bytes[DHT_ID_SIZE]);
 
+	// get the target id of a mutable item
+	DhtID MutableTarget(const byte* key, const byte* salt, int salt_length);
+
 	void Put(const byte * pkey, const byte* skey, DhtPutCallback * put_callback
 		, DhtPutCompletedCallback* put_completed_callback
 		, DhtPutDataCallback* put_data_callback
@@ -2046,6 +2049,7 @@ public:
 		DHT_INVALID_PQ_BAD_PUT_SIGNATURE,
 		DHT_INVALID_PQ_BAD_PUT_CAS,
 		DHT_INVALID_PQ_BAD_PUT_KEY,
+		DHT_INVALID_PQ_BAD_PUT_SALT,
 		DHT_INVALID_PQ_BAD_GET_TARGET,
 		DHT_INVALID_PQ_UNKNOWN_COMMAND,
 		DHT_INVALID_PR_BAD_ID_FIELD,
@@ -2091,7 +2095,8 @@ public:
 	void Account(int slot, int size);
 
 	void DumpAccountingInfo();
-	bool Verify(byte const * signature, byte const * message, int message_length, byte *pkey, int64 seq);
+	bool Verify(byte const * signature, byte const * message, int message_length
+		, byte const * salt, int salt_length, byte *pkey, int64 seq);
 
 	//--------------------------------------------------------------------------------
 

@@ -42,6 +42,7 @@ const char MUTABLE_PAYLOAD_FORMAT[] = "3:seqi%" PRId64 "e1:v";
 
 const int MESSAGE_TOO_BIG = 205;
 const int INVALID_SIGNATURE = 206;
+const int SALT_TOO_BIG = 207;
 const int CAS_MISMATCH = 301;
 const int LOWER_SEQ = 302;
 
@@ -743,6 +744,7 @@ void DhtImpl::DumpAccountingInfo()
 		"DHT_INVALID_PQ_BAD_PUT_SIGNATURE",
 		"DHT_INVALID_PQ_BAD_PUT_CAS",
 		"DHT_INVALID_PQ_BAD_PUT_KEY",
+		"DHT_INVALID_PQ_BAD_PUT_SALT",
 		"DHT_INVALID_PQ_BAD_GET_TARGET",
 		"DHT_INVALID_PQ_UNKNOWN_COMMAND",
 		"DHT_INVALID_PR_BAD_ID_FIELD",
@@ -2074,7 +2076,15 @@ bool DhtImpl::ProcessQueryPut(DHTMessage &message, DhtPeerID &peerID,
 			Account(DHT_INVALID_PQ_BAD_PUT_KEY, packetSize);
 			return true;
 		}
-		if (!Verify(message.signature.b, message.vBuf.b, message.vBuf.len, message.key.b, message.sequenceNum)) {
+		if (message.salt.len > 64 || message.salt.len < 0)
+		{
+			Account(DHT_INVALID_PQ_BAD_PUT_SALT, packetSize);
+			send_put_response(sb, message.transactionID, packetSize, peerID,
+					SALT_TOO_BIG, "Salt too big.");
+			return true;
+		}
+		if (!Verify(message.signature.b, message.vBuf.b, message.vBuf.len
+				, message.salt.b, message.salt.len, message.key.b, message.sequenceNum)) {
 			Account(DHT_INVALID_PQ_BAD_PUT_SIGNATURE, packetSize);
 			send_put_response(sb, message.transactionID, packetSize, peerID,
 					INVALID_SIGNATURE, "Invalid message signature.");
@@ -2085,8 +2095,8 @@ bool DhtImpl::ProcessQueryPut(DHTMessage &message, DhtPeerID &peerID,
 		const sha1_hash addrHashPtr = _sha_callback((const byte*)peerID.addr.get_hash_key(), peerID.addr.get_hash_key_len());
 
 		// at this point, the put request has been verified
-		// store the data under a sha1 hash of the entire public key
-		DhtID targetDhtID = _sha_callback((const byte*)message.key.b, message.key.len);
+		// store the data under a sha1 hash of the entire public key and optional salt
+		DhtID targetDhtID = MutableTarget(message.key.b, message.salt.b, message.salt.len);
 		PairContainerBase<MutableData>* containerPtr = NULL;
 		if (_mutablePutStore.AddKeyToList(addrHashPtr, targetDhtID, &containerPtr, time(NULL)) == NEW_ITEM) {
 			// this is new to the store, set the sequence num, copy the 'v' bytes, store the signature and key
@@ -3189,6 +3199,16 @@ void DhtImpl::Vote(void *ctx_ptr, const sha1_hash* info_hash, int vote, DhtVoteC
 	sha1_hash target = _sha_callback(buf, sizeof(buf));
 	DoVote(target, vote, callb, ctx_ptr);
 	_allow_new_job = false;
+}
+
+DhtID DhtImpl::MutableTarget(const byte* key, const byte* salt, int salt_length)
+{
+	assert(salt_length < 64 && salt_length >= 0);
+
+	byte targetBuf[32+64];
+	memcpy(targetBuf, key, 32);
+	memcpy(targetBuf + 32, salt, salt_length);
+	return _sha_callback(targetBuf, 32 + salt_length);
 }
 
 void DhtImpl::Put(const byte * pkey, const byte * skey
@@ -4704,8 +4724,8 @@ void GetDhtProcess::ImplementationSpecificReplyProcess(void *userdata
 		&& message.signature.len > 0
 		&& message.vBuf.len > 0
 		&& message.key.len > 0
-		&& impl->Verify(message.signature.b, message.vBuf.b
-			, message.vBuf.len, message.key.b, message.sequenceNum)) {
+		&& impl->Verify(message.signature.b, message.vBuf.b, message.vBuf.len
+			, NULL, 0, message.key.b, message.sequenceNum)) {
 		// The maximum seq and the vBuf are saved by the
 		// processManager and will be used in creating Put messages.
 		processManager.set_data_blk(message.vBuf.b, message.vBuf.len, peer_id.addr);
@@ -5580,15 +5600,26 @@ bool ImmutablePutDhtProcess::Filter(DhtFindNodeEntry const& e)
 	return no_put_support(e) || e.token.b == NULL;
 }
 
-bool DhtImpl::Verify(byte const * signature, byte const * message, int message_length, byte *pkey, int64 seq) {
-	unsigned char buf[1500];
-	int index = sprintf(reinterpret_cast<char*>(buf), MUTABLE_PAYLOAD_FORMAT, seq);
+bool DhtImpl::Verify(byte const * signature, byte const * message, int message_length
+	, byte const * salt, int salt_length, byte *pkey, int64 seq)
+{
+	char buf[1500];
+
+	int index = 0;
+	if (salt_length > 0)
+	{
+		index += snprintf(buf + index, sizeof(buf) - index, "4:salt%d:", salt_length);
+		memcpy(buf + index, salt, salt_length);
+		index += salt_length;
+	}
+
+	index += snprintf(buf + index, sizeof(buf) - index, MUTABLE_PAYLOAD_FORMAT, seq);
 	if (index + message_length >= sizeof(buf)) {
 		return false;
 	}
 	memcpy(buf + index, message, message_length);
 	assert(_ed25519_verify_callback);
-	return _ed25519_verify_callback(signature, buf, message_length + index, pkey);
+	return _ed25519_verify_callback(signature, (unsigned char*)buf, message_length + index, pkey);
 }
 
 void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo

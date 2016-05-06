@@ -208,6 +208,7 @@ void DHTMessage::DecodeQuery(BencodedDict &bDict)
 		if (signature.b && signature.len != 64) _argumentsAreValid = false;
 		key.b = (byte*)args->GetString("k", &key.len); // 32 bytes
 		if (key.b && key.len != 32) _argumentsAreValid = false;
+		salt.b = (byte*)args->GetString("salt", &salt.len);
 		sequenceNum = args->GetInt64("seq", 0);
 		cas = args->GetInt("cas", 0);
 	}

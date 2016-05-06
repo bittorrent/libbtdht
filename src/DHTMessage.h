@@ -147,6 +147,7 @@ public:
 	Buffer version; // ver
 	Buffer signature;  // 'sig' for mutable put
 	Buffer key; // 'k' for mutable put
+	Buffer salt; // for mutable put
 	Buffer target;
 	Buffer external_ip;
 	// this is used to point to the 'v' region of a "put" that is extracted when

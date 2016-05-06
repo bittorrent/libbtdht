@@ -201,6 +201,7 @@ TEST_F(dht_impl_test, TestGetRPC_min_seq) {
 			("a").d()
 				("id")("abcdefghij0123456789")
 				("k")("12345678901234567890123456789012")
+				("salt")("test salt")
 				("seq")(int64(2))
 				("sig")("1234567890123456789012345678901234567890123456789012345678901234")
 				("token")(token)
@@ -217,7 +218,7 @@ TEST_F(dht_impl_test, TestGetRPC_min_seq) {
 
 	// issue a get but specify the same seq, the node should omit the value in the response
 	sha1_hash target = sha1_callback(
-			reinterpret_cast<const unsigned char*>("12345678901234567890123456789012"), 32);
+			reinterpret_cast<const unsigned char*>("12345678901234567890123456789012test salt"), 32+9);
 	Buffer hashInfo;
 	hashInfo.b = (unsigned char*)target.value;
 	hashInfo.len = 20;
@@ -248,6 +249,10 @@ TEST_F(dht_impl_test, TestGetRPC_min_seq) {
 	Buffer tok;
 	reply->GetString("token", &tok.len);
 	EXPECT_TRUE(tok.len) << "There should have been a token of non-zero length";
+
+	// check that there is a sequence number
+	int64 seq = reply->GetInt64("seq", -1);
+	EXPECT_EQ(2, seq);
 
 	// check that there is no v
 	Buffer value;
