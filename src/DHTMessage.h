@@ -21,7 +21,14 @@ limitations under the License.
 #include <utility> // for std::pair
 #include "sha1_hash.h"
 
-enum { DHT_ID_SIZE = 20, DHT_ID_WORDCOUNT = DHT_ID_SIZE / sizeof(uint32) };
+enum
+{
+	DHT_ID_SIZE = 20,
+	DHT_KEY_SIZE = 32,
+	DHT_SIG_SIZE = 64,
+	DHT_MAX_SALT_SIZE = 64,
+	DHT_ID_WORDCOUNT = DHT_ID_SIZE / sizeof(uint32)
+};
 
 enum DHTMessageTypes
 {

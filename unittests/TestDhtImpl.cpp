@@ -218,10 +218,10 @@ TEST_F(dht_impl_test, TestGetRPC_min_seq) {
 
 	// issue a get but specify the same seq, the node should omit the value in the response
 	sha1_hash target = sha1_callback(
-			reinterpret_cast<const unsigned char*>("12345678901234567890123456789012test salt"), 32+9);
+			reinterpret_cast<const unsigned char*>("12345678901234567890123456789012test salt"), DHT_KEY_SIZE+9);
 	Buffer hashInfo;
 	hashInfo.b = (unsigned char*)target.value;
-	hashInfo.len = 20;
+	hashInfo.len = SHA1_DIGESTSIZE;
 
 	len = bencoder(message, 1024)
 		.d()

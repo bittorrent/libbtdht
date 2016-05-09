@@ -2072,11 +2072,11 @@ bool DhtImpl::ProcessQueryPut(DHTMessage &message, DhtPeerID &peerID,
 	if(message.key.len && message.sequenceNum && message.signature.len)
 	{ // mutable put
 
-		if(message.key.len != 32 || message.signature.len != 64) {
+		if(message.key.len != DHT_KEY_SIZE || message.signature.len != DHT_SIG_SIZE) {
 			Account(DHT_INVALID_PQ_BAD_PUT_KEY, packetSize);
 			return true;
 		}
-		if (message.salt.len > 64 || message.salt.len < 0)
+		if (message.salt.len > DHT_MAX_SALT_SIZE || message.salt.len < 0)
 		{
 			Account(DHT_INVALID_PQ_BAD_PUT_SALT, packetSize);
 			send_put_response(sb, message.transactionID, packetSize, peerID,
@@ -3203,12 +3203,12 @@ void DhtImpl::Vote(void *ctx_ptr, const sha1_hash* info_hash, int vote, DhtVoteC
 
 DhtID DhtImpl::MutableTarget(const byte* key, const byte* salt, int salt_length)
 {
-	assert(salt_length < 64 && salt_length >= 0);
+	assert(salt_length < DHT_MAX_SALT_SIZE && salt_length >= 0);
 
-	byte targetBuf[32+64];
-	memcpy(targetBuf, key, 32);
-	memcpy(targetBuf + 32, salt, salt_length);
-	return _sha_callback(targetBuf, 32 + salt_length);
+	byte targetBuf[DHT_KEY_SIZE + DHT_MAX_SALT_SIZE];
+	memcpy(targetBuf, key, DHT_KEY_SIZE);
+	memcpy(targetBuf + DHT_KEY_SIZE, salt, salt_length);
+	return _sha_callback(targetBuf, DHT_KEY_SIZE + salt_length);
 }
 
 void DhtImpl::Put(const byte * pkey, const byte * skey
@@ -3222,7 +3222,7 @@ void DhtImpl::Put(const byte * pkey, const byte * skey
 		? KADEMLIA_LOOKUP_OUTSTANDING + KADEMLIA_LOOKUP_OUTSTANDING_DELTA
 		: KADEMLIA_LOOKUP_OUTSTANDING;
 
-	DhtID target = _sha_callback(pkey, 32);
+	DhtID target = _sha_callback(pkey, DHT_KEY_SIZE);
 
 	DhtPeerID *ids[32];
 	int num = AssembleNodeList(target, ids, lenof(ids));
@@ -5488,7 +5488,7 @@ PutDhtProcess::PutDhtProcess(DhtImpl* pDhtImpl, DhtProcessManager &dpm
 	memcpy(buf, pDhtImpl->_my_id_bytes, DHT_ID_SIZE);
 
 	buf = (char*)this->_pkey;
-	memcpy(buf, pkey, 32);
+	memcpy(buf, pkey, DHT_KEY_SIZE);
 
 	buf = (char*)this->_skey;
 	memcpy(buf, skey, 64);
@@ -5531,18 +5531,18 @@ bool PutDhtProcess::Filter(DhtFindNodeEntry const& e)
 }
 
 void PutDhtProcess::Sign(std::vector<char> &signature, std::vector<char> v, byte * skey, int64 seq) {
-	unsigned char sig[64];
+	unsigned char sig[DHT_SIG_SIZE];
 	char buf[1024];
 	unsigned int index = 0;
 
 	index += sprintf(buf, MUTABLE_PAYLOAD_FORMAT, seq);
 
-	v.insert(v.begin(), buf, buf+index);	
+	v.insert(v.begin(), buf, buf+index);
 
 	assert(impl->_ed25519_sign_callback);
 	impl->_ed25519_sign_callback(sig, (unsigned char *)&v[0], v.size(), skey);
 
-	signature.assign(sig, sig+64);
+	signature.assign(sig, sig+DHT_SIG_SIZE);
 }
 
 //*****************************************************************************
@@ -5684,9 +5684,9 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 		sb("3:casi%" PRId64 "e", nodeInfo.cas);
 	}
 	sb("2:id20:")(DHT_ID_SIZE, (byte const*)this->_id);
-	sb("1:k32:")(32, (byte*)this->_pkey);
+	sb("1:k32:")(DHT_KEY_SIZE, (byte*)this->_pkey);
 	sb("3:seqi%" PRId64 "e", seq);
-	sb("3:sig64:")(64, (byte const*)&signature[0]);
+	sb("3:sig64:")(DHT_SIG_SIZE, (byte const*)&signature[0]);
 	sb("5:token")("%d:", int(nodeInfo.token.len));
 	sb(nodeInfo.token.len, (byte const*)nodeInfo.token.b);
 	sb("1:v")(blk.size(), (byte const*)&blk[0]);
