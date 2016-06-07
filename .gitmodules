@@ -1,3 +1,3 @@
-[submodule "ut_utils"]
-	path = ut_utils
-	url = git@github.com:bittorrent/ut_utils.git
+[submodule "btutils"]
+	path = btutils
+	url = git@github.com:bittorrent/libbtutils.git

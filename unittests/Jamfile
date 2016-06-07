@@ -3,10 +3,10 @@ import modules ;
 
 BOOST_ROOT = [ modules.peek : BOOST_ROOT ] ;
 use-project /boost : $(BOOST_ROOT) ;
-use-project /ut_dht : .. ;
+use-project /btdht : .. ;
 
-GTEST_ROOT = ../ut_utils/vendor/gtest-1.6.0 ;
-GMOCK_ROOT = ../ut_utils/vendor/gmock-1.6.0 ;
+GTEST_ROOT = ../btutils/vendor/gtest-1.6.0 ;
+GMOCK_ROOT = ../btutils/vendor/gmock-1.6.0 ;
 
 lib pthread : : <name>pthread <link>shared ;
 
@@ -17,7 +17,7 @@ project
 	<source>$(GMOCK_ROOT)/src/gmock-all.cc
 	<source>$(GMOCK_ROOT)/src/gmock_main.cc
 #	<define>ENABLE_SRP=1
-	<library>/ut_dht//ut_dht/<link>static
+	<library>/btdht//btdht/<link>static
 	<library>/boost//system/<link>static
 	<target-os>linux:<library>pthread
 

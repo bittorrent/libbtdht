@@ -1,4 +1,4 @@
-ut_dht
+btdht
 ======
 
-The DHT implementation used in uTorrent
+The DHT implementation used by BitTorrent projects

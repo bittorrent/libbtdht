@@ -127,9 +127,9 @@ endif
 # Library sources and products
 #
 
-# ut_utils
+# btutils
 
-UTILS_DIR_ROOT = ut_utils
+UTILS_DIR_ROOT = btutils
 UTILS_DIR = $(UTILS_DIR_ROOT)
 UTILS_SRC_ROOT = $(UTILS_DIR)/src
 OUTDIR_UTILS = $(OUTDIR)/$(UTILS_DIR_ROOT)
@@ -152,7 +152,7 @@ UTILS_LIBOBJDIR = $(OUTDIR)/$(UTILS_DIR)
 UTILS_LIBOBJSRCDIR = $(OUTDIR)/$(UTILS_SRC_ROOT)
 UTILS_INCS += -I $(UTILS_SRC_ROOT)
 
-# ut_dht
+# btdht
 
 SRC_DIR = src
 LIBSRCS = $(sort $(addprefix $(SRC_DIR)/, \
@@ -281,7 +281,7 @@ $(UT_EXE_DEST): $(OBJDESTUNSTRIPPEDLIB) $(OBJS_UNITTESTS) $(UNITTESTS_DIR_DEPS)
 $(OUTDIR):
 	mkdir -p $@
 
-# ut_utils
+# btutils
 $(UTILS_LIBOBJDIR): $(filter-out $(wildcard $(OUTDIR)), $(OUTDIR))
 	mkdir -p $@
 $(UTILS_LIBOBJSRCDIR): $(filter-out $(wildcard $(OUTDIR)), $(OUTDIR))

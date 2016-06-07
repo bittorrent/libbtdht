@@ -23,7 +23,6 @@ limitations under the License.
 #include <boost/uuid/sha1.hpp>
 using namespace boost::uuids::detail;
 
-// TODO: this test should be moved into ut_dht!
 struct ip_change_observer_test : ip_change_observer{
 	bool flag;
 	void on_ip_change(SockAddr const & new_ip)

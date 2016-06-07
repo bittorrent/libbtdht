@@ -1,16 +1,16 @@
 import feature : feature ;
 
-use-project /ut_utils : ut_utils ;
+use-project /btutils : btutils ;
 
 SOURCES = DHTMessage DhtImpl ExternalIPCounter blockallocator dht crc32c ;
 
 feature holepunch : off on : composite propagated link-incompatible ;
 feature.compose <holepunch>on : <define>USE_HOLEPUNCH=1 ;
 
-lib ut_dht : src/$(SOURCES).cpp
+lib btdht : src/$(SOURCES).cpp
 	: # requirements
 	  <include>src
-	  <library>/ut_utils//ut_utils/<link>static
+	  <library>/btutils//btutils/<link>static
 	  <target-os>windows:<define>WIN32
      <toolset>gcc:<cxxflags>-Wno-invalid-offsetof
 	: # default build

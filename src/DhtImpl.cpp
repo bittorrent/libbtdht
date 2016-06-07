@@ -104,7 +104,7 @@ static void do_log(char const* fmt, ...)
 	va_end(args);
 }
 
-// TODO: factor this into ut_utils sockaddr
+// TODO: factor this into btutils sockaddr
 std::string print_sockaddr(SockAddr const& addr)
 {
 	char buf[256];
