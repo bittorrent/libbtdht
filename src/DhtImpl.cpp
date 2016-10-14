@@ -4065,7 +4065,7 @@ DhtPeer* DhtImpl::Update(const DhtPeerID &id, uint origin, bool seen, int rtt)
 			// if there is a sub-prefix or rtt that should be replaced
 			replacementAvailable = bucket.FindReplacementCandidate(this, *returnNode, DhtBucket::replacement_list, &replaceNode);
 			if (replacementAvailable) {
-				replaceNode = returnNode;
+				replaceNode->CopyAllButNext(*returnNode);
 			}
 			(*returnNode).CopyAllButNext(candidateNode); // replace the node with the candidate
 		}
