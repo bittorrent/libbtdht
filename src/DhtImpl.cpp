@@ -1129,6 +1129,7 @@ void DhtImpl::UpdateError(const DhtPeerID &id, bool force_remove)
 #endif
 			// remove the node from its bucket and move one node from the
 			// replacement cache
+			RemoveTableIP(p->id.addr);
 			bucket.peers.unlinknext(peer);
 			if (!bucket.replacement_peers.empty()) {
 				// move one from the replacement_peers instead.
@@ -1162,6 +1163,7 @@ void DhtImpl::UpdateError(const DhtPeerID &id, bool force_remove)
 			assert((*peer)->origin < sizeof(g_dht_peertype_count)/sizeof(g_dht_peertype_count[0]));
 			g_dht_peertype_count[(*peer)->origin]--;
 #endif
+			RemoveTableIP(p->id.addr);
 			bucket.replacement_peers.unlinknext(peer);
 			_dht_peer_allocator.Free(p);
 			_dht_peers_count--;
@@ -3150,6 +3152,7 @@ void DhtImpl::AddBootstrapNode(SockAddr const& addr)
 
 			// remove the router from its bucket and move one node from the
 			// replacement cache
+			RemoveTableIP(p->id.addr);
 			bucket.peers.unlinknext(peer);
 			if (!bucket.replacement_peers.empty()) {
 				// move one from the replacement_peers instead.
@@ -3174,7 +3177,7 @@ void DhtImpl::AddBootstrapNode(SockAddr const& addr)
 #ifdef _DEBUG_DHT
 			debug_log("found bootstrap node in replacement queue, purging");
 #endif
-
+			RemoveTableIP(p->id.addr);
 			bucket.replacement_peers.unlinknext(peer);
 			_dht_peer_allocator.Free(p);
 			_dht_peers_count--;
@@ -3584,6 +3587,7 @@ void DhtImpl::Restart() {
 	_buckets.clear();
 	_refresh_buckets_counter = 0;
 	_dht_peers_count = 0;
+	_ip4s.clear();
 
 #ifdef _DEBUG_DHT
 	if (_dht_bootstrap == valid_response_received && _bootstrap_log) {
@@ -3978,16 +3982,56 @@ DhtPeer* DhtImpl::Update(const DhtPeerID &id, uint origin, bool seen, int rtt)
 		return NULL;
 	}
 
+	// Don't allow bootstrap servers into the rounting table
+	if (IsBootstrap(id.addr))
+		return NULL;
+
+	DhtPeer* existing = NULL;
+	// TODO: IPv6
+	if (_ip4s.count(id.addr.get_addr4()))
+	{
+		int b = 0;
+		DhtBucket::BucketListType list;
+		for (; b < _buckets.size(); b++)
+		{
+			existing = _buckets[b]->FindNode(id.addr, list);
+			if (existing) break;
+		}
+
+		// we didn't find an existing node
+		// this means we have an existing entry with the same ip but different port
+		// ignore the new node
+		if (!existing)
+		{
+			return NULL;
+		}
+		// this is the same node, continue on to update the entry
+		else if (existing->id.id == id.id)
+		{ }
+		// someone claiming the same endpoint has a different id
+		// but we haven't confirmed it, this may just be spoofing
+		// so ignore it
+		else if (!seen)
+		{
+			return NULL;
+		}
+		// the same endpoint is claiming a different id
+		// this is suspicious so remove the node form the routing table
+		else
+		{
+			RemoveTableIP(id.addr);
+			bool removed = _buckets[b]->RemoveFromList(this, existing->id.id, list);
+			assert(removed);
+			return NULL;
+		}
+	}
+
 	int bucket_id = GetBucket(id.id);
 
 	// this will detect the -1 case
 	if (bucket_id < 0) {
 		return NULL;
 	}
-
-	// Don't allow bootstrap servers into the rounting table
-	if (IsBootstrap(id.addr))
-		return NULL;
 
 	DhtBucket &bucket = *_buckets[bucket_id];
 
@@ -4011,11 +4055,33 @@ DhtPeer* DhtImpl::Update(const DhtPeerID &id, uint origin, bool seen, int rtt)
 	candidateNode.origin = origin;
 #endif
 
+	{
+		DhtPeer* existingNode = bucket.FindNode(id.id);
+		// if the node is trying to claim the same id with a different IP, reject it
+		if (existingNode && existingNode->id.addr != id.addr)
+			return NULL;
+	}
+
 	// try putting the node in the active node list (or updating it if it's already there)
 	bool added = bucket.InsertOrUpdateNode(this, candidateNode, DhtBucket::peer_list, &returnNode);
 
 	// the node was already in or added to the main bucket
-	if (added) {
+	if (returnNode) {
+		if (added)
+		{
+			// if the candidate node is in the replacement list, remove it (to
+			// prevent it from possibly being in both lists simultainously)
+			if (bucket.RemoveFromList(this, candidateNode.id.id, DhtBucket::replacement_list))
+			{
+				RemoveTableIP(candidateNode.id.addr);
+			}
+			else
+			{
+				assert(!existing);
+			}
+
+			AddTableIP(id.addr);
+		}
 		return returnNode;
 	}
 
@@ -4040,7 +4106,14 @@ DhtPeer* DhtImpl::Update(const DhtPeerID &id, uint origin, bool seen, int rtt)
 
 		// if the candidate node is in the replacement list, remove it (to
 		// prevent it from possibly being in both lists simultainously)
-		bucket.RemoveFromList(this, candidateNode.id.id, DhtBucket::replacement_list);
+		if (bucket.RemoveFromList(this, candidateNode.id.id, DhtBucket::replacement_list))
+		{
+			RemoveTableIP(candidateNode.id.addr);
+		}
+		else
+		{
+			assert(!existing);
+		}
 
 		// a replacement candidate has been identified in the active peers list.
 
@@ -4048,6 +4121,8 @@ DhtPeer* DhtImpl::Update(const DhtPeerID &id, uint origin, bool seen, int rtt)
 		// just replace it
 		if (returnNode->num_fail) {
 			// replace the node with the candidate
+			RemoveTableIP(returnNode->id.addr);
+			AddTableIP(candidateNode.id.addr);
 			(*returnNode).CopyAllButNext(candidateNode);
 			return returnNode;
 		}
@@ -4056,17 +4131,26 @@ DhtPeer* DhtImpl::Update(const DhtPeerID &id, uint origin, bool seen, int rtt)
 		// for it in the reserve list.
 		DhtPeer* replaceNode = NULL;
 		added = bucket.InsertOrUpdateNode(this, *returnNode, DhtBucket::replacement_list, &replaceNode);
-		if (added) {
+		if (replaceNode) {
+			// assert that the node wasn't on both lists
+			assert(added);
 			// the peer list node is now in the replacement list, put the new
 			// node in the peer list
+			AddTableIP(candidateNode.id.addr);
 			(*returnNode).CopyAllButNext(candidateNode); // replace the node with the candidate
 		} else {
 			// the replacement candidate was not added directly to the replace list (full), see
 			// if there is a sub-prefix or rtt that should be replaced
 			replacementAvailable = bucket.FindReplacementCandidate(this, *returnNode, DhtBucket::replacement_list, &replaceNode);
 			if (replacementAvailable) {
+				RemoveTableIP(replaceNode->id.addr);
 				replaceNode->CopyAllButNext(*returnNode);
 			}
+			else
+			{
+				RemoveTableIP(returnNode->id.addr);
+			}
+			AddTableIP(candidateNode.id.addr);
 			(*returnNode).CopyAllButNext(candidateNode); // replace the node with the candidate
 		}
 	} else {
@@ -4074,16 +4158,25 @@ DhtPeer* DhtImpl::Update(const DhtPeerID &id, uint origin, bool seen, int rtt)
 		// see if the candidate node belongs in the replacement list
 		added = bucket.InsertOrUpdateNode(this, candidateNode, DhtBucket::replacement_list, &returnNode);
 		if(!added){
-			// The candidate node was not added to the bucket; see if a node in the replacement bucket
-			// can be replaced with the candidate node to either improve the sub-prefix distribution
-			// or significantly improve the rtt of the reserve.
-			replacementAvailable = bucket.FindReplacementCandidate(this, candidateNode, DhtBucket::replacement_list, &returnNode);
-			if (replacementAvailable) {
-				(*returnNode).CopyAllButNext(candidateNode); // replace the node with the candidate
-				return returnNode;
-			} else {
-				return NULL; // the candidate node is being discarded
+			if (!returnNode)
+			{
+				// The candidate node was not added to the bucket; see if a node in the replacement bucket
+				// can be replaced with the candidate node to either improve the sub-prefix distribution
+				// or significantly improve the rtt of the reserve.
+				replacementAvailable = bucket.FindReplacementCandidate(this, candidateNode, DhtBucket::replacement_list, &returnNode);
+				if (replacementAvailable) {
+					RemoveTableIP(returnNode->id.addr);
+					AddTableIP(candidateNode.id.addr);
+					(*returnNode).CopyAllButNext(candidateNode); // replace the node with the candidate
+					return returnNode;
+				} else {
+					return NULL; // the candidate node is being discarded
+				}
 			}
+		}
+		else
+		{
+			AddTableIP(returnNode->id.addr);
 		}
 	}
 	return returnNode;
@@ -6242,11 +6335,55 @@ bool DhtBucket::RemoveFromList(DhtImpl* pDhtImpl, const DhtID &id, BucketListTyp
 	return false;
 }
 
+DhtPeer* DhtBucket::FindNode(SockAddr const& addr, BucketListType& list)
+{
+	for (DhtPeer **peer = &peers.first(); *peer; peer=&(*peer)->next) {
+		DhtPeer *p = *peer;
+		if (p->id.addr == addr)
+		{
+			list = peer_list;
+			return p;
+		}
+	}
+
+	for (DhtPeer **peer = &replacement_peers.first(); *peer; peer=&(*peer)->next) {
+		DhtPeer *p = *peer;
+		if (p->id.addr == addr)
+		{
+			list = replacement_list;
+			return p;
+		}
+	}
+
+	return NULL;
+}
+
+DhtPeer* DhtBucket::FindNode(const DhtID& id)
+{
+	for (DhtPeer **peer = &peers.first(); *peer; peer=&(*peer)->next) {
+		DhtPeer *p = *peer;
+		if (p->id.id == id)
+		{
+			return p;
+		}
+	}
+
+	for (DhtPeer **peer = &replacement_peers.first(); *peer; peer=&(*peer)->next) {
+		DhtPeer *p = *peer;
+		if (p->id.id == id)
+		{
+			return p;
+		}
+	}
+
+	return NULL;
+}
+
 /**
 	Searches through the designated node list for the candidate node's id.  If the id is in
 	the list, the node information is updated.  If the candidate node's id is not found
-	and the list is not full (less than the bucket size) the node is added.  In either
-	of these cases, TRUE is returned.  If pout is proveded, it is set to the node that
+	and the list is not full (less than the bucket size) the node is added and TRUE is
+	returned.  If pout is proveded, it is set to the node that
 	was updated/added.
 
 	FALSE is returned if the bucket is full and the node is not in the list.  pout is
@@ -6303,7 +6440,7 @@ bool DhtBucket::InsertOrUpdateNode(DhtImpl* pDhtImpl, DhtPeer const& candidateNo
 				p->rtt = (p->rtt * 3 + candidateNode.rtt) / 4;
 		}
 		if (pout) *pout = p;
-		return true;
+		return false;
 	}
 
 	// if the bucket isn't full, just add this new node
@@ -6337,6 +6474,7 @@ bool DhtBucket::InsertOrUpdateNode(DhtImpl* pDhtImpl, DhtPeer const& candidateNo
 		return true;
 	}
 
+	if (pout) *pout = NULL;
 	// return false to indicate the bucket is full and does not contain the candidate node
 	return false;
 }

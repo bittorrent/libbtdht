@@ -339,6 +339,7 @@ enum SubPrefixType
 */
 int FillBucketList(smart_ptr<DhtImpl> &dhtObj, time_t rtt, SubPrefixType subPrefixType, int numPrefixBits = 0, int diff = 1)
 {
+	static uint32 ipCounter = 1;
 	int added = 0;
 	if(numPrefixBits >=160 || numPrefixBits < 0)
 		return added;
@@ -346,7 +347,6 @@ int FillBucketList(smart_ptr<DhtImpl> &dhtObj, time_t rtt, SubPrefixType subPref
 	DhtID subPrefixBits;
 	DhtPeerID peerId;
 	peerId.addr.set_port(128);
-	peerId.addr.set_addr4(0xf0f0f0f0);
 
 	for(int ctr=0; ctr<16; ++ctr)
 	{
@@ -380,6 +380,8 @@ int FillBucketList(smart_ptr<DhtImpl> &dhtObj, time_t rtt, SubPrefixType subPref
 		//{
 		//	ProgramBit(peerId.id, 159-numPrefixBits-x, GetBit(dctr, x));
 		//}
+
+		peerId.addr.set_addr4(ipCounter++);
 		(dhtObj->Update(peerId, 0, true, rtt))? ++added:0;
 	}
 	added += FillBucketList(dhtObj, rtt, subPrefixType, numPrefixBits+diff, diff);
@@ -394,7 +396,6 @@ int OverFillBuckets(smart_ptr<DhtImpl> &dhtObj, time_t rtt)
 	DhtID dctr;
 	DhtPeerID peerId;
 	peerId.addr.set_port(128);
-	peerId.addr.set_addr4(0xf0f0f0f0);
 	int numPrefixBits;
 
 	for(int bucketNum=0; bucketNum < dhtObj->_buckets.size(); ++bucketNum)
@@ -413,6 +414,7 @@ int OverFillBuckets(smart_ptr<DhtImpl> &dhtObj, time_t rtt)
 			{
 				ProgramBit(peerId.id, 159-numPrefixBits-x, GetBit(dctr, 3-x));
 			}
+			peerId.addr.set_addr4((bucketNum << 24) | (ctr << 16) | (bucketNum << 8) | rand() % 256);
 			(dhtObj->Update(peerId, 0, true, rtt))? ++added:0;
 		}
 	}
@@ -426,7 +428,6 @@ int FillPreallocatedBuckets(smart_ptr<DhtImpl> &dhtObj, time_t rtt)
 	DhtID dctr;
 	DhtPeerID peerId;
 	peerId.addr.set_port(128);
-	peerId.addr.set_addr4(0xf0f0f0f0);
 
 	for(int ctr=0; ctr<32; ++ctr)
 	{
@@ -445,6 +446,8 @@ int FillPreallocatedBuckets(smart_ptr<DhtImpl> &dhtObj, time_t rtt)
 			{
 				ProgramBit(peerId.id, 159-x, GetBit(dctr, 4-x));
 			}
+
+			peerId.addr.set_addr4((nodenum << 24) | (ctr << 16) | (nodenum << 8) | rand() % 256);
 
 			// add the node
 			(dhtObj->Update(peerId, 0, true, rtt))? ++added:0;
@@ -482,7 +485,7 @@ TEST(TestDhtRoutingTables, SimpleInsertNodes)
 		for(int y=0; y<5; ++y){
 			peerIds[x].id.id[y] = x<<24;
 			peerIds[x].addr.set_port(128);
-			peerIds[x].addr.set_addr4(0xf0f0f0f0);
+			peerIds[x].addr.set_addr4((x << 24) | (y << 16) | (x << 8) | y);
 		}
 		peerIds[x].id.id[0] = (x % 8)<<24;
 		dhtTestObj->Update(peerIds[x], 0, true, 100);
@@ -535,7 +538,7 @@ TEST(TestDhtRoutingTables, InsertNodesWithSplit)
 		for(int y=0; y<5; ++y){
 			peerIds[x].id.id[y] = x<<24;
 			peerIds[x].addr.set_port(128);
-			peerIds[x].addr.set_addr4(0xf0f0f0f0);
+			peerIds[x].addr.set_addr4((x << 24) | (y << 16) | (x << 8) | y);
 		}
 		peerIds[x].id.id[0] = (x % 8)<<24; // make sure the only bits added to the most significant word are only the 3 sub-prefix bits; all other bits are 0
 		dhtTestObj->Update(peerIds[x], 0, true, 100);
@@ -637,7 +640,7 @@ TEST(TestDhtRoutingTables, PopBestNode)
 		for(int y=0; y<5; ++y){
 			peerIds[x].id.id[y] = x<<24;
 			peerIds[x].addr.set_port(128);
-			peerIds[x].addr.set_addr4(0xf0f0f0f0);
+			peerIds[x].addr.set_addr4((x << 24) | (y << 16) | (x << 8) | y);
 		}
 		peerIds[x].id.id[0] = (x % 8)<<24;
 		dhtTestObj->Update(peerIds[x], 0, true, 100 + 10 * (x % 8)); // make different rtt's (arbitrarily based on sub-prefix value)
@@ -1129,7 +1132,7 @@ TEST(TestDhtRoutingTables, SimpleErroredNode)
 	for(int subPrefix=0; subPrefix<8; ++subPrefix){
 		peerIds[subPrefix]= MakeNodeForBucket(dhtTestObj, workingBucket, subPrefix);
 		peerIds[subPrefix].addr.set_port(128);
-		peerIds[subPrefix].addr.set_addr4(0xf0f0f0f0);
+		peerIds[subPrefix].addr.set_addr4((subPrefix << 24) | (subPrefix << 16) | (subPrefix << 8) | subPrefix);
 		dhtTestObj->Update(peerIds[subPrefix], 0, true, rtt);
 	}
 
@@ -1144,6 +1147,7 @@ TEST(TestDhtRoutingTables, SimpleErroredNode)
 
 	// create a different node with the same sub-prefix for the bucket
 	DhtPeerID newNode = peerIds[4];
+	newNode.addr.set_addr4(~newNode.addr.get_addr4());
 	newNode.id.id[4] = ~newNode.id.id[4]; // just invert the last word
 	// add the new node
 	dhtTestObj->Update(newNode, 0, true, rtt);
@@ -1190,7 +1194,7 @@ TEST(TestDhtRoutingTables, FasterNodeErroredNode)
 	for(int subPrefix=0; subPrefix<8; ++subPrefix){
 		peerIds[subPrefix]= MakeNodeForBucket(dhtTestObj, workingBucket, subPrefix);
 		peerIds[subPrefix].addr.set_port(128);
-		peerIds[subPrefix].addr.set_addr4(0xf0f0f0f0);
+		peerIds[subPrefix].addr.set_addr4((subPrefix << 24) | (subPrefix << 16) | (subPrefix << 8) | subPrefix);
 		dhtTestObj->Update(peerIds[subPrefix], 0, true, rtt);
 	}
 
@@ -1203,6 +1207,7 @@ TEST(TestDhtRoutingTables, FasterNodeErroredNode)
 	// create a different node sub-prefix 4 for the bucket with a much FASTER rtt
 	// this should move the original node at sub-prefix 4 to the replacement bucket
 	DhtPeerID newNode = peerIds[4];
+	newNode.addr.set_addr4(~newNode.addr.get_addr4());
 	newNode.id.id[4] = ~newNode.id.id[4]; // just invert the last word
 	// add the new node
 	rtt = 4000;
@@ -1262,7 +1267,7 @@ TEST(TestDhtRoutingTables, ReplacementListPullBackAndUpdate)
 	for(int subPrefix=0; subPrefix<8; ++subPrefix){
 		peerIds[subPrefix]= MakeNodeForBucket(dhtTestObj, workingBucket, subPrefix);
 		peerIds[subPrefix].addr.set_port(128);
-		peerIds[subPrefix].addr.set_addr4(0xf0f0f0f0);
+		peerIds[subPrefix].addr.set_addr4((subPrefix << 24) | (subPrefix << 16) | (subPrefix << 8) | subPrefix);
 		dhtTestObj->Update(peerIds[subPrefix], 0, true, rtt);
 	}
 
@@ -1270,6 +1275,7 @@ TEST(TestDhtRoutingTables, ReplacementListPullBackAndUpdate)
 	DhtPeerID fasterPeerIds[8];
 	for(int subPrefix=0; subPrefix<8; ++subPrefix){
 		fasterPeerIds[subPrefix]= peerIds[subPrefix];
+		fasterPeerIds[subPrefix].addr.set_addr4(~fasterPeerIds[subPrefix].addr.get_addr4());
 		fasterPeerIds[subPrefix].id.id[4] = ~fasterPeerIds[subPrefix].id.id[4]; // make this id different in the least significant bits
 		dhtTestObj->Update(fasterPeerIds[subPrefix], 0, true, rtt);
 	}
@@ -1298,6 +1304,7 @@ TEST(TestDhtRoutingTables, ReplacementListPullBackAndUpdate)
 
 	// now add a node with the errored node's sub-prefix; it should replace the errored node in the replacement list
 	DhtPeerID newNode = peerIds[3];
+	newNode.addr.set_addr4(~newNode.addr.get_addr4()+123456);
 	newNode.id.id[3] = newNode.id.id[3]+1; // add something to make it different
 	// add the new node
 	dhtTestObj->Update(newNode, 0, true, rtt);
@@ -1346,7 +1353,7 @@ TEST(TestDhtRoutingTables, ThrashingNode)
 	for(int subPrefix=0; subPrefix<8; ++subPrefix){
 		peerIds[subPrefix]= MakeNodeForBucket(dhtTestObj, workingBucket, subPrefix);
 		peerIds[subPrefix].addr.set_port(128);
-		peerIds[subPrefix].addr.set_addr4(0xf0f0f0f0);
+		peerIds[subPrefix].addr.set_addr4((subPrefix << 24) | (subPrefix << 16) | (subPrefix << 8) | subPrefix);
 		dhtTestObj->Update(peerIds[subPrefix], 0, true, rtt);
 	}
 
@@ -1359,6 +1366,7 @@ TEST(TestDhtRoutingTables, ThrashingNode)
 	// create a different node sub-prefix 4 for the bucket with a much FASTER rtt
 	// this should move the original node at sub-prefix 4 to the replacement bucket
 	DhtPeerID newNode = peerIds[4];
+	newNode.addr.set_addr4(~newNode.addr.get_addr4());
 	newNode.id.id[4] = ~newNode.id.id[4]; // just invert the last word
 	// add the new node
 	rtt = 2000;
