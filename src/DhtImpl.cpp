@@ -5666,7 +5666,7 @@ void PutDhtProcess::DhtSendRPC(const DhtFindNodeEntry &nodeInfo
 
 #ifdef _DEBUG_DHT
 		assert(impl->Verify((unsigned char*)&signature[0], (unsigned char*)&blk[0]
-			, blk.size(), _pkey, seq));
+			, blk.size(), NULL, 0, _pkey, seq));
 #endif
 	}
 
