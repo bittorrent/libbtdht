@@ -359,7 +359,7 @@ void DhtImpl::Initialize(UDPSocketInterface *udp_socket_mgr
 	LoadState();
 
 	// initialize _lastLeadingAddress
-	if (_ip_counter) _ip_counter->GetIP(_lastLeadingAddress);
+	if (_ip_counter) _ip_counter->GetIPv4(_lastLeadingAddress);
 }
 
 /**
@@ -472,7 +472,7 @@ void DhtImpl::GenerateId()
 	SockAddr externIp;
 	byte id_bytes[DHT_ID_SIZE];
 
-	if(_ip_counter && _ip_counter->GetIP(externIp)){
+	if(_ip_counter && _ip_counter->GetIPv4(externIp)){
 		DhtCalculateHardenedID(externIp, id_bytes);
 
 #if defined(_DEBUG_DHT)
@@ -3779,7 +3779,7 @@ void DhtImpl::SaveState()
 			// one vote for this IP, just to seed it with something
 
 		SockAddr addr;
-		_ip_counter->GetIP(addr);
+		_ip_counter->GetIPv4(addr);
 		size_t iplen = addr.compact(buf, false);
 		BencEntityMem beMemIP(buf, iplen);
 		dict->Insert("ip", beMemIP);
@@ -3854,7 +3854,7 @@ void DhtImpl::LoadState()
 				
 #if defined(_DEBUG_DHT)
 				SockAddr tmp;
-				_ip_counter->GetIP(tmp);
+				_ip_counter->GetIPv4(tmp);
 				debug_log("Loaded possible external IP \"%s\""
 					, print_sockaddr(addr).c_str());
 #endif
@@ -3903,7 +3903,7 @@ void DhtImpl::CountExternalIPReport(const SockAddr& addr, const SockAddr& voter 
 	SockAddr tempWinner;
 	_ip_counter->CountIP(addr, voter);
 
-	if (_ip_counter->GetIP(tempWinner) && !tempWinner.ip_eq(_lastLeadingAddress)) {
+	if (_ip_counter->GetIPv4(tempWinner) && !tempWinner.ip_eq(_lastLeadingAddress)) {
 
 #if defined(_DEBUG_DHT)
 		debug_log("External IP changed from: \"%s\" to \"%s\""
